@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author: Abbas
+"""
+
+from enum import Enum
+
+class Gender(Enum):
+    female = 1
+    male = 2
+    unknown = 3
+    
+class Age(Enum):
+    infant = 1
+    toddler = 2
+    teen = 3
+    young_adult = 4
+    adult = 5
+    senior = 6
+
+class Disability(Enum):
+    none = 1
+    Wheelchair = 2
+    Walker = 3
+    Cane = 4
+    While_cane = 5
+    
+class activityTypes(Enum):
+    strolling = 1
+    gogging = 2
+    shopping = 3
+    talking = 4
+    resting = 5
+    eating = 6
+    playing = 7
+    doing_exercise = 8
+    smoking = 9
+    using_cellphone = 10
+    observing = 11
+
+class siteTypes(Enum):
+    street_segment = 1
+    public_space = 2
+    intersection = 3
+    
+class zoiTypes(Enum):
+    school = 1
+    nursery = 2
+    shopping_center = 3
+    hypermarket = 4
+    convenience_store = 5
+    pharmacy = 6
+    beauty_center = 7
+    bank = 8
+    residential_building = 9
+    university_campus = 10
+    restaurant = 11
+    fast_food = 12
+    bistro = 13
+    bakery = 14
+    cinema = 15
+    park = 16
+    post_office = 17
+    gas_station = 18
+    library = 19
+    coffee_shop = 20
+    NA = 21
+    
+class odTypes(Enum):
+    sidewalk = 1
+    road_lane = 2
+    bus_lane = 3
+    cycling_path = 4
+    adjoining_ZOI = 5
+    parking_lot = 6
+    bicycle_rack = 7
+    bus_stop = 8
+    subway_stop = 9
+    street = 10
+    
+class vehicleTypes(Enum):
+    personal_car_Sedan = 1
+    personal_car_SUV = 2
+    motorbike = 3
+    moped = 4
+    mini_truck = 5
+    big_truck = 6
+    electric_bike = 7
+    electric_shared_car = 8
+    van = 9
+    ambulance = 10
+    school_buse = 11
+    police_car = 12
+    fire_engine = 13
+    taxi = 14
+    cleaning_service = 15
+    waste_collection_service = 16
+    autonomous_car = 17
+    
+class streetCrossings(Enum):
+    from_crosswalk = 1
+    jaywalking = 2
+    
+class pedCarrying(Enum):
+    none = 1
+    stroller = 2
+    luggage = 3
+    cart = 4
+    food_drink = 5
+    ball = 6
+    umbrella = 7
+    parasol = 8
+    box = 9
+    bicycle = 10
+    shopping_bag = 11
+      
+class pedRolling(Enum):
+    none = 1
+    scooter = 2
+    skateboard = 3
+    rollerblades = 4
+    segway = 5
+    uniwheel = 6
+    heelies = 7
+    
+    
+    
+    
+    
+    
+    
