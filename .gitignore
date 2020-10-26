@@ -1,0 +1,5 @@
+
+.DS_Store
+framework/__pycache__/__init__.cpython-38.pyc
+framework/__pycache__/dbSchema.cpython-38.pyc
+framework/__pycache__/enums.cpython-38.pyc

@@ -10,7 +10,9 @@ from random import choice, randint, choices
 
 from framework.dbSchema import createDatabase, connectDatabase,\
         Study_site, Site_ODs, Person, Pedestrian, Vehicle, Bike,\
-            Activity
+        Activity, Group, Pedestrian_obs, Vehicle_obs, Bike_obs,\
+        Passenger
+
 from framework import enums as en
 
 age = [a.name for a in en.Age]
@@ -29,149 +31,305 @@ if session is None:
 
 
 #------------------ Simulating street layout -------------------
-site_1 = Study_site(id = 500, siteName = 'Jean-Talon', siteType = 'street_segment')
-ods_1_1 = Site_ODs(id = 101, odType = 'sidewalk', odName = 'sidewalk_SW')
-ods_1_2 = Site_ODs(id = 102, odType = 'sidewalk', odName = 'sidewalk_SE')
-ods_2_1 = Site_ODs(id = 103, odType = 'sidewalk', odName = 'sidewalk_NW')
-ods_2_2 = Site_ODs(id = 104, odType = 'sidewalk', odName = 'sidewalk_NE')
+#--------------------------------------------------------------------
+site_1 = Study_site(id = 900, siteName = 'Jean-Talon', siteType = 'street_segment')
 
-ods_3_1 = Site_ODs(id = 201, odType = 'road_lane', odName = 'roadway_SW')
-ods_3_2 = Site_ODs(id = 202, odType = 'road_lane', odName = 'roadway_SE')
-ods_4_1 = Site_ODs(id = 203, odType = 'road_lane', odName = 'roadway_NE')
-ods_4_2 = Site_ODs(id = 204, odType = 'road_lane', odName = 'roadway_NW')
+swk_sw = Site_ODs(id = 101, odType = 'sidewalk', odName = 'sidewalk_SW')
+swk_se = Site_ODs(id = 102, odType = 'sidewalk', odName = 'sidewalk_SE')
+swk_nw = Site_ODs(id = 103, odType = 'sidewalk', odName = 'sidewalk_NW')
+swk_ne = Site_ODs(id = 104, odType = 'sidewalk', odName = 'sidewalk_NE')
 
-ods_5_1 = Site_ODs(id = 301, odType = 'cycling_path', odName = 'cycling_SW')
-ods_5_2 = Site_ODs(id = 302, odType = 'cycling_path', odName = 'cycling_SW')
+rwy_sw = Site_ODs(id = 201, odType = 'road_lane', odName = 'roadway_SW')
+rwy_se = Site_ODs(id = 202, odType = 'road_lane', odName = 'roadway_SE')
+rwy_ne = Site_ODs(id = 203, odType = 'road_lane', odName = 'roadway_NE')
+rwy_nw = Site_ODs(id = 204, odType = 'road_lane', odName = 'roadway_NW')
 
-ods_6 = Site_ODs(id = 401, odType = 'adjoining_ZOI', zoiType = 'convenience_store', odName = 'Sam Store')
-ods_7 = Site_ODs(id = 402, odType = 'adjoining_ZOI', zoiType = 'residential_building', odName = 'Richmond Bldg.')
-ods_8 = Site_ODs(id = 403, odType = 'adjoining_ZOI', zoiType = 'fast_food', odName = 'McDonalds')
-ods_9 = Site_ODs(id = 404, odType = 'adjoining_ZOI', zoiType = 'coffee_shop', odName = 'Tim Hortons')
+cyp_sw = Site_ODs(id = 301, odType = 'cycling_path', odName = 'cycling_SW')
+cyp_se = Site_ODs(id = 302, odType = 'cycling_path', odName = 'cycling_SE')
 
-site_1.ods = [ods_1_1, ods_1_2, ods_2_1, ods_2_2, ods_3_1, ods_3_2, ods_4_1, ods_4_2, ods_5_1, ods_5_2, ods_6, ods_7, ods_8, ods_9]
+zoi_sh = Site_ODs(id = 401, odType = 'adjoining_ZOI', odName = 'Sam Store')
+zoi_bg = Site_ODs(id = 402, odType = 'adjoining_ZOI', odName = 'Richmond Bldg.')
+zoi_ff = Site_ODs(id = 403, odType = 'adjoining_ZOI', odName = 'McDonalds')
+zoi_cf = Site_ODs(id = 404, odType = 'adjoining_ZOI', odName = 'Tim Hortons')
+
+osp_s = Site_ODs(id = 501, odType = 'on_street_parking_lot', odName = 'parking_lot')
+brk_n = Site_ODs(id = 502, odType = 'bicycle_rack', odName = 'bicycle_rack')
+ibp_s = Site_ODs(id = 503, odType = 'informal_bicycle_parking', odName = 'bicycle_parking')
+
+bus_n = Site_ODs(id = 601, odType = 'bus_stop', odName = 'bus_stop')
+
+
+site_1.ods = [swk_sw, swk_se, swk_nw, swk_ne, rwy_sw, rwy_se, rwy_ne, 
+              rwy_nw, cyp_sw, cyp_se, zoi_sh, zoi_bg, zoi_ff, zoi_cf,
+              osp_s, brk_n, bus_n, ibp_s]
 
 #----------------- START and END time of simulation ------------
-start = datetime(2020, 9, 14, 7, 0, 0)
-end = datetime(2020, 9, 14, 21, 0, 0)
+#--------------------------------------------------------------------
+simStartTime = datetime(2019, 2, 20, 7, 30, 0)
+simEndTime = datetime(2019, 2, 20, 12, 30, 0)
 
 
-#------------------ Simulating the moving pedestrians ----------------
-pedODs = [[ods_1_1, ods_1_2], [ods_2_1, ods_2_2],
-          [ods_1_2, ods_1_1], [ods_2_2, ods_2_1],
-          [ods_1_1, ods_6], [ods_6, ods_1_1],
-          [ods_2_1, ods_7], [ods_7, ods_2_1],
-          [ods_1_2, ods_8], [ods_8, ods_1_2],
-          [ods_2_2, ods_9], [ods_9, ods_2_2],
-          [ods_6, ods_7], [ods_7, ods_6]]
+#--------- Simulating the passing/staying pedestrians ---------------
+#--------------------------------------------------------------------
+pedODs = [[swk_sw, swk_se], [swk_se, swk_sw],
+          [swk_nw, swk_ne], [swk_ne, swk_nw],
+          [swk_sw, zoi_sh], [zoi_sh, swk_sw],
+          [swk_nw, zoi_bg], [zoi_bg, swk_nw],
+          [swk_se, zoi_ff], [zoi_ff, swk_se],
+          [swk_ne, zoi_cf], [zoi_cf, swk_ne],
+          [zoi_sh, zoi_bg], [zoi_bg, zoi_sh]]
 
-peds = []
-obsTime = start
-while (obsTime < end):
+peds_obs = []
+activs = []
+obsStartTime = simStartTime
+while (obsStartTime < simEndTime):
     
-    if obsTime.hour < 5 or obsTime.hour > 22:
+    if obsStartTime.hour < 5 or obsStartTime.hour > 22:
         lb = 1800
         ub = 2700
-    elif (obsTime.hour >= 5 and obsTime.hour < 10) or\
-         (obsTime.hour >= 15 and obsTime.hour < 19):
+    elif (obsStartTime.hour >= 5 and obsStartTime.hour < 10) or\
+         (obsStartTime.hour >= 15 and obsStartTime.hour < 19):
         lb = 1
         ub = 300
     else:
         lb = 300
         ub = 900
         
-    obsTime = obsTime + timedelta(seconds = randint(lb, ub))
+    obsStartTime = obsStartTime + timedelta(seconds = randint(lb, ub))
+    obsEndTime = obsStartTime + timedelta(seconds = randint(13, 63))
+    
     pedod = choice(pedODs)
     isGroup = randint(0,1)
-    if isGroup:
-        groupSize = randint(2,6)
-    else:
-        per = Person(age = choice(age), gender = choice(gender), 
-                     disability = choice(disability), withBag = choice(yesNo), 
-                     withPet = choice(yesNo))
-        ped = Pedestrian(carryObject = choice(carryObject),
-                         rolling = choice(rolling), origin = pedod[0],
-                         startTime = obsTime)
-        ped.person = per
-        ped.destination = pedod[1]
-        ped.endTime = obsTime + timedelta(seconds = randint(13, 63))
-        peds.append(ped)
-
-session.add_all(peds)
-
-#------------------ Simulating the activities ----------------
-
-acts = []
-obsTime = start
-while (obsTime < end):
-    obsTime = obsTime + timedelta(seconds = randint(60, 900))
-    if choices([0,1], weights=(90, 10)):  #Simulates whether we have observation
-        per = Person(age = choice(age), gender = choice(gender), 
-                         disability = choice(disability), withBag = choice(yesNo), 
-                         withPet = choice(yesNo))
-        act = Activity(activityType = choice(activity), startTime = obsTime)
-        per.activity = [act]
-        act.endTime = obsTime + timedelta(seconds = randint(60, 900))
-        acts.append(act)
-
-session.add_all(acts)
-
-#------------------ Simulating the moving vehicles ----------------
-vehODs = [[ods_3_1, ods_3_2], [ods_4_1, ods_4_2]]
-
-vehs = []
-obsTime = start
-while (obsTime < end):
     
-    if obsTime.hour < 5 or obsTime.hour > 22:
+    if isGroup:        
+        grpSize = choices(range(2,6), weights = [65, 20, 10, 5])
+        grp = Group(groupSize = grpSize[0])
+                
+        for i in range(grpSize[0]):            
+            per = Person(age = choice(age), gender = choices(gender, weights = [45, 50, 5])[0], 
+                     disability = choices(disability, weights = [80, 5, 5, 5, 5])[0],  
+                     withPet = choice(yesNo), withBag = choice(yesNo), group = [grp])
+            ped = Pedestrian(carryObject = choice(carryObject),
+                     rolling = choice(rolling), person = per)
+            ped_obs1 = Pedestrian_obs(pedestrian = ped, odStatus = 'origin',
+                     od = pedod[0], instant = obsStartTime)
+            ped_obs2 = Pedestrian_obs(pedestrian = ped, odStatus = 'destination',
+                     od = pedod[1], instant = obsEndTime)
+            peds_obs = peds_obs + [ped_obs1, ped_obs1]
+    else:
+        per = Person(age = choice(age), gender = choices(gender, weights = [45, 50, 5])[0], 
+                     disability = choices(disability, weights = [80, 5, 5, 5, 5])[0],  
+                     withPet = choice(yesNo), withBag = choice(yesNo))
+        ped = Pedestrian(carryObject = choice(carryObject),
+                 rolling = choice(rolling), person = per)
+        ped_obs1 = Pedestrian_obs(pedestrian = ped, odStatus = 'origin',
+                 od = pedod[0], instant = obsStartTime)
+        
+        hasActivity = choices([0,1], weights = [70, 30])[0]
+        if hasActivity:
+            actStartTime = obsStartTime + timedelta(seconds = randint(10, 30))
+            actEndTime = actStartTime + timedelta(seconds = randint(60, 900))
+            act = Activity(activityType = choice(activity), 
+                           startTime = actStartTime, endTime = actEndTime,
+                           person = per)
+            activs.append(act)
+            ped_obs2 = Pedestrian_obs(pedestrian = ped, odStatus = 'destination',
+                     od = pedod[1], 
+                     instant = actEndTime + timedelta(seconds = randint(10, 30)))
+        else:
+            ped_obs2 = Pedestrian_obs(pedestrian = ped, odStatus = 'destination',
+                     od = pedod[1], instant = obsEndTime)
+        peds_obs = peds_obs + [ped_obs1, ped_obs2]
+
+session.add_all(peds_obs + activs)
+
+
+#------------------ Simulating the passing vehicles ----------------
+#--------------------------------------------------------------------
+vehODs = [[rwy_sw, rwy_se], [rwy_ne, rwy_nw]]
+
+vehs_obs = []
+obsStartTime = simStartTime
+while (obsStartTime < simEndTime):
+    
+    if obsStartTime.hour < 5 or obsStartTime.hour > 22:
         lb = 1200
         ub = 2400
-    elif (obsTime.hour >= 5 and obsTime.hour < 10) or\
-         (obsTime.hour >= 15 and obsTime.hour < 19):
+    elif (obsStartTime.hour >= 5 and obsStartTime.hour < 10) or\
+          (obsStartTime.hour >= 15 and obsStartTime.hour < 19):
         lb = 1
         ub = 180
     else:
         lb = 180
         ub = 600
         
-    obsTime = obsTime + timedelta(seconds = randint(lb, ub))
+    obsStartTime = obsStartTime + timedelta(seconds = randint(lb, ub))
+
+    vType = choices(vehType[:6], weights = [40, 40] + [5]*4)[0]
+    veh = Vehicle(vehicleType = vType)
+    
     vehod = choice(vehODs)
-    veh = Vehicle(vehicleType = choice(vehType), origin = vehod[0],\
-                  startTime = obsTime)
-    veh.destination = vehod[1]
-    veh.endTime = obsTime + timedelta(seconds = randint(4, 18))
-    vehs.append(veh)
+    veh_obs1 = Vehicle_obs(vehicle = veh, odStatus = 'origin', od = vehod[0], 
+                     instant = obsStartTime)
+    veh_obs2 = Vehicle_obs(vehicle = veh, odStatus = 'destination',od = vehod[1], 
+                     instant = obsStartTime + timedelta(seconds = randint(4, 18)))
+    
+    vehs_obs = vehs_obs + [veh_obs1, veh_obs2]
 
-session.add_all(vehs)
+session.add_all(vehs_obs)
 
-#------------------ Simulating the moving Bikes ----------------
-bikODs = [[ods_1_1, ods_1_2], [ods_2_1, ods_2_2],
-          [ods_1_2, ods_1_1], [ods_2_2, ods_2_1]]\
-           + vehODs + [[ods_5_1, ods_5_2]]
+#------------------ Simulating the passing Bikes ----------------
+#--------------------------------------------------------------------
+bikODs = [[swk_sw, swk_se], [swk_nw, swk_ne],
+          [swk_se, swk_sw], [swk_ne, swk_nw]]\
+            + vehODs + [[cyp_sw, cyp_se]]
 
-biks = []
-obsTime = start
-while (obsTime < end):
+biks_obs = []
+obsStartTime = simStartTime
+while (obsStartTime < simEndTime):
 
-    if obsTime.hour < 5 or obsTime.hour > 22:
+    if obsStartTime.hour < 5 or obsStartTime.hour > 22:
         lb = 2400
         ub = 3600
-    elif (obsTime.hour >= 5 and obsTime.hour < 10) or\
-         (obsTime.hour >= 15 and obsTime.hour < 19):
+    elif (obsStartTime.hour >= 5 and obsStartTime.hour < 10) or\
+          (obsStartTime.hour >= 15 and obsStartTime.hour < 19):
         lb = 1
         ub = 300
     else:
         lb = 600
         ub = 1200
 
-    obsTime = obsTime + timedelta(seconds = randint(lb, ub))
+    obsStartTime = obsStartTime + timedelta(seconds = randint(lb, ub))
     bikod = choice(bikODs)
-    bik = Bike(origin = bikod[0], startTime = obsTime)
-    bik.destination = bikod[1]
-    bik.endTime = obsTime + timedelta(seconds = randint(7, 12))
-    biks.append(bik)
+    bik = Bike() 
+    bik_obs1 = Bike_obs(bike = bik, odStatus = 'origin', od = bikod[0], 
+                     instant = obsStartTime)
+    bik_obs2 = Bike_obs(bike = bik, odStatus = 'destination', od = bikod[1], 
+                     instant = obsStartTime + timedelta(seconds = randint(7, 12)))
+    
+    biks_obs = biks_obs + [bik_obs1, bik_obs2]
 
-session.add_all(biks)
+session.add_all(biks_obs)
 
+#---- Scenario 1: people accessing site by car, taxi or bus ---------
+#--------------------------------------------------------------------
+sc1VehArrODs = [[rwy_sw, osp_s]]
+sc1VehDepODs = [[osp_s, rwy_se]]
+sc1PedOD = [zoi_sh, zoi_bg, zoi_ff, zoi_cf]
+
+sc1BusArrODs = [[rwy_ne, bus_n]]
+sc1BusDepODs = [[bus_n, rwy_nw]]
+
+sc1VehsObs = []
+sc1PedsObs = []
+obsStartTime = simStartTime
+while (obsStartTime < simEndTime):
+
+    if obsStartTime.hour < 5 or obsStartTime.hour > 22:
+        lb = 3600
+        ub = 7200
+    elif (obsStartTime.hour >= 5 and obsStartTime.hour < 10) or\
+          (obsStartTime.hour >= 15 and obsStartTime.hour < 19):
+        lb = 300
+        ub = 1800
+    else:
+        lb = 1800
+        ub = 5400
+
+    obsStartTime = obsStartTime + timedelta(seconds = randint(lb, ub))
+    
+    vType = choices(vehType[:5], weights = [25, 25, 25, 20, 5])[0]
+
+    veh = Vehicle(vehicleType = vType)
+    
+    per = Person(age = choice(age), gender = choices(gender, weights = [45, 50, 5])[0], 
+                     disability = choices(disability, weights = [80, 5, 5, 5, 5])[0],  
+                     withPet = choice(yesNo), withBag = choice(yesNo))
+
+    if vType == 'bus':
+        vehod = choice(sc1BusArrODs)
+        psg = Passenger(person = per)
+        veh.passengers = [psg]
+
+    elif vType == 'taxi':
+        vehod = choice(sc1VehArrODs)
+        psg = Passenger(person = per)
+        veh.passengers = [psg]
+
+    else:
+        vehod = choice(sc1VehArrODs)
+        veh.driver = per
+         
+    veh_obs1 = Vehicle_obs(vehicle = veh, odStatus = 'origin', 
+                     od = vehod[0], instant = obsStartTime)
+    vehObsEndTime = obsStartTime + timedelta(seconds = randint(4, 18))
+    veh_obs2 = Vehicle_obs(vehicle = veh, odStatus = 'destination',
+                     od = vehod[1], instant = vehObsEndTime)
+    
+    ped = Pedestrian(carryObject = choice(carryObject), person = per)
+    pedObsStartTime = vehObsEndTime + timedelta(seconds = 30)
+    ped_obs1 = Pedestrian_obs(pedestrian = ped, odStatus = 'origin',
+             od = vehod[1], instant = pedObsStartTime)
+    pedObsEndTime = pedObsStartTime + timedelta(seconds = randint(20, 60))
+    pedDest = choice(sc1PedOD)
+    ped_obs2 = Pedestrian_obs(pedestrian = ped, odStatus = 'destination',
+             od = pedDest, instant = pedObsEndTime)
+    
+    sc1VehsObs = sc1VehsObs + [veh_obs1, veh_obs2]
+    sc1PedsObs = sc1PedsObs + [ped_obs1, ped_obs2]
+     
+session.add_all(sc1VehsObs + sc1PedsObs)
+
+#---------- Scenario 2: people accessing site by bike -----------
+#--------------------------------------------------------------------
+sc2BikArrODs = [[cyp_se, brk_n]]
+sc2BikDepODs = [[brk_n, cyp_sw]]
+sc2PedOD = [zoi_sh, zoi_bg, zoi_ff, zoi_cf]
+
+sc2BiksObs = []
+sc2PedsObs = []
+obsStartTime = simStartTime
+while (obsStartTime < simEndTime):
+
+    if obsStartTime.hour < 5 or obsStartTime.hour > 22:
+        lb = 3600
+        ub = 7200
+    elif (obsStartTime.hour >= 5 and obsStartTime.hour < 10) or\
+          (obsStartTime.hour >= 15 and obsStartTime.hour < 19):
+        lb = 300
+        ub = 1800
+    else:
+        lb = 1800
+        ub = 5400
+
+    obsStartTime = obsStartTime + timedelta(seconds = randint(lb, ub))
+      
+    per = Person(age = choice(age), gender = choices(gender, weights = [45, 50, 5])[0], 
+                     withBag = choice(yesNo))
+    
+    bik = Bike(cyclist = per)
+    
+    bikod = choice(sc2BikArrODs)
+         
+    bik_obs1 = Bike_obs(bike = bik, odStatus = 'origin', 
+                     od = bikod[0], instant = obsStartTime)
+    bikObsEndTime = obsStartTime + timedelta(seconds = randint(10, 25))
+    bik_obs2 = Bike_obs(bike = bik, odStatus = 'destination',
+                     od = bikod[1], instant = bikObsEndTime)
+    
+    ped = Pedestrian(carryObject = choice(carryObject), person = per)
+    pedObsStartTime = bikObsEndTime + timedelta(seconds = 30)
+    ped_obs1 = Pedestrian_obs(pedestrian = ped, odStatus = 'origin',
+             od = bikod[1], instant = pedObsStartTime)
+    pedObsEndTime = pedObsStartTime + timedelta(seconds = randint(20, 60))
+    pedDest = choice(sc2PedOD)
+    ped_obs2 = Pedestrian_obs(pedestrian = ped, odStatus = 'destination',
+             od = pedDest, instant = pedObsEndTime)
+    
+    sc2BiksObs = sc2BiksObs + [bik_obs1, bik_obs2]
+    sc2PedsObs = sc2PedsObs + [ped_obs1, ped_obs2]
+     
+session.add_all(sc2BiksObs + sc2PedsObs)
 
 session.commit()
 session.close()

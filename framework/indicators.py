@@ -6,23 +6,35 @@
 """
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.ticker import MaxNLocator
 
 import pandas as pd
-from dbSchema import connectDatabase, Pedestrian, Person, Vehicle, Bike,\
+from dbSchema import connectDatabase, Pedestrian_obs,Vehicle,\
+                     Person, Vehicle_obs, Bike_obs, Pedestrian,\
                      Activity, Site_ODs
 import enums as en
 
 session = connectDatabase('../simulatedData.sqlite')
 
 #==============================================================
-def tempDistHist(user):
+def tempDistHist(user, od_name):
     if user == 'pedestrians':
-        q = session.query(Pedestrian.startTime)
+        q = session.query(Pedestrian_obs.instant).\
+            join(Site_ODs, Pedestrian_obs.odId == Site_ODs.id).\
+            filter(Site_ODs.odName == od_name)
+
     elif user == 'vehicles':
-        q = session.query(Vehicle.startTime)
+        q = session.query(Vehicle_obs.instant).\
+            join(Site_ODs, Vehicle_obs.odId == Site_ODs.id).\
+            filter(Site_ODs.odName == od_name)
     elif user == 'bikes':
-        q = session.query(Bike.startTime)
+        q = session.query(Bike_obs.instant).\
+            join(Site_ODs, Bike_obs.odId == Site_ODs.id).\
+            filter(Site_ODs.odName == od_name)
     
+    if q.all() == []:
+        print('No ' + user + ' passage in the ' + od_name)
+        return
     time_list = [i[0] for i in q.all()]
     
     fig, ax = plt.subplots(1,1)
@@ -40,14 +52,15 @@ def tempDistHist(user):
     ax.tick_params(axis='y', labelsize = 7)
     ax.set_xlabel('Time', fontsize = 8)
     ax.set_ylabel('No. of ' + user, fontsize = 8)
-    ax.set_title('Temporal distribution of ' + user , fontsize = 10)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_title('Temporal distribution of ' + user + ' passing from ' + od_name, fontsize = 10)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
     
     ax.text(0.05, 0.95,str(time_list[0].strftime('%A, %b %d, %Y')),
-     horizontalalignment='left',
-     verticalalignment='center',
-     transform = ax.transAxes,
-     fontsize=7)
+            horizontalalignment='left',
+            verticalalignment='center',
+            transform = ax.transAxes,
+            fontsize=7)
     
     plt.show()
 
@@ -60,7 +73,7 @@ def stackedHist(user, attr, bins):
         elif attr == 'age':
             cls_fld = Person.age
             comp_list = [a.name for a in en.Age]
-        q = session.query(cls_fld).join(Pedestrian, Person.id==Pedestrian.personId).\
+        q = session.query(cls_fld).join(Pedestrian, Person.id == Pedestrian.personId).\
         distinct()
     elif user == 'vehicles':
         if attr == 'vehicleType':
@@ -78,10 +91,14 @@ def stackedHist(user, attr, bins):
     time_list = []
     for val in distinct_vals:
         if user == 'pedestrians':
-            q = session.query(Pedestrian.startTime).join(Person, Person.id==Pedestrian.personId).\
-            filter(cls_fld == val)
+            q = session.query(Pedestrian_obs.instant).\
+                join(Pedestrian, Pedestrian_obs.pedestrianId == Pedestrian.id).\
+                join(Person, Person.id == Pedestrian.personId).\
+                filter(cls_fld == val)
         elif user == 'vehicles':
-            q = session.query(Vehicle.startTime).filter(cls_fld == val)
+            q = session.query(Vehicle_obs.instant).\
+                join(Vehicle, Vehicle_obs.vehicleId == Vehicle.id).\
+                filter(cls_fld == val)
         elif user == 'activities':
             q = session.query(Activity.startTime).filter(cls_fld == val)
         
@@ -101,6 +118,7 @@ def stackedHist(user, attr, bins):
     ax.tick_params(axis='y', labelsize = 7)
     ax.set_xlabel('Time', fontsize = 8)
     ax.set_ylabel('No. of ' + user, fontsize = 8)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_title('Temporal distribution of ' + user + ' by ' + attr, fontsize = 10)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
     plt.legend(loc="upper right", fontsize=7)
@@ -117,37 +135,65 @@ def stackedHist(user, attr, bins):
 def odMatrix(user):
     
     if user == 'pedestrians':
-        ods_list = ['sidewalk', 'adjoining_ZOI']
-        cls_ = Pedestrian
+        ods_list = ['sidewalk', 'adjoining_ZOI', 'bus_stop',
+                    'on_street_parking_lot', 'bicycle_rack']
+        cls_ = Pedestrian_obs
+        cls_fld = Pedestrian_obs.pedestrianId
         
     elif user == 'cyclists':
-        ods_list = ['cycling_path', 'sidewalk', 'road_lane', 'bus_lane']
-        cls_ = Bike
+        ods_list = ['cycling_path', 'sidewalk', 'road_lane',
+                    'bus_lane', 'bicycle_rack', 'informal_bicycle_parking']
+        cls_ = Bike_obs
+        cls_fld = Bike_obs.bikeId
         
     elif user == 'vehicles':
-        ods_list = ['road_lane']
-        cls_ = Vehicle
+        ods_list = ['road_lane', 'on_street_parking_lot', 'bus_stop']
+        cls_ = Vehicle_obs
+        cls_fld = Vehicle_obs.vehicleId
     
-    q_ods = session.query(Site_ODs.id, Site_ODs.odType, Site_ODs.zoiType, Site_ODs.odName).\
+    q_ods = session.query(Site_ODs.id, Site_ODs.odType, Site_ODs.odName).\
         filter(Site_ODs.odType.in_(ods_list))
         
     ods_id = [str(i[0]) for i in q_ods.all()]
-    ods_name = [str(i[3]) for i in q_ods.all()]
+    ods_name = [str(i[2]) for i in q_ods.all()]
 
     od_df = pd.DataFrame(columns = ods_id, index = ods_id)
     od_df[:] = 0
 
-    q = session.query(cls_.originId, cls_.destinationId)
+    q = session.query(cls_fld, cls_.odStatus, cls_.odId)
     
+    user_od_dict = {}
     for rec in q.all():
-        od_df.loc[rec[0], rec[1]] = od_df.loc[rec[0], rec[1]] + 1
+        if rec[0] in user_od_dict.keys():
+            if rec[1] == 'origin':
+                user_od_dict[rec[0]][0] = rec[2]
+            else:
+                user_od_dict[rec[0]][1] = rec[2]
+        else:
+            user_od_dict[rec[0]] = [None, None]
+            if rec[1] == 'origin':
+                user_od_dict[rec[0]][0] = rec[2]
+            else:
+                user_od_dict[rec[0]][1] = rec[2]
+                
+    for od in user_od_dict.values():
+        od_df.loc[od[0], od[1]] = od_df.loc[od[0], od[1]] + 1
         
     od_df = od_df.apply(pd.to_numeric)
+    
+    org_sum = [str(i) for i in od_df.sum(1).values]
+    dst_sum = [str(i) for i in od_df.sum(0).values]
     
     plt.matshow(od_df, cmap=plt.cm.coolwarm)
     plt.xticks(range(len(ods_name)), ods_name , fontsize = 7, rotation= 90, weight="bold");
     plt.yticks(range(len(ods_name)), ods_name , fontsize = 7, weight="bold");
     # plt.colorbar()
+    # plt.table(cellText = dst_sum,loc = 'bottom', cellLoc = 'center')
+    # plt.table(cellText = org_sum,loc = 'right', cellLoc = 'center')
+    
+    for i in range(len(ods_name)):
+        plt.text(len(ods_name) - 0.3, i, org_sum[i], va='center', ha='left')
+        plt.text(i, len(ods_name) - 0.2, dst_sum[i], va='center', ha='center')
     
     for i in range(0,od_df.shape[0]):
         for j in range(0,od_df.shape[0]):
@@ -158,6 +204,6 @@ def odMatrix(user):
     
 #======================= DEMO MODE ============================
 if __name__ == '__main__':
-    # tempDistHist(user = 'pedestrians')
+    # tempDistHist(user = 'pedestrians', od_name = 'sidewalk_SW')
     # stackedHist('vehicles', 'vehicleType', 20)
-    odMatrix(user = 'vehicles')
+    odMatrix(user = 'pedestrians')

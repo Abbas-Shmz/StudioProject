@@ -28,7 +28,7 @@ class Disability(Enum):
     
 class activityTypes(Enum):
     strolling = 1
-    gogging = 2
+    jogging = 2
     shopping = 3
     talking = 4
     resting = 5
@@ -38,6 +38,9 @@ class activityTypes(Enum):
     smoking = 9
     using_cellphone = 10
     observing = 11
+    reading_writing = 12
+    performing = 13
+    selling = 14
 
 class siteTypes(Enum):
     street_segment = 1
@@ -73,30 +76,32 @@ class odTypes(Enum):
     bus_lane = 3
     cycling_path = 4
     adjoining_ZOI = 5
-    parking_lot = 6
+    on_street_parking_lot = 6
     bicycle_rack = 7
-    bus_stop = 8
-    subway_stop = 9
-    street = 10
+    informal_bicycle_parking = 8
+    bus_stop = 9
+    subway_station = 10
+    street = 11
     
 class vehicleTypes(Enum):
     personal_car_Sedan = 1
     personal_car_SUV = 2
-    motorbike = 3
-    moped = 4
-    mini_truck = 5
-    big_truck = 6
-    electric_bike = 7
-    electric_shared_car = 8
-    van = 9
-    ambulance = 10
-    school_buse = 11
-    police_car = 12
-    fire_engine = 13
-    taxi = 14
-    cleaning_service = 15
-    waste_collection_service = 16
-    autonomous_car = 17
+    bus = 3
+    taxi = 4
+    motorbike = 5
+    mini_truck = 6
+    moped = 7
+    big_truck = 8
+    electric_bike = 9
+    electric_shared_car = 10
+    van = 11
+    ambulance = 12
+    school_buse = 13
+    police_car = 14
+    fire_engine = 15
+    cleaning_service = 16
+    waste_collection_service = 17
+    autonomous_car = 18
     
 class streetCrossings(Enum):
     from_crosswalk = 1

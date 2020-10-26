@@ -30,24 +30,18 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base(cls=Base)
 
 class ObsMixin(object):
-    startTime = Column(DateTime)
-    endTime = Column(DateTime)
+    odStatus = Column(String)
+    instant = Column(DateTime)
+    speed = Column(Integer)
+    location = Column(String)
     
     @declared_attr
-    def originId(cls):
+    def odId(cls):
         return Column(String, ForeignKey('site_ods.id'))
     
     @declared_attr
-    def destinationId(cls):
-        return Column(String, ForeignKey('site_ods.id'))
-    
-    @declared_attr
-    def origin(cls):
-        return relationship('Site_ODs', uselist=False, foreign_keys = cls.originId)
-    
-    @declared_attr
-    def destination(cls):
-        return relationship('Site_ODs', uselist=False, foreign_keys = cls.destinationId)    
+    def od(cls):
+        return relationship('Site_ODs', foreign_keys = cls.odId)
     
 class Person(Base):
     age = Column(Enum(en.Age))
@@ -61,33 +55,62 @@ class Person(Base):
     vehicle = relationship('Vehicle', uselist=False, back_populates= 'driver')
     bike = relationship('Bike', uselist=False, back_populates= 'cyclist')
     activity = relationship('Activity', back_populates= 'person')
-    
+    passenger = relationship('Passenger', uselist=False, back_populates= 'person')
+
     def __repr__(self):
         return "person(Id = {}, age = {}, gender = {}, disability = {})".format(self.id, self.age, self.gender, self.disability)
     
-class Pedestrian(Base, ObsMixin):
+class Pedestrian(Base):
     personId = Column(Integer, ForeignKey('person.id'))
     carryObject = Column(Enum(en.pedCarrying), default = 'none')
     rolling = Column(Enum(en.pedRolling), default = 'none')
     
     person = relationship('Person', back_populates= 'pedestrian')
+    observation = relationship('Pedestrian_obs', back_populates= 'pedestrian')
     
 
-class Vehicle(Base, ObsMixin):
+class Vehicle(Base):
     vehicleType = Column(Enum(en.vehicleTypes))
     noPassengers = Column(Integer)
     driverId = Column(Integer, ForeignKey('person.id'))
     noStops = Column(Integer, default = 0)
     
     driver = relationship('Person', back_populates= 'vehicle')
+    observation = relationship('Vehicle_obs', back_populates= 'vehicle')
+    passengers = relationship('Passenger', back_populates= 'vehicle')
 
-class Bike(Base, ObsMixin):
+class Bike(Base):
     bikeType = Column(String)
     cyclistId = Column(Integer, ForeignKey('person.id'))
     wearHelmet = Column(Boolean, default = True)
     
     cyclist = relationship('Person', back_populates= 'bike')
+    observation = relationship('Bike_obs', back_populates= 'bike')
+
+class Passenger(Base):
+    vehicleId = Column(Integer, ForeignKey('vehicle.id'))
+    personId = Column(Integer, ForeignKey('person.id'))
     
+    vehicle = relationship('Vehicle', back_populates= 'passengers')
+    person = relationship('Person', back_populates= 'passenger')
+
+    
+class Pedestrian_obs(Base, ObsMixin):
+    pedestrianId = Column(Integer, ForeignKey('pedestrian.id'))
+    
+    pedestrian = relationship('Pedestrian', back_populates= 'observation')
+
+class Vehicle_obs(Base, ObsMixin):
+    vehicleId = Column(Integer, ForeignKey('vehicle.id'))
+    
+    vehicle = relationship('Vehicle', back_populates= 'observation')
+
+class Bike_obs(Base, ObsMixin):
+    bikeId = Column(Integer, ForeignKey('bike.id'))
+    
+    bike = relationship('Bike', back_populates= 'observation')
+
+
 class Activity(Base):
     personId = Column(Integer, ForeignKey('person.id'))
     activityType = Column(Enum(en.activityTypes))
@@ -118,8 +141,8 @@ class Study_site(Base):
 class Site_ODs(Base):
     siteId = Column(Integer, ForeignKey('study_site.id'))
     odType = Column(Enum(en.odTypes))
-    zoiShape = Column(String)
-    zoiType = Column(Enum(en.zoiTypes), default = 'NA')
+    shape = Column(String)
+    # zoiType = Column(Enum(en.zoiTypes), default = 'NA')
     odName = Column(String)
     
     site = relationship('Study_site', back_populates = 'ods')
@@ -164,7 +187,9 @@ if __name__ == '__main__': # demo code
     ods_4 = Site_ODs(id = 202, odType = 'road_lane')
     ods_5 = Site_ODs(id = 301, odType = 'cycling_path')
     ods_6 = Site_ODs(id = 302, odType = 'cycling_path')
-    site_1.ods = [ods_1, ods_2, ods_3, ods_4, ods_5, ods_6]
+    ods_7 = Site_ODs(id = 401, odType = 'on_street_parking_lot')
+    ods_8 = Site_ODs(id = 501, odType = 'adjoining_ZOI')
+    site_1.ods = [ods_1, ods_2, ods_3, ods_4, ods_5, ods_6, ods_7]
     
     act_1 = Activity(activityType = 'playing')
     
@@ -173,15 +198,20 @@ if __name__ == '__main__': # demo code
     per2 = Person(age = 'senior', gender = 'female')
     per3 = Person(age = 'adult', gender = 'male')
     per4 = Person(age = 'senior', gender = 'unknown')
+    per5 = Person(age = 'senior', gender = 'female')
     
-    ped1 = Pedestrian(carryObject = 'stroller', rolling = 'none', origin = ods_1)
+    ped1 = Pedestrian(carryObject = 'stroller', rolling = 'none')
     ped1.person = per1_1
-    ped1.destination = ods_2
-    ped1.activity = [act_1]
+    
+    ped_obs_1 = Pedestrian_obs(odStatus = 'origin', od = ods_1)
+    ped_obs_1.pedestrian = ped1
+
+    per1_1.activity = [act_1]
     
     
     ped2 = Pedestrian()
     ped2.person = per1_2
+    ped_obs_2 = Pedestrian_obs(odStatus = 'origin', od = ods_1, pedestrian = ped2)
     
     grp1 = Group()
     grp1.people = [per1_1, per1_2]
@@ -189,13 +219,35 @@ if __name__ == '__main__': # demo code
     grp2 = Group()
     grp2.people = [per2, per4]
     
-    veh1 = Vehicle(vehicleType = 'personal_car_Sedan', origin = ods_3)
-    veh1.driver = per2
-    veh1.destination = ods_4
+    veh1 = Vehicle(vehicleType = 'personal_car_Sedan', driver = per2)
     
-    bik1 = Bike(bikeType = 'Automatic', origin = ods_5)
+    psg1 = Passenger(person = per5, vehicle = veh1)
+    #veh1.passengers = [psg1]
+
+
+    veh_obs_1 = Vehicle_obs(odStatus = 'origin', od = ods_3, vehicle = veh1)
+    veh_obs_2 = Vehicle_obs(odStatus = 'destination', od = ods_7, vehicle = veh1)
+    
+    ped3 = Pedestrian(person = per2)
+    ped_obs_3 = Pedestrian_obs(odStatus = 'origin', od = ods_7, pedestrian = ped3)
+    ped_obs_4 = Pedestrian_obs(odStatus = 'destination', od = ods_8, pedestrian = ped3)
+
+    act_2 = Activity(activityType = 'shopping')
+    per2.activity = [act_2]
+
+    ped_obs_4 = Pedestrian_obs(odStatus = 'origin', od = ods_8, pedestrian = ped3)
+    ped_obs_5 = Pedestrian_obs(odStatus = 'destination', od = ods_7, pedestrian = ped3)
+
+    ped_obs_6 = Vehicle_obs(odStatus = 'origin', od = ods_7, vehicle = veh1)
+    ped_obs_7 = Vehicle_obs(odStatus = 'destination', od = ods_4, vehicle = veh1)
+
+    
+    bik1 = Bike(bikeType = 'Automatic')
     bik1.cyclist = per3
-    bik1.destination = ods_6
+    bik_obs_1 = Bike_obs(odStatus = 'origin', od = ods_5)
+    bik_obs_1.bike = bik1
+    bik_obs_2 = Bike_obs(odStatus = 'destination', od = ods_6)
+    bik_obs_2.bike = bik1
     #--------------------------------------------------------
     
     session.add_all([ped1, ped2, grp1, grp2, veh1, bik1])
