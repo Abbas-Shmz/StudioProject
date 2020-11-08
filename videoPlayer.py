@@ -1,59 +1,4 @@
 
-# import os
-# from PyQt5 import QtCore, QtGui, QtWidgets, QtMultimedia, QtMultimediaWidgets
-# from PyQt5.QtMultimedia import QMediaPlayer
-#
-# class Widget(QtWidgets.QWidget):
-#     def __init__(self, parent=None):
-#         super(Widget, self).__init__(parent)
-#
-#         self._scene = QtWidgets.QGraphicsScene(self)
-#         self._gv = QtWidgets.QGraphicsView(self._scene)
-#         self._gv.setBackgroundBrush(QtGui.QBrush(QtCore.Qt.lightGray))
-#         # self._scene.set
-#
-#         self._videoitem = QtMultimediaWidgets.QGraphicsVideoItem()
-#         self._scene.addItem(self._videoitem)
-#
-#         # self._ellipse_item = QtWidgets.QGraphicsEllipseItem(QtCore.QRectF(0, 0, 40, 60), self._videoitem)
-#         # self._ellipse_item.setBrush(QtGui.QBrush(QtCore.Qt.green))
-#         # self._ellipse_item.setPen(QtGui.QPen(QtCore.Qt.red))
-#
-#         self._line_item = QtWidgets.QGraphicsLineItem(100, 100, 300, 200 , self._videoitem)
-#         # self._ellipse_item.setBrush(QtGui.QBrush(QtCore.Qt.green))
-#         self._line_item.setPen(QtGui.QPen(QtCore.Qt.red))
-#
-#         self._player = QtMultimedia.QMediaPlayer(self, QtMultimedia.QMediaPlayer.VideoSurface)
-#         self._player.stateChanged.connect(self.on_stateChanged)
-#         self._player.setVideoOutput(self._videoitem)
-#
-#         file = os.path.join(os.path.dirname(__file__), "/Users/Abbas/IMG_0389.MP4")
-#         self._player.setMedia(QtMultimedia.QMediaContent(QtCore.QUrl.fromLocalFile(file)))
-#         button = QtWidgets.QPushButton("Play")
-#         button.clicked.connect(self.play)
-#
-#         self.resize(640, 480)
-#         lay = QtWidgets.QVBoxLayout(self)
-#         lay.addWidget(self._gv)
-#         lay.addWidget(button)
-#
-#     def play(self):
-#         if self._player.state() == QMediaPlayer.PlayingState:
-#             self._player.pause()
-#         else:
-#             self._player.play()
-#
-#     @QtCore.pyqtSlot(QtMultimedia.QMediaPlayer.State)
-#     def on_stateChanged(self, state):
-#         if state == QtMultimedia.QMediaPlayer.PlayingState:
-#             self._gv.fitInView(self._videoitem, QtCore.Qt.KeepAspectRatio)
-#
-# if __name__ == '__main__':
-#     import sys
-#     app = QtWidgets.QApplication(sys.argv)
-#     w = Widget()
-#     w.show()
-#     sys.exit(app.exec_())
 # ===========================================================================================
 
 from PyQt5.QtCore import QDir, Qt, QUrl, QLineF, QPoint, QSizeF
@@ -128,8 +73,6 @@ class VideoWindow(QMainWindow):
         self.mediaPlayer = QMediaPlayer(self, QMediaPlayer.VideoSurface)
         self.mediaPlayer.setVideoOutput(self.videoItem)
         # self.mediaPlayer.stateChanged.connect(self.on_stateChanged)
-        # file = "/Users/Abbas/Stuart_GOPR0196.MP4"
-        # self.mediaPlayer.setMedia(QMediaContent(QtCore.QUrl.fromLocalFile(file)))
         self.mediaPlayer.stateChanged.connect(self.mediaStateChanged)
         self.mediaPlayer.positionChanged.connect(self.positionChanged)
         self.mediaPlayer.durationChanged.connect(self.durationChanged)
@@ -213,24 +156,12 @@ class VideoWindow(QMainWindow):
             self.setWindowTitle(fileName)
             # self.mediaPlayer.pause()
 
-
-
-            # self.gView.scale(1.5, 1.5)
-            # self.gView.fitInView(self.videoItem, Qt.KeepAspectRatio)
-            # self.mediaPlayer.pause()
-            # self.videoItem.setSize(QSizeF(self.gView.size()))
-            # self.gView.resizeEvent(QResizeEvent())
-            # print(self.gView.size())
-            # print(self.videoItem.nativeSize())
-
-
     def exitCall(self):
         sys.exit(app.exec_())
         self.mediaPlayer.pause()
         self.close()
 
     def play(self):
-        # print(self.videoItem.nativeSize())
         # self.gView.fitInView(self.videoItem, Qt.KeepAspectRatio)
 
         if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
@@ -256,9 +187,6 @@ class VideoWindow(QMainWindow):
                                 self.videoCurrentDatetime.time().hour,
                                 self.videoCurrentDatetime.time().minute,
                                 self.videoCurrentDatetime.time().second))
-        # self.videoCurrentDatetime = current_datetime
-        # print(current_datetime)
-        # print(self.videoCurrentDatetime)
 
 
     def durationChanged(self, duration):
@@ -297,11 +225,6 @@ class VideoWindow(QMainWindow):
         creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
         creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S%f')
         return creationDatetime
-        # creationDate_text = creationDateTime.strftime('%a, %b %d, %Y')
-        # self.videoStartDatetime = creationDateTime
-        # creationTime = creationDateTime.time()
-        # return creationDate_text, creationDate, creationTime
-
 
 
 if __name__ == '__main__':
