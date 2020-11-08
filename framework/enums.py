@@ -6,11 +6,13 @@
 
 from enum import Enum
 
+
 class Gender(Enum):
     female = 1
     male = 2
     unknown = 3
-    
+
+
 class Age(Enum):
     infant = 1
     toddler = 2
@@ -19,13 +21,15 @@ class Age(Enum):
     adult = 5
     senior = 6
 
+
 class Disability(Enum):
     none = 1
     Wheelchair = 2
     Walker = 3
     Cane = 4
     While_cane = 5
-    
+
+
 class activityTypes(Enum):
     strolling = 1
     jogging = 2
@@ -42,11 +46,13 @@ class activityTypes(Enum):
     performing = 13
     selling = 14
 
+
 class siteTypes(Enum):
     street_segment = 1
     public_space = 2
     intersection = 3
-    
+
+
 class zoiTypes(Enum):
     school = 1
     nursery = 2
@@ -69,7 +75,8 @@ class zoiTypes(Enum):
     library = 19
     coffee_shop = 20
     NA = 21
-    
+
+
 class odTypes(Enum):
     sidewalk = 1
     road_lane = 2
@@ -82,7 +89,8 @@ class odTypes(Enum):
     bus_stop = 9
     subway_station = 10
     street = 11
-    
+
+
 class vehicleTypes(Enum):
     personal_car_Sedan = 1
     personal_car_SUV = 2
@@ -102,11 +110,13 @@ class vehicleTypes(Enum):
     cleaning_service = 16
     waste_collection_service = 17
     autonomous_car = 18
-    
+
+
 class streetCrossings(Enum):
     from_crosswalk = 1
     jaywalking = 2
-    
+
+
 class pedCarrying(Enum):
     none = 1
     stroller = 2
@@ -119,7 +129,8 @@ class pedCarrying(Enum):
     box = 9
     bicycle = 10
     shopping_bag = 11
-      
+
+
 class pedRolling(Enum):
     none = 1
     scooter = 2
@@ -128,10 +139,3 @@ class pedRolling(Enum):
     segway = 5
     uniwheel = 6
     heelies = 7
-    
-    
-    
-    
-    
-    
-    
