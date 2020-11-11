@@ -14,6 +14,7 @@ from framework.dbSchema import createDatabase, connectDatabase, \
     Passenger
 
 from framework import enums as en
+from sqlalchemy import Enum, schema
 
 age = [a.name for a in en.Age]
 gender = [g.name for g in en.Gender]
@@ -323,6 +324,20 @@ while obsStartTime < simEndTime:
 
     sc2BiksObs = sc2BiksObs + [bik_obs1, bik_obs2]
     sc2PedsObs = sc2PedsObs + [ped_obs1, ped_obs2]
+
+print(Person.__table__.columns.keys())
+gender_column = Person.__table__.columns['gender']
+print(gender_column.type.enums)
+# print(Person.__mapper__.attrs)
+print(Person.age.type.enums)
+cd = schema.ColumnDefault(23)
+print(type(cd.arg))
+print(Person.withPet.default)
+# print(isinstance(Person.age.type, Enum))
+# mapper = inspect(Person)
+
+# for prop in Person.__mapper__.iterate_properties:
+#     print(getattr(Person, prop.key))
 
 session.add_all(sc2BiksObs + sc2PedsObs)
 

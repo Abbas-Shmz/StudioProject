@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
         QGraphicsLineItem)
 from PyQt5.QtWidgets import QMainWindow,QWidget, QPushButton, QAction, qApp, QStatusBar
-from PyQt5.QtGui import QIcon, QBrush, QResizeEvent
+from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen
 
 from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
@@ -16,6 +16,8 @@ from hachoir.core import config as HachoirConfig
 
 import sys
 from datetime import datetime, timedelta
+
+from observationToolbox import ObsToolbox
 
 class GraphicView(QGraphicsView):
     def __init__(self, *args):
@@ -27,19 +29,31 @@ class GraphicView(QGraphicsView):
 
     def mousePressEvent(self, event):
         if event.buttons() == Qt.MidButton:
+            cursor = QCursor(Qt.CrossCursor)
+            self.setCursor(cursor)
+
             p1 = self.mapToScene(event.x(), event.y())
             self.graphicItem = self.scene().addLine(QLineF(p1, p1))
-        else:
-            self.parent().parent().play()
+            self.graphicItem.setPen(QPen(Qt.red))
+            # self.graphicItem.setOpacity(0.25)
+        # else:
+        #     self.parent().parent().play()
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MidButton:
+            cursor = QCursor(Qt.CrossCursor)
+            self.setCursor(cursor)
+
             p2 = self.mapToScene(event.x(), event.y())
-            # self.parent().parent().statusBar.showMessage(f'x: {event.x()},  y: {event.y()}')
-            # .prepareGeometryChange()
             self.graphicItem.setLine(QLineF(self.graphicItem.line().p1(), p2))
 
+    def mouseReleaseEvent(self, event):
+        self.unsetCursor()
+
     def resizeEvent(self, event):
+        self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
+
+    def showEvent(self, event):
         self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
 
     def mouseDoubleClickEvent(self, event):
@@ -62,6 +76,8 @@ class VideoWindow(QMainWindow):
         self.gView = GraphicView(self.gScene)
         self.gView.setSceneRect(0, 0, 320, 240)
         self.gView.setBackgroundBrush(QBrush(Qt.black))
+
+        self.obsTb = None
 
         self.videoStartDatetime = None
         self.videoCurrentDatetime = None
@@ -96,12 +112,19 @@ class VideoWindow(QMainWindow):
         self.statusBar.addPermanentWidget(self.dateLabel)
 
 
-        # Create new action
+        # Create open action
         openAction = QAction('&Open', self)  # QIcon('open.png'),
         openAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open video file')
         openAction.triggered.connect(self.openFile)
+
+        # Create observation action
+        obsTbAction = QAction('&Open toolbox', self)  # QIcon('open.png'),
+        # obsTbAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        # obsTbAction.setShortcut('Ctrl+O')
+        obsTbAction.setStatusTip('Open obseration toolbox')
+        obsTbAction.triggered.connect(self.openObsToolbox)
 
         # Create exit action
         exitAction = QAction('&Exit', self)  # QIcon('exit.png'),
@@ -111,11 +134,17 @@ class VideoWindow(QMainWindow):
         exitAction.triggered.connect(qApp.quit)  # self.exitCall
 
         # Create menu bar and add action
-        menuBar = self.menuBar()
-        menuBar.setNativeMenuBar(False)
-        fileMenu = menuBar.addMenu('&File')
-        fileMenu.addAction(openAction)
-        fileMenu.addAction(exitAction)
+        # menuBar = self.menuBar()
+        # menuBar.setNativeMenuBar(False)
+        # fileMenu = menuBar.addMenu('&File')
+        # fileMenu.addAction(openAction)
+        # fileMenu.addAction(obsTbAction)
+        # fileMenu.addAction(exitAction)
+
+        self.toolbar = self.addToolBar('Tools')
+        self.toolbar.addAction(openAction)
+        self.toolbar.addAction(obsTbAction)
+        self.toolbar.addAction(exitAction)
 
 
         # Create a widget for window contents
@@ -148,13 +177,12 @@ class VideoWindow(QMainWindow):
             creation_datetime = self.getVideoMetadata(fileName)
             self.videoStartDatetime = self.videoCurrentDatetime = creation_datetime
             self.dateLabel.setText(creation_datetime.strftime('%a, %b %d, %Y'))
-            print(creation_datetime)
 
             self.mediaPlayer.setMedia(
                 QMediaContent(QUrl.fromLocalFile(fileName)))
             self.playButton.setEnabled(True)
             self.setWindowTitle(fileName)
-            # self.mediaPlayer.pause()
+            self.mediaPlayer.pause()
 
     def exitCall(self):
         sys.exit(app.exec_())
@@ -200,6 +228,11 @@ class VideoWindow(QMainWindow):
     def handleError(self):
         self.playButton.setEnabled(False)
         # self.errorLabel.setText("Error: " + self.mediaPlayer.errorString())
+
+    def openObsToolbox(self):
+        if self.obsTb == None:
+            self.obsTb = ObsToolbox(self)
+        self.obsTb.show()
 
     @staticmethod
     def convertMillis(millis):

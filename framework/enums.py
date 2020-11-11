@@ -16,10 +16,11 @@ class Gender(Enum):
 class Age(Enum):
     infant = 1
     toddler = 2
-    teen = 3
-    young_adult = 4
-    adult = 5
-    senior = 6
+    child = 3
+    teen = 4
+    young_adult = 5
+    adult = 6
+    senior = 7
 
 
 class Disability(Enum):
@@ -92,8 +93,8 @@ class odTypes(Enum):
 
 
 class vehicleTypes(Enum):
-    personal_car_Sedan = 1
-    personal_car_SUV = 2
+    car_Sedan = 1
+    car_SUV = 2
     bus = 3
     taxi = 4
     motorbike = 5
@@ -101,14 +102,14 @@ class vehicleTypes(Enum):
     moped = 7
     big_truck = 8
     electric_bike = 9
-    electric_shared_car = 10
+    shared_eCar = 10
     van = 11
     ambulance = 12
     school_buse = 13
     police_car = 14
     fire_engine = 15
     cleaning_service = 16
-    waste_collection_service = 17
+    waste_collection = 17
     autonomous_car = 18
 
 
