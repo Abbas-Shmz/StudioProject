@@ -165,8 +165,8 @@ class Site_ODs(Base):
 def createDatabase(filename):
     'creates a session to query the filename'
     # -------------------------------------------
-    if os.path.exists(filename):
-        os.remove(filename)
+    # if os.path.exists(filename):
+    #     os.remove(filename)
     # -------------------------------------------
     if Path(filename).is_file():
         print('The file ' + filename + ' exists')

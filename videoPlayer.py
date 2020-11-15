@@ -1,7 +1,7 @@
 
 # ===========================================================================================
 
-from PyQt5.QtCore import QDir, Qt, QUrl, QLineF, QPoint, QSizeF
+from PyQt5.QtCore import QDir, Qt, QUrl, QLineF, QPoint, QSize
 from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
@@ -128,7 +128,7 @@ class VideoWindow(QMainWindow):
 
         # Create exit action
         exitAction = QAction('&Exit', self)  # QIcon('exit.png'),
-        exitAction.setIcon(self.style().standardIcon(QStyle.SP_TitleBarCloseButton))
+        exitAction.setIcon(self.style().standardIcon(QStyle.SP_BrowserStop))
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(qApp.quit)  # self.exitCall
@@ -142,6 +142,7 @@ class VideoWindow(QMainWindow):
         # fileMenu.addAction(exitAction)
 
         self.toolbar = self.addToolBar('Tools')
+        self.toolbar.setIconSize(QSize(16, 16))
         self.toolbar.addAction(openAction)
         self.toolbar.addAction(obsTbAction)
         self.toolbar.addAction(exitAction)
