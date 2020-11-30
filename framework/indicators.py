@@ -14,29 +14,42 @@ from framework.dbSchema import connectDatabase, Pedestrian_obs, Vehicle, \
     Activity, Site_ODs
 from framework import enums as en
 
-session = connectDatabase('../simulatedData.sqlite')
+session = connectDatabase('/Users/Abbas/stuart.sqlite')
 
 
 # ==============================================================
 def tempDistHist(user, od_name):
-    if user == 'pedestrians':
-        q = session.query(Pedestrian_obs.instant). \
-            join(Site_ODs, Pedestrian_obs.odId == Site_ODs.id). \
+    if user == 'pedestrian':
+        q1 = session.query(Pedestrian_obs.instant). \
+            join(Site_ODs, Pedestrian_obs.originId == Site_ODs.id). \
             filter(Site_ODs.odName == od_name)
 
-    elif user == 'vehicles':
-        q = session.query(Vehicle_obs.instant). \
-            join(Site_ODs, Vehicle_obs.odId == Site_ODs.id). \
-            filter(Site_ODs.odName == od_name)
-    elif user == 'bikes':
-        q = session.query(Bike_obs.instant). \
-            join(Site_ODs, Bike_obs.odId == Site_ODs.id). \
+        q2 = session.query(Pedestrian_obs.instant). \
+            join(Site_ODs, Pedestrian_obs.destinationId == Site_ODs.id). \
             filter(Site_ODs.odName == od_name)
 
-    if q.all() == []:
-        print('No ' + user + ' passage in the ' + od_name)
-        return
-    time_list = [i[0] for i in q.all()]
+    elif user == 'vehicle':
+        q1 = session.query(Vehicle_obs.instant). \
+            join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
+            filter(Site_ODs.odName == od_name)
+
+        q2 = session.query(Vehicle_obs.instant). \
+            join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id). \
+            filter(Site_ODs.odName == od_name)
+
+    elif user == 'cyclist':
+        q1 = session.query(Bike_obs.instant). \
+            join(Site_ODs, Bike_obs.originId == Site_ODs.id). \
+            filter(Site_ODs.odName == od_name)
+
+        q2 = session.query(Bike_obs.instant). \
+            join(Site_ODs, Bike_obs.destinationId == Site_ODs.id). \
+            filter(Site_ODs.odName == od_name)
+
+    if q1.all() == [] and q2.all() == []:
+        return 'No {} is observed passing through the {} section!'.format(user, od_name)
+
+    time_list = [i[0] for i in q1.all()] + [i[0] for i in q2.all()]
 
     fig, ax = plt.subplots(1, 1)
     ax.hist(time_list, bins=20, color='skyblue', ec='grey', rwidth=0.9)
@@ -54,7 +67,7 @@ def tempDistHist(user, od_name):
     ax.set_xlabel('Time', fontsize=8)
     ax.set_ylabel('No. of ' + user, fontsize=8)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.set_title('Temporal distribution of ' + user + ' passing from ' + od_name, fontsize=10)
+    ax.set_title('Temporal distribution of ' + user + ' passings from ' + od_name, fontsize=10)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     ax.text(0.05, 0.95, str(time_list[0].strftime('%A, %b %d, %Y')),
@@ -65,10 +78,9 @@ def tempDistHist(user, od_name):
 
     plt.show()
 
-
 # ==============================================================
 def stackedHist(user, attr, bins):
-    if user == 'pedestrians':
+    if user == 'pedestrian':
         if attr == 'gender':
             cls_fld = Person.gender
             comp_list = [g.name for g in en.Gender]
@@ -77,7 +89,7 @@ def stackedHist(user, attr, bins):
             comp_list = [a.name for a in en.Age]
         q = session.query(cls_fld).join(Pedestrian, Person.id == Pedestrian.personId). \
             distinct()
-    elif user == 'vehicles':
+    elif user == 'vehicle':
         if attr == 'vehicleType':
             cls_fld = Vehicle.vehicleType
             comp_list = [v.name for v in en.vehicleTypes]
@@ -95,16 +107,16 @@ def stackedHist(user, attr, bins):
     distinct_vals = sorted(distinct_vals, key=lambda x: comp_list.index(x))
     time_list = []
     for val in distinct_vals:
-        if user == 'pedestrians':
+        if user == 'pedestrian':
             q = session.query(Pedestrian_obs.instant). \
                 join(Pedestrian, Pedestrian_obs.pedestrianId == Pedestrian.id). \
                 join(Person, Person.id == Pedestrian.personId). \
                 filter(cls_fld == val)
-        elif user == 'vehicles':
+        elif user == 'vehicle':
             q = session.query(Vehicle_obs.instant). \
                 join(Vehicle, Vehicle_obs.vehicleId == Vehicle.id). \
                 filter(cls_fld == val)
-        elif user == 'activities':
+        elif user == 'activity':
             q = session.query(Activity.startTime).filter(cls_fld == val)
         else:
             print('ERROR: The argument is not correct!')
@@ -142,19 +154,19 @@ def stackedHist(user, attr, bins):
 
 # ==============================================================
 def odMatrix(user):
-    if user == 'pedestrians':
+    if user == 'pedestrian':
         ods_list = ['sidewalk', 'adjoining_ZOI', 'bus_stop',
                     'on_street_parking_lot', 'bicycle_rack']
         cls_ = Pedestrian_obs
         cls_fld = Pedestrian_obs.pedestrianId
 
-    elif user == 'cyclists':
+    elif user == 'cyclist':
         ods_list = ['cycling_path', 'sidewalk', 'road_lane',
                     'bus_lane', 'bicycle_rack', 'informal_bicycle_parking']
         cls_ = Bike_obs
         cls_fld = Bike_obs.bikeId
 
-    elif user == 'vehicles':
+    elif user == 'vehicle':
         ods_list = ['road_lane', 'on_street_parking_lot', 'bus_stop']
         cls_ = Vehicle_obs
         cls_fld = Vehicle_obs.vehicleId
@@ -221,6 +233,6 @@ def odMatrix(user):
 
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':
-    # tempDistHist(user = 'pedestrians', od_name = 'sidewalk_SW')
-    stackedHist('activities', 'activityType', 20)
+    tempDistHist(user = 'vehicle', od_name = 'road_2')
+    # stackedHist('activities', 'activityType', 20)
     # odMatrix(user='cyclists')

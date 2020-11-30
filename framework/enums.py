@@ -49,9 +49,10 @@ class activityTypes(Enum):
 
 
 class siteTypes(Enum):
-    street_segment = 1
-    public_space = 2
-    intersection = 3
+    street_section = 1
+    street_segment = 2
+    public_space = 3
+    intersection = 4
 
 
 class zoiTypes(Enum):

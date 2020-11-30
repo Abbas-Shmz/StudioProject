@@ -1,28 +1,35 @@
 import sys
-from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QLabel,
+from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
-                             QComboBox, QGroupBox)
+                             QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
+                             QFileDialog, QToolBar, QMessageBox, QDialog, QLabel)
 from PyQt5.QtGui import QColor
+from PyQt5.QtCore import QDateTime, QSize, QDir, Qt
 
 from framework.dbSchema import createDatabase, connectDatabase, \
     Study_site, Site_ODs, Person, Pedestrian, Vehicle, Bike, \
     Activity, Group, Pedestrian_obs, Vehicle_obs, Bike_obs, \
-    Passenger
+    Passenger, GroupBelongings
+
+from framework.indicators import tempDistHist
 
 from framework import dbSchema
 
-from sqlalchemy import Enum, Boolean
+from sqlalchemy import Enum, Boolean, DateTime
 from sqlalchemy.inspection import inspect
 
 
 class ObsToolbox(QMainWindow):
     def __init__(self, parent=None):
         super(ObsToolbox, self).__init__(parent)
-        self.resize(300, 480)
+        self.resize(400, 650)
         self.dbFilename = '/Users/Abbas/stuart.sqlite'
         self.session = None
+        self.roadUser = None
+        self.odName = None
         layout = QVBoxLayout() #QGridLayout()
 
+        self.setWindowTitle(self.dbFilename)
         self.session = createDatabase(self.dbFilename)
         if self.session is None:
             self.session = connectDatabase(self.dbFilename)
@@ -49,9 +56,31 @@ class ObsToolbox(QMainWindow):
         self.toolbox.setStyleSheet(styleSheet)
         layout.addWidget(self.toolbox)#, 0, 0)
 
+        openAction = QAction('&Open', self)  # QIcon('open.png'),
+        openAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        openAction.setShortcut('Ctrl+O')
+        openAction.setStatusTip('Open database file')
+        openAction.triggered.connect(self.opendbFile)
+
+        tempHistAction = QAction('&THist', self)  # QIcon('open.png'),
+        tempHistAction.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+        # openAction.setShortcut('Ctrl+O')
+        # openAction.setStatusTip('Open database file')
+        tempHistAction.triggered.connect(self.tempHist)
+
+        self.toolbar = QToolBar()
+        self.toolbar.setIconSize(QSize(16, 16))
+        self.toolbar.addAction(openAction)
+        self.toolbar.addAction(tempHistAction)
+        self.toolbar.insertSeparator(tempHistAction)
+        self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
+
         # ==================== Toolbox tabs =========================
         # Person tab
         self.newTab([Person], Person.__name__)
+
+        # Group tab
+        self.newTab([Group, GroupBelongings], Group.__name__)
 
         # Pedestrian tab
         self.newTab([Pedestrian, Pedestrian_obs], Pedestrian.__name__)
@@ -61,6 +90,12 @@ class ObsToolbox(QMainWindow):
 
         # Bicycles tab
         self.newTab([Bike, Bike_obs], Bike.__name__)
+
+        # Activity tab
+        self.newTab([Activity], Activity.__name__)
+
+        # Study_site tab
+        self.newTab([Study_site, Site_ODs], Study_site.__name__)
 
 
         # Create a widget for window contents
@@ -83,15 +118,12 @@ class ObsToolbox(QMainWindow):
             else:
                 e = None
 
-            if column.name in pk_list:
-                is_pk = True
-            else:
-                is_pk = False
-
             columnsList.append({'name':column.name,
-                               'enum': e,
-                               'default': column.default.arg if column.default != None else None,
-                                'is_primary_key': is_pk})
+                                'enum': e,
+                                'default': column.default.arg if column.default != None else None,
+                                'is_primary_key': True if column.name in pk_list else False,
+                                'is_foreign_key': False if len(column.foreign_keys) == 0 else True,
+                                'is_datetime': True if isinstance(column.type, DateTime) else False})
         return columnsList
 
 
@@ -109,18 +141,22 @@ class ObsToolbox(QMainWindow):
         for column in self.getTableColumns(tableClass):
             label = QLabel(column['name'])
             gridLayout.addWidget(label, i, 0)
+
             if column['enum'] != None:
-                # self.widgetsDict['{}_{}'.format(tableClass.__name__, column['name'])] = QComboBox()
                 wdgt = QComboBox()
                 wdgt.addItems(column['enum'])
-                # self.widgetsDict['{}_{}'.format(tableClass.__name__, column['name'])].\
-                #                                  addItems(column['enum'])
+                # wdgt.setCurrentIndex(-1)
+            elif column['is_foreign_key']:
+                wdgt = QComboBox()
+            elif column['is_datetime']:
+                wdgt = QDateTimeEdit()
+                wdgt.setDisplayFormat('yyyy-MM-dd hh:mm:ss')
+                # wdgt.setCalendarPopup(True)
             else:
-                # self.widgetsDict['{}_{}'.format(tableClass.__name__, column['name'])] = QLineEdit()
                 wdgt = QLineEdit()
                 if column['is_primary_key']:
                     wdgt.setReadOnly(True) #.setEnabled(False)
-            # gridLayout.addWidget(self.widgetsDict['{}_{}'.format(tableClass.__name__, column['name'])], i, 1)
+
             gridLayout.addWidget(wdgt, i, 1)
             i = i + 1
 
@@ -158,10 +194,33 @@ class ObsToolbox(QMainWindow):
             input_wdgt = grid_lyt.itemAtPosition(i, 1).widget()
             if  isinstance(input_wdgt, QLineEdit) and input_wdgt.isReadOnly():
                 input_wdgt.setText(str(getattr(instance, label.text())))
+            elif isinstance(input_wdgt, QComboBox):
+                if len(getattr(class_, label.text()).foreign_keys) > 0:
+                    fk_set = getattr(class_, label.text()).foreign_keys
+                    fk = next(iter(fk_set))
+                    items = [i[0] for i in self.session.query(fk.column).all()]
+                    items.sort(reverse=True)
+                    items = [str(i) for i in items]
+                    input_wdgt.clear()
+                    input_wdgt.addItems(items)
+            elif  isinstance(input_wdgt, QDateTimeEdit):
+                if self.parent() == None or self.parent().videoCurrentDatetime == None:
+                    input_wdgt.setDateTime(QDateTime.currentDateTime())
+                else:
+                    input_wdgt.setDateTime(QDateTime(self.parent().videoCurrentDatetime))
             i = i + 1
 
         grid_wdgt.repaint()
         # self.session.commit()
+
+        # rels = inspect(class_).relationships
+        # clss = [rel.mapper.class_ for rel in rels]
+        # print(clss)
+
+        # fk_set = inspect(class_).columns.personId.foreign_keys
+        # fk = next(iter(fk_set))
+        # print(fk.column)
+        # print([i[0] for i in self.session.query(fk.column).all()])
 
 
     def addObject(self, grpBx, grid_wdgt, newBtn, addBtn):
@@ -201,6 +260,8 @@ class ObsToolbox(QMainWindow):
                     input_wdgt_val = False
                 else:
                     input_wdgt_val = input_wdgt.currentText()
+            elif isinstance(input_wdgt, QDateTimeEdit):
+                    input_wdgt_val = input_wdgt.dateTime().toPyDateTime()
             setattr(instance, label.text(), input_wdgt_val)
             i = i + 1
 
@@ -219,6 +280,69 @@ class ObsToolbox(QMainWindow):
         self.toolbox.addItem(wdgt, tabName)
 
 
+    def opendbFile(self):
+        # dlg = QFileDialog()
+        # dlg.DontUseNativeDialog
+        # dlg.FileMode(QFileDialog.AnyFile)
+        fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
+                                                  QDir.homePath())#, "Sqlite files (*.sqlite)")
+        if fileName != '':
+            self.setWindowTitle(fileName)
+
+            self.dbFilename = fileName
+
+            self.session = createDatabase(self.dbFilename)
+            if self.session is None:
+                self.session = connectDatabase(self.dbFilename)
+
+    def tempHist(self):
+        inputWin = QDialog(self)
+        inputWin.setModal(True)
+        inputWin.setAttribute(Qt.WA_DeleteOnClose)
+
+        winLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+        btnsLayout = QHBoxLayout()
+
+        gridLayout.addWidget(QLabel('Road user'), 0, 0)
+        userCombobx = QComboBox()
+        userCombobx.addItems(['pedestrian', 'vehicle', 'cyclist'])
+        gridLayout.addWidget(userCombobx, 0, 1)
+
+        gridLayout.addWidget(QLabel('OD name'), 1, 0)
+        odNamesCombobx = QComboBox()
+        odNamesCombobx.addItems([name[0] for name in self.session.query(Site_ODs.odName).all()])
+        gridLayout.addWidget(odNamesCombobx, 1, 1)
+
+        okBtn = QPushButton('Ok')
+        okBtn.clicked.connect(lambda: self.okBtnClick(userCombobx, odNamesCombobx))
+        cancelBtn = QPushButton('Cancel')
+        cancelBtn.clicked.connect(self.cancelBtnClick)
+
+        btnsLayout.addWidget(cancelBtn)
+        btnsLayout.addWidget(okBtn)
+
+        winLayout.addLayout(gridLayout)
+        winLayout.addLayout(btnsLayout)
+
+        inputWin.setLayout(winLayout)
+
+        inputWin.exec_()
+
+        err = tempDistHist(user=self.roadUser, od_name=self.odName)
+        if err != None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(err)
+            msg.exec_()
+
+    def okBtnClick(self, userCombobx, odNamesCombobx):
+        self.roadUser = userCombobx.currentText()
+        self.odName = odNamesCombobx.currentText()
+        self.sender().parent().close()
+
+    def cancelBtnClick(self):
+        self.sender().parent().close()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

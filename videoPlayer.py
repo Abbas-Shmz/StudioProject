@@ -6,9 +6,11 @@ from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
-        QGraphicsLineItem)
-from PyQt5.QtWidgets import QMainWindow,QWidget, QPushButton, QAction, qApp, QStatusBar
-from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen
+        QGraphicsLineItem, QGraphicsTextItem, QGridLayout, QComboBox, QOpenGLWidget)
+from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
+                             QLineEdit)
+from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont
+from PyQt5.QtOpenGL import QGLWidget
 
 from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
@@ -17,14 +19,18 @@ from hachoir.core import config as HachoirConfig
 import sys
 from datetime import datetime, timedelta
 
+from framework.dbSchema import connectDatabase, Site_ODs
+
 from observationToolbox import ObsToolbox
 
 class GraphicView(QGraphicsView):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.graphicItem = None
+        self.labelShape = None
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # self.setViewport(QOpenGLWidget())
         # self.setMouseTracking(True)
 
     def mousePressEvent(self, event):
@@ -36,8 +42,97 @@ class GraphicView(QGraphicsView):
             self.graphicItem = self.scene().addLine(QLineF(p1, p1))
             self.graphicItem.setPen(QPen(Qt.red))
             # self.graphicItem.setOpacity(0.25)
-        # else:
-        #     self.parent().parent().play()
+        elif event.buttons() == Qt.RightButton:
+            p = self.mapToScene(event.x(), event.y())
+            labelShape = self.scene().addEllipse(p.x(), p.y(), 10, 10,
+                                                 QPen(Qt.white, 0.75), QBrush(Qt.black))
+            labelShape.moveBy(-5, -5)
+
+            labelWin = QDialog(self)
+            labelWin.setModal(True)
+            labelWinLayout = QVBoxLayout()
+
+            labelWinGrid = QGridLayout()
+            labelWinGrid.addWidget(QLabel('id'), 1,0)
+
+            id_lineedit = QLineEdit()
+            id_lineedit.setReadOnly(True)
+            labelWinGrid.addWidget(id_lineedit, 1, 1)
+
+            labelWinGrid.addWidget(QLabel('odName'), 0, 0)
+
+            odName_cmbbx = QComboBox()
+            labelWinGrid.addWidget(odName_cmbbx, 0, 1)
+            session = connectDatabase(self.scene().parent().obsTb.dbFilename)
+            odName_cmbbx.addItems([name[0] for name in session.query(Site_ODs.odName).all()])
+            odName_cmbbx.setCurrentIndex(-1)
+
+            labelWinLayout.addItem(labelWinGrid)
+            addBtn = QPushButton('Add', labelWin)
+            addBtn.setEnabled(False)
+            addBtn.clicked.connect(lambda: self.labelAdd(p, id_lineedit, labelShape, session))
+
+            cancelBtn = QPushButton('Cancel', labelWin)
+            cancelBtn.clicked.connect(lambda: self.labelCancel(labelShape))
+
+            odName_cmbbx.currentIndexChanged.connect(lambda: self.cmbbxIndexChanged(session, addBtn,
+                                                                                    id_lineedit))
+
+            btnsLayout = QHBoxLayout()
+            btnsLayout.addWidget(cancelBtn)
+            btnsLayout.addWidget(addBtn)
+            labelWinLayout.addLayout(btnsLayout)
+            labelWin.setLayout(labelWinLayout)
+            labelWin.exec_()
+
+        else:
+            self.parent().parent().play()
+
+    def labelAdd(self, p, id_lineedit, labelShape, session):
+        labelText = self.scene().addText(id_lineedit.text())
+        labelFont = QFont()
+        labelFont.setPointSize(6)
+        labelFont.setBold(True)
+        labelText.setFont(labelFont)
+        labelText.setDefaultTextColor(Qt.white)
+        labelText.setPos(p)
+        labelText.moveBy(-labelText.boundingRect().width() / 2,
+                         -labelText.boundingRect().height() / 2)
+
+        od_type = session.query(Site_ODs.odType). \
+            filter(Site_ODs.id == id_lineedit.text()).all()[0][0].name
+
+        od_name = session.query(Site_ODs.odName). \
+            filter(Site_ODs.id == id_lineedit.text()).all()[0][0]
+
+        labelShape.setToolTip("<h3>Name: {} <hr>Type: {}</h3>"         
+                        "".format(od_name, od_type))
+        if od_type == 'sidewalk':
+            labelShape.setBrush(QBrush(Qt.darkRed))
+        elif od_type == 'road_lane':
+            labelShape.setBrush(QBrush(Qt.darkGray))
+        elif od_type == 'cycling_path':
+            labelShape.setBrush(QBrush(Qt.darkGreen))
+        elif od_type == 'bus_lane':
+            labelShape.setBrush(QBrush(Qt.darkYellow))
+        elif od_type == 'adjoining_ZOI':
+            labelShape.setBrush(QBrush(Qt.darkBlue))
+
+        # print(self.scene().parent().obsTb.dbFilename)
+        self.sender().parent().close()
+
+
+    def labelCancel(self, labelShape):
+        self.scene().removeItem(labelShape)
+        self.sender().parent().close()
+
+
+    def cmbbxIndexChanged(self, session, addBtn, id_lineedit):
+        addBtn.setEnabled(True)
+        id = session.query(Site_ODs.id).\
+                           filter(Site_ODs.odName == self.sender().currentText()).all()[0][0]
+        id_lineedit.setText(str(id))
+
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.MidButton:
@@ -60,6 +155,17 @@ class GraphicView(QGraphicsView):
         self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
     #     print(self.items()[-1].boundingRect())
 
+    def wheelEvent(self, event):
+        factor = 1.1
+        if event.angleDelta().y() < 0:
+            factor = 0.9
+        view_pos = event.pos()
+        scene_pos = self.mapToScene(view_pos)
+        self.centerOn(scene_pos)
+        self.scale(factor, factor)
+        delta = self.mapToScene(view_pos) - self.mapToScene(self.viewport().rect().center())
+        self.centerOn(scene_pos - delta)
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Space:
             self.parent().parent().play()
@@ -75,9 +181,10 @@ class VideoWindow(QMainWindow):
         self.gScene = QGraphicsScene(self)
         self.gView = GraphicView(self.gScene)
         self.gView.setSceneRect(0, 0, 320, 240)
-        self.gView.setBackgroundBrush(QBrush(Qt.black))
+        # self.gView.setBackgroundBrush(QBrush(Qt.black))
 
-        self.obsTb = None
+
+        self.obsTb = ObsToolbox(self)
 
         self.videoStartDatetime = None
         self.videoCurrentDatetime = None
@@ -120,15 +227,23 @@ class VideoWindow(QMainWindow):
         openAction.triggered.connect(self.openFile)
 
         # Create observation action
-        obsTbAction = QAction('&Open toolbox', self)  # QIcon('open.png'),
+        obsTbAction = QAction('&Toolbox', self)  # QIcon('open.png'),
         # obsTbAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         # obsTbAction.setShortcut('Ctrl+O')
         obsTbAction.setStatusTip('Open obseration toolbox')
         obsTbAction.triggered.connect(self.openObsToolbox)
 
+        drawLineAction = QAction('Draw line', self)
+        drawLineAction.setToolTip('Draw line over the video')
+        drawLineAction.setCheckable(True)
+
+        labelingAction = QAction('Labeling', self)
+        labelingAction.setToolTip('Mark ODs over the video')
+        labelingAction.setCheckable(True)
+
         # Create exit action
         exitAction = QAction('&Exit', self)  # QIcon('exit.png'),
-        exitAction.setIcon(self.style().standardIcon(QStyle.SP_BrowserStop))
+        # exitAction.setIcon(self.style().standardIcon(QStyle.SP_BrowserStop))
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(qApp.quit)  # self.exitCall
@@ -144,6 +259,8 @@ class VideoWindow(QMainWindow):
         self.toolbar = self.addToolBar('Tools')
         self.toolbar.setIconSize(QSize(16, 16))
         self.toolbar.addAction(openAction)
+        self.toolbar.addAction(drawLineAction)
+        self.toolbar.addAction(labelingAction)
         self.toolbar.addAction(obsTbAction)
         self.toolbar.addAction(exitAction)
 
@@ -171,7 +288,7 @@ class VideoWindow(QMainWindow):
         # self.gView.fitInView(self.videoItem, Qt.KeepAspectRatio)
 
     def openFile(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open Movie",
+        fileName, _ = QFileDialog.getOpenFileName(self, "Open video",
                                                   QDir.homePath())
 
         if fileName != '':
@@ -183,6 +300,7 @@ class VideoWindow(QMainWindow):
                 QMediaContent(QUrl.fromLocalFile(fileName)))
             self.playButton.setEnabled(True)
             self.setWindowTitle(fileName)
+            self.gView.setViewport(QOpenGLWidget())
             self.mediaPlayer.pause()
 
     def exitCall(self):
@@ -231,9 +349,8 @@ class VideoWindow(QMainWindow):
         # self.errorLabel.setText("Error: " + self.mediaPlayer.errorString())
 
     def openObsToolbox(self):
-        if self.obsTb == None:
-            self.obsTb = ObsToolbox(self)
-        self.obsTb.show()
+        if not self.obsTb.isVisible():
+            self.obsTb.show()
 
     @staticmethod
     def convertMillis(millis):
@@ -263,6 +380,7 @@ class VideoWindow(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setStyle('Fusion') #'Fusion', 'Windows', 'WindowsVista', 'Macintosh'
     player = VideoWindow()
     player.resize(640, 480)
     player.show()
