@@ -79,7 +79,7 @@ def tempDistHist(user, od_name):
     plt.show()
 
 # ==============================================================
-def stackedHist(user, attr, bins):
+def stackedHist(user, attr, bins=20):
     if user == 'pedestrian':
         if attr == 'gender':
             cls_fld = Person.gender
@@ -87,6 +87,9 @@ def stackedHist(user, attr, bins):
         elif attr == 'age':
             cls_fld = Person.age
             comp_list = [a.name for a in en.Age]
+        else:
+            return 'ERROR: The argument is not correct!'
+
         q = session.query(cls_fld).join(Pedestrian, Person.id == Pedestrian.personId). \
             distinct()
     elif user == 'vehicle':
@@ -99,9 +102,9 @@ def stackedHist(user, attr, bins):
             cls_fld = Activity.activityType
             comp_list = [v.name for v in en.activityTypes]
         q = session.query(cls_fld).distinct()
-    else:
-        print('ERROR: The argument is not correct!')
-        return
+
+    if q.all() == []:
+        return 'There is no observation for {} of {}!'.format(attr, user)
 
     distinct_vals = [i[0].name for i in q.all()]
     distinct_vals = sorted(distinct_vals, key=lambda x: comp_list.index(x))
@@ -119,8 +122,8 @@ def stackedHist(user, attr, bins):
         elif user == 'activity':
             q = session.query(Activity.startTime).filter(cls_fld == val)
         else:
-            print('ERROR: The argument is not correct!')
-            return
+            return 'ERROR: The argument is not correct!'
+
 
         time_list.append([i[0] for i in q.all()])
 
@@ -156,7 +159,7 @@ def stackedHist(user, attr, bins):
 def odMatrix(user):
     if user == 'pedestrian':
         ods_list = ['sidewalk', 'adjoining_ZOI', 'bus_stop',
-                    'on_street_parking_lot', 'bicycle_rack']
+                    'on_street_parking_lot', 'bicycle_rack', 'road_lane']
         cls_ = Pedestrian_obs
         cls_fld = Pedestrian_obs.pedestrianId
 
@@ -185,21 +188,22 @@ def odMatrix(user):
     od_df = pd.DataFrame(columns=ods_id, index=ods_id)
     od_df[:] = 0
 
-    q = session.query(cls_fld, cls_.odStatus, cls_.odId)
+    q = session.query(cls_fld, cls_.originId, cls_.destinationId)
 
     user_od_dict = {}
     for rec in q.all():
-        if rec[0] in user_od_dict.keys():
-            if rec[1] == 'origin':
-                user_od_dict[rec[0]][0] = rec[2]
-            else:
-                user_od_dict[rec[0]][1] = rec[2]
-        else:
+        if not rec[0] in user_od_dict.keys():
             user_od_dict[rec[0]] = [None, None]
-            if rec[1] == 'origin':
-                user_od_dict[rec[0]][0] = rec[2]
-            else:
-                user_od_dict[rec[0]][1] = rec[2]
+
+        if rec[1] == '' and rec[2] != '':
+            user_od_dict[rec[0]][1] = rec[2]
+        elif rec[1] != '' and rec[2] == '':
+            user_od_dict[rec[0]][0] = rec[1]
+        elif rec[1] != '' and rec[2] != '':
+            user_od_dict[rec[0]][0] = rec[1]
+            user_od_dict[rec[0]][1] = rec[2]
+        else:
+            continue
 
     for od in user_od_dict.values():
         od_df.loc[od[0], od[1]] = od_df.loc[od[0], od[1]] + 1

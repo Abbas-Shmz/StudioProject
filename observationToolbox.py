@@ -11,8 +11,7 @@ from framework.dbSchema import createDatabase, connectDatabase, \
     Activity, Group, Pedestrian_obs, Vehicle_obs, Bike_obs, \
     Passenger, GroupBelongings
 
-from framework.indicators import tempDistHist
-
+from framework.indicators import tempDistHist, stackedHist, odMatrix
 from framework import dbSchema
 
 from sqlalchemy import Enum, Boolean, DateTime
@@ -27,6 +26,7 @@ class ObsToolbox(QMainWindow):
         self.session = None
         self.roadUser = None
         self.odName = None
+        self.userAttr = None
         layout = QVBoxLayout() #QGridLayout()
 
         #--------------------------------------------
@@ -70,10 +70,20 @@ class ObsToolbox(QMainWindow):
         # openAction.setStatusTip('Open database file')
         tempHistAction.triggered.connect(self.tempHist)
 
+        stackHistAction = QAction('&SHist', self)  # QIcon('open.png'),
+        stackHistAction.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp))
+        stackHistAction.triggered.connect(self.stackedHist)
+
+        odMatrixAction = QAction('&OD Matrix', self)  # QIcon('open.png'),
+        odMatrixAction.setIcon(self.style().standardIcon(QStyle.SP_DesktopIcon))
+        odMatrixAction.triggered.connect(self.odMatrix)
+
         self.toolbar = QToolBar()
         self.toolbar.setIconSize(QSize(16, 16))
         self.toolbar.addAction(openAction)
         self.toolbar.addAction(tempHistAction)
+        self.toolbar.addAction(stackHistAction)
+        self.toolbar.addAction(odMatrixAction)
         self.toolbar.insertSeparator(tempHistAction)
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
 
@@ -317,7 +327,7 @@ class ObsToolbox(QMainWindow):
         gridLayout.addWidget(odNamesCombobx, 1, 1)
 
         okBtn = QPushButton('Ok')
-        okBtn.clicked.connect(lambda: self.okBtnClick(userCombobx, odNamesCombobx))
+        okBtn.clicked.connect(lambda: self.okBtnClickTHist(userCombobx, odNamesCombobx))
         cancelBtn = QPushButton('Cancel')
         cancelBtn.clicked.connect(self.cancelBtnClick)
 
@@ -338,9 +348,97 @@ class ObsToolbox(QMainWindow):
             msg.setText(err)
             msg.exec_()
 
-    def okBtnClick(self, userCombobx, odNamesCombobx):
+
+    def stackedHist(self):
+        inputWin = QDialog(self)
+        inputWin.setModal(True)
+        inputWin.setAttribute(Qt.WA_DeleteOnClose)
+
+        winLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+        btnsLayout = QHBoxLayout()
+
+        gridLayout.addWidget(QLabel('Road user'), 0, 0)
+        userCombobx = QComboBox()
+        userCombobx.addItems(['pedestrian', 'vehicle', 'activities'])
+        gridLayout.addWidget(userCombobx, 0, 1)
+
+        gridLayout.addWidget(QLabel('Attribute'), 1, 0)
+        attrCombobx = QComboBox()
+        attrCombobx.addItems(['age', 'gender', 'vehicleType', 'activityType'])
+        gridLayout.addWidget(attrCombobx, 1, 1)
+
+        okBtn = QPushButton('Ok')
+        okBtn.clicked.connect(lambda: self.okBtnClickSHist(userCombobx, attrCombobx))
+        cancelBtn = QPushButton('Cancel')
+        cancelBtn.clicked.connect(self.cancelBtnClick)
+
+        btnsLayout.addWidget(cancelBtn)
+        btnsLayout.addWidget(okBtn)
+
+        winLayout.addLayout(gridLayout)
+        winLayout.addLayout(btnsLayout)
+
+        inputWin.setLayout(winLayout)
+
+        inputWin.exec_()
+
+        err = stackedHist(user=self.roadUser, attr=self.userAttr)
+        if err != None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(err)
+            msg.exec_()
+
+
+    def odMatrix(self):
+        inputWin = QDialog(self)
+        inputWin.setModal(True)
+        inputWin.setAttribute(Qt.WA_DeleteOnClose)
+
+        winLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+        btnsLayout = QHBoxLayout()
+
+        gridLayout.addWidget(QLabel('Road user'), 0, 0)
+        userCombobx = QComboBox()
+        userCombobx.addItems(['pedestrian', 'vehicle', 'cyclist'])
+        gridLayout.addWidget(userCombobx, 0, 1)
+
+        okBtn = QPushButton('Ok')
+        okBtn.clicked.connect(lambda: self.okBtnClickODmatrix(userCombobx))
+        cancelBtn = QPushButton('Cancel')
+        cancelBtn.clicked.connect(self.cancelBtnClick)
+
+        btnsLayout.addWidget(cancelBtn)
+        btnsLayout.addWidget(okBtn)
+
+        winLayout.addLayout(gridLayout)
+        winLayout.addLayout(btnsLayout)
+
+        inputWin.setLayout(winLayout)
+
+        inputWin.exec_()
+
+        err = odMatrix(user=self.roadUser)
+        if err != None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(err)
+            msg.exec_()
+
+    def okBtnClickTHist(self, userCombobx, odNamesCombobx):
         self.roadUser = userCombobx.currentText()
         self.odName = odNamesCombobx.currentText()
+        self.sender().parent().close()
+
+    def okBtnClickSHist(self, userCombobx, attrCombobx):
+        self.roadUser = userCombobx.currentText()
+        self.userAttr = attrCombobx.currentText()
+        self.sender().parent().close()
+
+    def okBtnClickODmatrix(self, userCombobx):
+        self.roadUser = userCombobx.currentText()
         self.sender().parent().close()
 
     def cancelBtnClick(self):
