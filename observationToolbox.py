@@ -29,10 +29,12 @@ class ObsToolbox(QMainWindow):
         self.odName = None
         layout = QVBoxLayout() #QGridLayout()
 
+        #--------------------------------------------
         self.setWindowTitle(self.dbFilename)
         self.session = createDatabase(self.dbFilename)
         if self.session is None:
             self.session = connectDatabase(self.dbFilename)
+        #-----------------------------------------------
 
         # styleSheet = """
         #                 QToolBox::tab {
