@@ -14,11 +14,11 @@ from framework.dbSchema import connectDatabase, Pedestrian_obs, Vehicle, \
     Activity, Site_ODs
 from framework import enums as en
 
-session = connectDatabase('/Users/Abbas/stuart.sqlite')
+# session = connectDatabase('/Users/Abbas/stuart.sqlite')
 
 
 # ==============================================================
-def tempDistHist(user, od_name):
+def tempDistHist(user, od_name, session):
     if user == 'pedestrian':
         q1 = session.query(Pedestrian_obs.instant). \
             join(Site_ODs, Pedestrian_obs.originId == Site_ODs.id). \
@@ -79,7 +79,7 @@ def tempDistHist(user, od_name):
     plt.show()
 
 # ==============================================================
-def stackedHist(user, attr, bins=20):
+def stackedHist(user, attr, session, bins=20):
     if user == 'pedestrian':
         if attr == 'gender':
             cls_fld = Person.gender
@@ -156,7 +156,7 @@ def stackedHist(user, attr, bins=20):
 
 
 # ==============================================================
-def odMatrix(user):
+def odMatrix(user, session):
     if user == 'pedestrian':
         ods_list = ['sidewalk', 'adjoining_ZOI', 'bus_stop',
                     'on_street_parking_lot', 'bicycle_rack', 'road_lane']
@@ -175,12 +175,13 @@ def odMatrix(user):
         cls_fld = Vehicle_obs.vehicleId
 
     else:
-        print('ERROR: The argument is not correct!')
-        return
-
+        return 'ERROR: The argument is not correct!'
 
     q_ods = session.query(Site_ODs.id, Site_ODs.odType, Site_ODs.odName). \
         filter(Site_ODs.odType.in_(ods_list))
+
+    if q_ods.all() == []:
+        return 'There is no data for ODs!'
 
     ods_id = [str(i[0]) for i in q_ods.all()]
     ods_name = [str(i[2]) for i in q_ods.all()]
@@ -189,6 +190,9 @@ def odMatrix(user):
     od_df[:] = 0
 
     q = session.query(cls_fld, cls_.originId, cls_.destinationId)
+
+    if q.all() == []:
+        return 'There is no observation for {}!'.format(user)
 
     user_od_dict = {}
     for rec in q.all():
@@ -216,16 +220,17 @@ def odMatrix(user):
     plt.matshow(od_df, cmap=plt.cm.coolwarm)
     plt.xticks(range(len(ods_name)), ods_name, fontsize=7, rotation=90, weight="bold")
     plt.yticks(range(len(ods_name)), ods_name, fontsize=7, weight="bold")
+    plt.tick_params(bottom=False, left=False, right=False, top=False)
 
-    plt.text(len(ods_name), len(ods_name), od_df.values.sum(), va='center', ha='left',
+    plt.text(len(ods_name) - 0.4, len(ods_name) - 0.3, od_df.values.sum(), va='center', ha='left',
              fontsize=8, weight="bold")
     # plt.colorbar()
     # plt.table(cellText = dst_sum,loc = 'bottom', cellLoc = 'center')
     # plt.table(cellText = org_sum,loc = 'right', cellLoc = 'center')
 
     for i in range(len(ods_name)):
-        plt.text(len(ods_name), i, org_sum[i], va='center', ha='left', fontsize=8)
-        plt.text(i, len(ods_name), dst_sum[i], va='center', ha='center', fontsize=8)
+        plt.text(len(ods_name) - 0.4, i, org_sum[i], va='center', ha='left', fontsize=8)
+        plt.text(i, len(ods_name) - 0.3, dst_sum[i], va='center', ha='center', fontsize=8)
 
     for i in range(0, od_df.shape[0]):
         for j in range(0, od_df.shape[0]):
@@ -237,6 +242,6 @@ def odMatrix(user):
 
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':
-    tempDistHist(user = 'vehicle', od_name = 'road_2')
+    # tempDistHist(user = 'vehicle', od_name = 'road_2')
     # stackedHist('activities', 'activityType', 20)
-    # odMatrix(user='cyclists')
+    odMatrix('cyclist', session)

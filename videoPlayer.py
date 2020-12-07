@@ -6,7 +6,8 @@ from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
-        QGraphicsLineItem, QGraphicsTextItem, QGridLayout, QComboBox, QOpenGLWidget, QMessageBox)
+        QGraphicsLineItem, QGraphicsTextItem, QGridLayout, QComboBox, QOpenGLWidget, QMessageBox,
+        QButtonGroup)
 from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
                              QLineEdit)
 from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont
@@ -191,7 +192,7 @@ class VideoWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super(VideoWindow, self).__init__(parent)
-        self.setWindowTitle("Video Player")
+        self.setWindowTitle("StudioProject")
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.gScene = QGraphicsScene(self)
@@ -237,31 +238,32 @@ class VideoWindow(QMainWindow):
 
 
         # Create open action
-        openAction = QAction('&Open', self)  # QIcon('open.png'),
-        openAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        openAction = QAction(QIcon('icons/video-file.png'), '&Open video file', self)  # QIcon('open.png'),
+        # openAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open video file')
         openAction.triggered.connect(self.openFile)
 
         # Create observation action
-        obsTbAction = QAction('&Toolbox', self)  # QIcon('open.png'),
+        obsTbAction = QAction(QIcon('icons/clipboards.png'), '&Observation toolbox', self)  # QIcon('open.png'),
         # obsTbAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         # obsTbAction.setShortcut('Ctrl+O')
         obsTbAction.setStatusTip('Open obseration toolbox')
         obsTbAction.triggered.connect(self.openObsToolbox)
 
-        self.drawLineAction = QAction('Draw line', self)
+        self.drawLineAction = QAction(QIcon('icons/pencil.png'), 'Draw line', self)
         self.drawLineAction.setToolTip('Draw line over the video')
         self.drawLineAction.setCheckable(True)
         self.drawLineAction.triggered.connect(self.drawLabelClick)
 
-        self.labelingAction = QAction('Labeling', self)
+        self.labelingAction = QAction(QIcon('icons/tags.png'), 'Labeling', self)
         self.labelingAction.setToolTip('Mark ODs over the video')
         self.labelingAction.setCheckable(True)
         self.labelingAction.triggered.connect(self.drawLabelClick)
 
+
         # Create exit action
-        exitAction = QAction('&Exit', self)  # QIcon('exit.png'),
+        exitAction = QAction(QIcon('icons/close.png'), '&Exit', self)
         # exitAction.setIcon(self.style().standardIcon(QStyle.SP_BrowserStop))
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
@@ -276,7 +278,7 @@ class VideoWindow(QMainWindow):
         # fileMenu.addAction(exitAction)
 
         self.toolbar = self.addToolBar('Tools')
-        self.toolbar.setIconSize(QSize(16, 16))
+        self.toolbar.setIconSize(QSize(24, 24))
         self.toolbar.addAction(openAction)
         self.toolbar.addAction(self.drawLineAction)
         self.toolbar.addAction(self.labelingAction)
@@ -370,6 +372,10 @@ class VideoWindow(QMainWindow):
             self.obsTb.show()
 
     def drawLabelClick(self):
+        if self.sender() == self.drawLineAction:
+            self.labelingAction.setChecked(False)
+        else:
+            self.drawLineAction.setChecked(False)
         cursor = QCursor(Qt.CrossCursor)
         self.gView.setCursor(cursor)
 

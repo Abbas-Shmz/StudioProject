@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel)
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtCore import QDateTime, QSize, QDir, Qt
 
 from framework.dbSchema import createDatabase, connectDatabase, \
@@ -51,35 +51,32 @@ class ObsToolbox(QMainWindow):
                                 QToolBox::tab {
                                     font: bold;
                                     color: darkblue;
-                                }                             
+                                }
+                                QToolBox{ icon-size: 24px; }
                              """
 
         self.toolbox = QToolBox()
         self.toolbox.setStyleSheet(styleSheet)
         layout.addWidget(self.toolbox)#, 0, 0)
 
-        openAction = QAction('&Open', self)  # QIcon('open.png'),
-        openAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        openAction = QAction(QIcon('icons/database.png'), '&Open database file', self)
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open database file')
         openAction.triggered.connect(self.opendbFile)
 
-        tempHistAction = QAction('&THist', self)  # QIcon('open.png'),
-        tempHistAction.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+        tempHistAction = QAction(QIcon('icons/histogram.png'), '&Temporal Histogram', self)
         # openAction.setShortcut('Ctrl+O')
         # openAction.setStatusTip('Open database file')
         tempHistAction.triggered.connect(self.tempHist)
 
-        stackHistAction = QAction('&SHist', self)  # QIcon('open.png'),
-        stackHistAction.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp))
+        stackHistAction = QAction(QIcon('icons/stacked.png'), '&Stacked Histogram', self)
         stackHistAction.triggered.connect(self.stackedHist)
 
-        odMatrixAction = QAction('&OD Matrix', self)  # QIcon('open.png'),
-        odMatrixAction.setIcon(self.style().standardIcon(QStyle.SP_DesktopIcon))
+        odMatrixAction = QAction(QIcon('icons/square-grid.png'), '&OD Matrix', self)
         odMatrixAction.triggered.connect(self.odMatrix)
 
         self.toolbar = QToolBar()
-        self.toolbar.setIconSize(QSize(16, 16))
+        self.toolbar.setIconSize(QSize(24, 24))
         self.toolbar.addAction(openAction)
         self.toolbar.addAction(tempHistAction)
         self.toolbar.addAction(stackHistAction)
@@ -89,25 +86,25 @@ class ObsToolbox(QMainWindow):
 
         # ==================== Toolbox tabs =========================
         # Person tab
-        self.newTab([Person], Person.__name__)
+        self.newTab([Person], Person.__name__, 'icons/person.png')
 
         # Group tab
-        self.newTab([Group, GroupBelongings], Group.__name__)
+        self.newTab([Group, GroupBelongings], Group.__name__, 'icons/group.png')
 
         # Pedestrian tab
-        self.newTab([Pedestrian, Pedestrian_obs], Pedestrian.__name__)
+        self.newTab([Pedestrian, Pedestrian_obs], Pedestrian.__name__, 'icons/pedestrian.png')
 
         # Vehicle tab
-        self.newTab([Vehicle, Vehicle_obs], Vehicle.__name__)
+        self.newTab([Vehicle, Vehicle_obs], Vehicle.__name__, 'icons/vehicle.png')
 
         # Bicycles tab
-        self.newTab([Bike, Bike_obs], Bike.__name__)
+        self.newTab([Bike, Bike_obs], Bike.__name__, 'icons/bike.png')
 
         # Activity tab
-        self.newTab([Activity], Activity.__name__)
+        self.newTab([Activity], Activity.__name__, 'icons/activity.png')
 
         # Study_site tab
-        self.newTab([Study_site, Site_ODs], Study_site.__name__)
+        self.newTab([Study_site, Site_ODs], Study_site.__name__, 'icons/study_site.png')
 
 
         # Create a widget for window contents
@@ -282,14 +279,14 @@ class ObsToolbox(QMainWindow):
         grid_wdgt.repaint()
 
 
-    def newTab(self, classList, tabName):
+    def newTab(self, classList, tabName, iconFilename):
         wdgt = QWidget()
         layout = QVBoxLayout()
 
         for className in classList:
             layout.addWidget(self.generateWidgets(className))
         wdgt.setLayout(layout)
-        self.toolbox.addItem(wdgt, tabName)
+        self.toolbox.addItem(wdgt, QIcon(iconFilename), tabName)
 
 
     def opendbFile(self):
@@ -341,7 +338,7 @@ class ObsToolbox(QMainWindow):
 
         inputWin.exec_()
 
-        err = tempDistHist(user=self.roadUser, od_name=self.odName)
+        err = tempDistHist(user=self.roadUser, od_name=self.odName, session=self.session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -383,7 +380,7 @@ class ObsToolbox(QMainWindow):
 
         inputWin.exec_()
 
-        err = stackedHist(user=self.roadUser, attr=self.userAttr)
+        err = stackedHist(user=self.roadUser, attr=self.userAttr, session=self.session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -420,7 +417,7 @@ class ObsToolbox(QMainWindow):
 
         inputWin.exec_()
 
-        err = odMatrix(user=self.roadUser)
+        err = odMatrix(user=self.roadUser, session=self.session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
