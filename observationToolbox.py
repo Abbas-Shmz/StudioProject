@@ -22,7 +22,7 @@ class ObsToolbox(QMainWindow):
     def __init__(self, parent=None):
         super(ObsToolbox, self).__init__(parent)
         self.resize(400, 650)
-        self.dbFilename = '/Users/Abbas/stuart.sqlite'
+        self.dbFilename = '/Users/Abbas/test2.sqlite'
         self.session = None
         self.roadUser = None
         self.odName = None
@@ -143,7 +143,7 @@ class ObsToolbox(QMainWindow):
         gridWidget = QWidget()
         gridWidget.setEnabled(False)
 
-        newButton = QPushButton('New')
+        newButton = QPushButton(QIcon('icons/new.png'), 'New record')
         groupBox_layout.addWidget(newButton)
 
         i = 0
@@ -173,22 +173,39 @@ class ObsToolbox(QMainWindow):
 
         groupBox_layout.addWidget(gridWidget)
 
-        addButton = QPushButton('Add to list')
+        btnsLayout = QHBoxLayout()
+
+        addButton = QPushButton(QIcon('icons/save.png'), 'Save')
         addButton.setEnabled(False)
-        groupBox_layout.addWidget(addButton)
+
+        editButton = QPushButton(QIcon('icons/edit.png'), 'Edit')
+        editButton.setEnabled(False)
+
+        delButton = QPushButton(QIcon('icons/delete.png'), 'Delete')
+        delButton.setEnabled(False)
+
+        btnsLayout.addWidget(delButton)
+        btnsLayout.addWidget(editButton)
+        btnsLayout.addWidget(addButton)
+
+        groupBox_layout.addLayout(btnsLayout) #.addWidget(addButton)
 
         groupBox = QGroupBox(tableClass.__name__)
         groupBox.setLayout(groupBox_layout)
 
-        newButton.clicked.connect(lambda: self.newObject(groupBox, gridWidget, newButton, addButton))
-        addButton.clicked.connect(lambda: self.addObject(groupBox, gridWidget, newButton, addButton))
+        newButton.clicked.connect(lambda: self.newObject(groupBox, gridWidget, addButton, editButton))
+        addButton.clicked.connect(lambda: self.addObject(groupBox, gridWidget, newButton, editButton,
+                                                         delButton))
+        editButton.clicked.connect(lambda: self.editObject(groupBox, gridWidget, newButton, addButton))
+        delButton.clicked.connect(lambda: self.deleteObject(groupBox, gridWidget, newButton, editButton))
 
         return  groupBox
 
-    def newObject(self, grpBx, grid_wdgt, newBtn, addBtn):
-        newBtn.setEnabled(False)
+    def newObject(self, grpBx, grid_wdgt, addBtn, editBtn):
+        self.sender().setEnabled(False)
         grid_wdgt.setEnabled(True)
         addBtn.setEnabled(True)
+        editBtn.setEnabled(False)
 
         class_ = getattr(dbSchema, grpBx.title())
         instance = class_()
@@ -232,20 +249,23 @@ class ObsToolbox(QMainWindow):
         # print([i[0] for i in self.session.query(fk.column).all()])
 
 
-    def addObject(self, grpBx, grid_wdgt, newBtn, addBtn):
+    def addObject(self, grpBx, grid_wdgt, newBtn, editBtn, delBtn):
         newBtn.setEnabled(True)
+        editBtn.setEnabled(True)
+        delBtn.setEnabled(True)
         grid_wdgt.setEnabled(False)
-        addBtn.setEnabled(False)
+        self.sender().setEnabled(False)
+        self.sender().setText('Save')
 
         class_ = getattr(dbSchema, grpBx.title())
-
+        pk_list = [key.name for key in inspect(class_).primary_key]
         grid_lyt = grid_wdgt.layout()
         grid_labels = [grid_lyt.itemAtPosition(i, 0).widget() for i in range(grid_lyt.rowCount())]
 
         i = 0
         for label in grid_labels:
             input_wdgt = grid_lyt.itemAtPosition(i, 1).widget()
-            if not input_wdgt.isEnabled():
+            if label.text() in pk_list:
                 pk_name = label.text()
                 pk_val = input_wdgt.text()
                 break
@@ -278,6 +298,36 @@ class ObsToolbox(QMainWindow):
 
         grid_wdgt.repaint()
 
+    def editObject(self, grpBx, grid_wdgt, newBtn, addBtn):
+        grid_wdgt.setEnabled(True)
+        addBtn.setEnabled(True)
+        addBtn.setText('Update')
+        self.sender().setEnabled(False)
+
+    def deleteObject(self, grpBx, grid_wdgt, newBtn, editBtn):
+        self.sender().setEnabled(False)
+        editBtn.setEnabled(False)
+        newBtn.setEnabled(True)
+
+        class_ = getattr(dbSchema, grpBx.title())
+        pk_list = [key.name for key in inspect(class_).primary_key]
+        grid_lyt = grid_wdgt.layout()
+        grid_labels = [grid_lyt.itemAtPosition(i, 0).widget() for i in range(grid_lyt.rowCount())]
+
+        i = 0
+        for label in grid_labels:
+            input_wdgt = grid_lyt.itemAtPosition(i, 1).widget()
+            if label.text() in pk_list and isinstance(input_wdgt, QLineEdit):
+                pk_name = label.text()
+                pk_val = input_wdgt.text()
+            if isinstance(input_wdgt, QLineEdit):
+                input_wdgt.setText('')
+            elif isinstance(input_wdgt, QComboBox):
+                input_wdgt.setCurrentIndex(-1)
+            i = i + 1
+
+        self.session.query(class_).filter(getattr(class_, pk_name) == pk_val).delete()
+        self.session.commit()
 
     def newTab(self, classList, tabName, iconFilename):
         wdgt = QWidget()
@@ -305,6 +355,12 @@ class ObsToolbox(QMainWindow):
                 self.session = connectDatabase(self.dbFilename)
 
     def tempHist(self):
+        if self.session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
         inputWin = QDialog(self)
         inputWin.setModal(True)
         inputWin.setAttribute(Qt.WA_DeleteOnClose)
@@ -338,15 +394,22 @@ class ObsToolbox(QMainWindow):
 
         inputWin.exec_()
 
-        err = tempDistHist(user=self.roadUser, od_name=self.odName, session=self.session)
-        if err != None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText(err)
-            msg.exec_()
+        if self.roadUser != None and self.odName != None:
+            err = tempDistHist(user=self.roadUser, od_name=self.odName, session=self.session)
+            if err != None:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText(err)
+                msg.exec_()
 
 
     def stackedHist(self):
+        if self.session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
         inputWin = QDialog(self)
         inputWin.setModal(True)
         inputWin.setAttribute(Qt.WA_DeleteOnClose)
@@ -380,15 +443,22 @@ class ObsToolbox(QMainWindow):
 
         inputWin.exec_()
 
-        err = stackedHist(user=self.roadUser, attr=self.userAttr, session=self.session)
-        if err != None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText(err)
-            msg.exec_()
+        if self.roadUser != None and self.userAttr != None:
+            err = stackedHist(user=self.roadUser, attr=self.userAttr, session=self.session)
+            if err != None:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText(err)
+                msg.exec_()
 
 
     def odMatrix(self):
+        if self.session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
         inputWin = QDialog(self)
         inputWin.setModal(True)
         inputWin.setAttribute(Qt.WA_DeleteOnClose)
@@ -417,12 +487,13 @@ class ObsToolbox(QMainWindow):
 
         inputWin.exec_()
 
-        err = odMatrix(user=self.roadUser, session=self.session)
-        if err != None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText(err)
-            msg.exec_()
+        if self.roadUser != None:
+            err = odMatrix(user=self.roadUser, session=self.session)
+            if err != None:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText(err)
+                msg.exec_()
 
     def okBtnClickTHist(self, userCombobx, odNamesCombobx):
         self.roadUser = userCombobx.currentText()
@@ -439,7 +510,11 @@ class ObsToolbox(QMainWindow):
         self.sender().parent().close()
 
     def cancelBtnClick(self):
+        self.roadUser = None
+        self.userAttr = None
+        self.odName = None
         self.sender().parent().close()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
