@@ -117,8 +117,10 @@ class GraphicView(QGraphicsView):
         od_name = session.query(Site_ODs.odName). \
             filter(Site_ODs.id == id_lineedit.text()).all()[0][0]
 
-        labelShape.setToolTip("<h3>Name: {} <hr>Type: {}</h3>"         
-                        "".format(od_name, od_type))
+        # labelShape.setToolTip("<h3>Name: {} <hr>Type: {}</h3>"
+        #                 "".format(od_name, od_type))
+        labelShape.setToolTip('Name: {}\nType: {}'.format(od_name, od_type))
+
         if od_type == 'sidewalk':
             labelShape.setBrush(QBrush(Qt.darkRed))
         elif od_type == 'road_lane':

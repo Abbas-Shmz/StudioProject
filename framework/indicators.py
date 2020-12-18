@@ -4,6 +4,8 @@
 
 @author: Abbas
 """
+import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator
@@ -18,7 +20,7 @@ from framework import enums as en
 
 
 # ==============================================================
-def tempDistHist(user, od_name, session):
+def tempDistHist(user, od_name, ax, session):
     if user == 'pedestrian':
         q1 = session.query(Pedestrian_obs.instant). \
             join(Site_ODs, Pedestrian_obs.originId == Site_ODs.id). \
@@ -51,7 +53,8 @@ def tempDistHist(user, od_name, session):
 
     time_list = [i[0] for i in q1.all()] + [i[0] for i in q2.all()]
 
-    fig, ax = plt.subplots(1, 1)
+    # fig = plt.figure()#figsize=(5, 5), dpi=200, tight_layout=True)
+    # ax = fig.add_subplot(111) #plt.subplots(1, 1)
     ax.hist(time_list, bins=20, color='skyblue', ec='grey', rwidth=0.9)
 
     locator = mdates.AutoDateLocator()
@@ -74,12 +77,18 @@ def tempDistHist(user, od_name, session):
             horizontalalignment='left',
             verticalalignment='center',
             transform=ax.transAxes,
-            fontsize=7)
+            fontsize=8)
 
-    plt.show()
+    ax.text(0.03, 0.03, str('StudioProject'),
+            fontsize=10, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
+
+    # plt.show()
 
 # ==============================================================
-def stackedHist(user, attr, session, bins=20):
+def stackedHist(user, attr, ax, session, bins=20):
     if user == 'pedestrian':
         if attr == 'gender':
             cls_fld = Person.gender
@@ -127,7 +136,7 @@ def stackedHist(user, attr, session, bins=20):
 
         time_list.append([i[0] for i in q.all()])
 
-    fig, ax = plt.subplots(1, 1)
+    # fig, ax = plt.subplots(1, 1)
     ax.hist(time_list, bins=bins, label=distinct_vals, ec='grey', rwidth=0.85, stacked=True)
 
     locator = mdates.AutoDateLocator()
@@ -152,11 +161,16 @@ def stackedHist(user, attr, session, bins=20):
             transform=ax.transAxes,
             fontsize=7)
 
-    plt.show()
+    ax.text(0.03, 0.03, str('StudioProject'),
+            fontsize=10, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
 
+    # plt.show()
 
 # ==============================================================
-def odMatrix(user, session):
+def odMatrix(user, ax, session):
     if user == 'pedestrian':
         ods_list = ['sidewalk', 'adjoining_ZOI', 'bus_stop',
                     'on_street_parking_lot', 'bicycle_rack', 'road_lane']
@@ -170,7 +184,7 @@ def odMatrix(user, session):
         cls_fld = Bike_obs.bikeId
 
     elif user == 'vehicle':
-        ods_list = ['road_lane', 'on_street_parking_lot', 'bus_stop']
+        ods_list = ['road_lane', 'on_street_parking_lot', 'bus_stop', 'adjoining_ZOI']
         cls_ = Vehicle_obs
         cls_fld = Vehicle_obs.vehicleId
 
@@ -217,27 +231,153 @@ def odMatrix(user, session):
     org_sum = [str(i) for i in od_df.sum(1).values]
     dst_sum = [str(i) for i in od_df.sum(0).values]
 
-    plt.matshow(od_df, cmap=plt.cm.coolwarm)
-    plt.xticks(range(len(ods_name)), ods_name, fontsize=7, rotation=90, weight="bold")
-    plt.yticks(range(len(ods_name)), ods_name, fontsize=7, weight="bold")
-    plt.tick_params(bottom=False, left=False, right=False, top=False)
+    ticks = ['{}\n(ID: {})'.format(ods_name[i], ods_id[i]) for i in range(len(ods_name))]
 
-    plt.text(len(ods_name) - 0.4, len(ods_name) - 0.3, od_df.values.sum(), va='center', ha='left',
-             fontsize=8, weight="bold")
-    # plt.colorbar()
-    # plt.table(cellText = dst_sum,loc = 'bottom', cellLoc = 'center')
-    # plt.table(cellText = org_sum,loc = 'right', cellLoc = 'center')
+    im = heatmap(od_df, ticks, ticks, ax=ax,
+                       cmap="Wistia", cbarlabel="harvest [t/year]") #, cbar  "YlGn"
+    texts = annotate_heatmap(im, valfmt="{x}")
 
-    for i in range(len(ods_name)):
-        plt.text(len(ods_name) - 0.4, i, org_sum[i], va='center', ha='left', fontsize=8)
-        plt.text(i, len(ods_name) - 0.3, dst_sum[i], va='center', ha='center', fontsize=8)
 
-    for i in range(0, od_df.shape[0]):
-        for j in range(0, od_df.shape[0]):
-            c = od_df.iat[j, i]
-            plt.text(i, j, str(c), va='center', ha='center', fontsize=8, weight="bold", color='k')
+    # ax.matshow(od_df, cmap=plt.cm.coolwarm)
+    # plt.xticks(range(len(ods_name)), ticks, fontsize=7, rotation=90, weight="bold")
+    # plt.yticks(range(len(ods_name)), ticks, fontsize=7, weight="bold")
+    # plt.tick_params(bottom=False, left=False, right=False, top=False)
+    #
+    # plt.text(len(ods_name) - 0.4, len(ods_name) - 0.3, od_df.values.sum(), va='center', ha='left',
+    #          fontsize=8, weight="bold")
+    # # plt.colorbar()
+    # # plt.table(cellText = dst_sum,loc = 'bottom', cellLoc = 'center')
+    # # plt.table(cellText = org_sum,loc = 'right', cellLoc = 'center')
+    #
+    # for i in range(len(ods_name)):
+    #     plt.text(len(ods_name) - 0.4, i, org_sum[i], va='center', ha='left', fontsize=8)
+    #     plt.text(i, len(ods_name) - 0.3, dst_sum[i], va='center', ha='center', fontsize=8)
+    #
+    # for i in range(0, od_df.shape[0]):
+    #     for j in range(0, od_df.shape[0]):
+    #         c = od_df.iat[j, i]
+    #         plt.text(i, j, str(c), va='center', ha='center', fontsize=8, weight="bold", color='k')
+    #
+    # plt.show()
 
-    plt.show()
+def heatmap(data, row_labels, col_labels, ax=None,
+            cbar_kw={}, cbarlabel="", **kwargs):
+    """
+    Create a heatmap from a numpy array and two lists of labels.
+
+    Parameters
+    ----------
+    data
+        A 2D numpy array of shape (N, M).
+    row_labels
+        A list or array of length N with the labels for the rows.
+    col_labels
+        A list or array of length M with the labels for the columns.
+    ax
+        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
+        not provided, use current axes or create a new one.  Optional.
+    cbar_kw
+        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
+    cbarlabel
+        The label for the colorbar.  Optional.
+    **kwargs
+        All other arguments are forwarded to `imshow`.
+    """
+
+    if not ax:
+        ax = plt.gca()
+
+    # Plot the heatmap
+    im = ax.imshow(data, **kwargs)
+
+    # Create colorbar
+    # cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+    # cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(data.shape[1]))
+    ax.set_yticks(np.arange(data.shape[0]))
+    # ... and label them with the respective list entries.
+    ax.set_xticklabels(col_labels)
+    ax.set_yticklabels(row_labels)
+
+    # Let the horizontal axes labeling appear on top.
+    ax.tick_params(top=True, bottom=False,
+                   labeltop=True, labelbottom=False, labelsize=8)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=-30, ha="right",
+             rotation_mode="anchor")
+
+    # Turn spines off and create white grid.
+    for edge, spine in ax.spines.items():
+        spine.set_visible(False)
+
+    ax.set_xticks(np.arange(data.shape[1]+1)-.5, minor=True)
+    ax.set_yticks(np.arange(data.shape[0]+1)-.5, minor=True)
+    ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+    return im #, cbar
+
+
+def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+                     textcolors=("black", "white"),
+                     threshold=None, **textkw):
+    """
+    A function to annotate a heatmap.
+
+    Parameters
+    ----------
+    im
+        The AxesImage to be labeled.
+    data
+        Data used to annotate.  If None, the image's data is used.  Optional.
+    valfmt
+        The format of the annotations inside the heatmap.  This should either
+        use the string format method, e.g. "$ {x:.2f}", or be a
+        `matplotlib.ticker.Formatter`.  Optional.
+    textcolors
+        A pair of colors.  The first is used for values below a threshold,
+        the second for those above.  Optional.
+    threshold
+        Value in data units according to which the colors from textcolors are
+        applied.  If None (the default) uses the middle of the colormap as
+        separation.  Optional.
+    **kwargs
+        All other arguments are forwarded to each call to `text` used to create
+        the text labels.
+    """
+
+    if not isinstance(data, (list, np.ndarray)):
+        data = im.get_array()
+
+    # Normalize the threshold to the images color range.
+    if threshold is not None:
+        threshold = im.norm(threshold)
+    else:
+        threshold = im.norm(data.max())/2.
+
+    # Set default alignment to center, but allow it to be
+    # overwritten by textkw.
+    kw = dict(horizontalalignment="center",
+              verticalalignment="center")
+    kw.update(textkw)
+
+    # Get the formatter in case a string is supplied
+    if isinstance(valfmt, str):
+        valfmt = matplotlib.ticker.StrMethodFormatter(valfmt)
+
+    # Loop over the data and create a `Text` for each "pixel".
+    # Change the text's color depending on the data.
+    texts = []
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            kw.update(color=textcolors[int(im.norm(data[i, j]) > threshold)])
+            text = im.axes.text(j, i, valfmt(data[i, j], None), **kw)
+            texts.append(text)
+
+    return texts
 
 
 # ======================= DEMO MODE ============================
