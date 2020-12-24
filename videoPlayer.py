@@ -1,17 +1,20 @@
 
 # ===========================================================================================
 
-from PyQt5.QtCore import QDir, Qt, QUrl, QLineF, QPoint, QSize
+from PyQt5.QtCore import (QDir, Qt, QUrl, QLineF, QPoint, QSize, QFile, QIODevice, QXmlStreamReader,
+                          QXmlStreamWriter)
 from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
-        QGraphicsLineItem, QGraphicsTextItem, QGridLayout, QComboBox, QOpenGLWidget, QMessageBox,
-        QButtonGroup)
+        QGraphicsLineItem, QGraphicsTextItem, QGraphicsEllipseItem, QGridLayout, QComboBox,
+        QOpenGLWidget, QMessageBox)
 from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
                              QLineEdit)
-from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont
+from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor
 from PyQt5.QtOpenGL import QGLWidget
+
+import xml.etree.ElementTree as ET
 
 from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
@@ -56,9 +59,9 @@ class GraphicView(QGraphicsView):
                 return
 
             p = self.mapToScene(event.x(), event.y())
-            labelShape = self.scene().addEllipse(p.x(), p.y(), 10, 10,
+            labelShape = self.scene().addEllipse(p.x()-5, p.y()-5, 10, 10,
                                                  QPen(Qt.white, 0.75), QBrush(Qt.black))
-            labelShape.moveBy(-5, -5)
+            # labelShape.moveBy(-5, -5)
 
             labelWin = QDialog(self)
             labelWin.setModal(True)
@@ -208,6 +211,9 @@ class VideoWindow(QMainWindow):
         self.videoStartDatetime = None
         self.videoCurrentDatetime = None
 
+        self.graphicsFile = None
+        self.videoFile = None
+
         # ===================== Setting video item ==============================
         self.videoItem = QGraphicsVideoItem()
         self.videoItem.setAspectRatioMode(Qt.KeepAspectRatio)
@@ -240,17 +246,14 @@ class VideoWindow(QMainWindow):
 
 
         # Create open action
-        openAction = QAction(QIcon('icons/video-file.png'), '&Open video file', self)  # QIcon('open.png'),
-        # openAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
-        openAction.setShortcut('Ctrl+O')
-        openAction.setStatusTip('Open video file')
-        openAction.triggered.connect(self.openFile)
+        self.openVideoAction = QAction(QIcon('icons/video-file.png'), '&Open video file', self)
+        self.openVideoAction.setShortcut('Ctrl+O')
+        self.openVideoAction.setStatusTip('Open video file')
+        self.openVideoAction.triggered.connect(self.openVideoFile)
 
         # Create observation action
-        obsTbAction = QAction(QIcon('icons/clipboards.png'), '&Observation toolbox', self)  # QIcon('open.png'),
-        # obsTbAction.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
-        # obsTbAction.setShortcut('Ctrl+O')
-        obsTbAction.setStatusTip('Open obseration toolbox')
+        obsTbAction = QAction(QIcon('icons/checklist.png'), '&Observation toolbox', self)
+        obsTbAction.setStatusTip('Open observation toolbox')
         obsTbAction.triggered.connect(self.openObsToolbox)
 
         self.drawLineAction = QAction(QIcon('icons/pencil.png'), 'Draw line', self)
@@ -263,10 +266,25 @@ class VideoWindow(QMainWindow):
         self.labelingAction.setCheckable(True)
         self.labelingAction.triggered.connect(self.drawLabelClick)
 
+        openProjectAction = QAction(QIcon('icons/open-project.png'), 'Open project', self)
+        openProjectAction.setStatusTip('Open project')
+        openProjectAction.triggered.connect(self.openProject)
+
+        saveProjectAction = QAction(QIcon('icons/save.png'), 'Save project', self)
+        saveProjectAction.setStatusTip('Save project')
+        saveProjectAction.triggered.connect(self.saveProject)
+
+        saveGraphAction = QAction(QIcon('icons/save.png'), 'Save graphics', self)
+        saveGraphAction.setStatusTip('Save graphics')
+        saveGraphAction.triggered.connect(self.saveGraphics)
+
+        self.loadGraphAction = QAction(QIcon('icons/folders.png'), 'Load graphics', self)
+        self.loadGraphAction.setStatusTip('Load graphics')
+        self.loadGraphAction.triggered.connect(self.loadGraphics)
+
 
         # Create exit action
         exitAction = QAction(QIcon('icons/close.png'), '&Exit', self)
-        # exitAction.setIcon(self.style().standardIcon(QStyle.SP_BrowserStop))
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(qApp.quit)  # self.exitCall
@@ -275,16 +293,26 @@ class VideoWindow(QMainWindow):
         # menuBar = self.menuBar()
         # menuBar.setNativeMenuBar(False)
         # fileMenu = menuBar.addMenu('&File')
-        # fileMenu.addAction(openAction)
+        # fileMenu.addAction(openVideoAction)
         # fileMenu.addAction(obsTbAction)
         # fileMenu.addAction(exitAction)
 
         self.toolbar = self.addToolBar('Tools')
         self.toolbar.setIconSize(QSize(24, 24))
-        self.toolbar.addAction(openAction)
+        self.toolbar.addAction(openProjectAction)
+        self.toolbar.addAction(saveProjectAction)
+        self.toolbar.addAction(self.openVideoAction)
+
+        self.toolbar.insertSeparator(self.loadGraphAction)
+        self.toolbar.addAction(self.loadGraphAction)
+        self.toolbar.addAction(saveGraphAction)
         self.toolbar.addAction(self.drawLineAction)
         self.toolbar.addAction(self.labelingAction)
+
+        self.toolbar.insertSeparator(obsTbAction)
         self.toolbar.addAction(obsTbAction)
+
+        self.toolbar.insertSeparator(exitAction)
         self.toolbar.addAction(exitAction)
 
 
@@ -310,17 +338,19 @@ class VideoWindow(QMainWindow):
     # def showEvent(self, event):
         # self.gView.fitInView(self.videoItem, Qt.KeepAspectRatio)
 
-    def openFile(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open video", QDir.homePath())
+    def openVideoFile(self):
+        if self.sender() == self.openVideoAction:
+            self.videoFile, _ = QFileDialog.getOpenFileName(self, "Open video", QDir.homePath())
+            if self.videoFile != '':
+                self.setWindowTitle(self.videoFile)
 
-        if fileName != '':
-            creation_datetime = self.getVideoMetadata(fileName)
+        if self.videoFile != '':
+            creation_datetime = self.getVideoMetadata(self.videoFile)
             self.videoStartDatetime = self.videoCurrentDatetime = creation_datetime
             self.dateLabel.setText(creation_datetime.strftime('%a, %b %d, %Y'))
 
-            self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(fileName)))
+            self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(self.videoFile)))
             self.playButton.setEnabled(True)
-            self.setWindowTitle(fileName)
             self.gView.setViewport(QOpenGLWidget())
             self.mediaPlayer.pause()
 
@@ -380,6 +410,276 @@ class VideoWindow(QMainWindow):
             self.drawLineAction.setChecked(False)
         cursor = QCursor(Qt.CrossCursor)
         self.gView.setCursor(cursor)
+
+    def openProject(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Open project file",
+                                                  QDir.homePath(), "Project files (*.prj)")
+        # fileName = "/Users/Abbas/project.xml"
+        if fileName == '':
+            return
+
+        self.setWindowTitle(fileName)
+
+        tree = ET.parse(fileName)
+        root = tree.getroot()
+        gItems = []
+        for elem in root:
+            subEelTexts = {}
+            for subelem in elem:
+                subEelTexts[subelem.tag] = subelem.text
+            gItems.append([elem.tag, subEelTexts])
+
+        #print(gItems)
+
+        for key in gItems:
+            if key[0] == 'video':
+                item = key[1]
+                self.videoFile = item['fileName']
+                self.openVideoFile()
+                self.mediaPlayer.setPosition(int(item['sliderValue']))
+
+            elif key[0] == 'graphics':
+                item = key[1]
+                print(item['fileName'])
+                if item['fileName'] != None:
+                    self.graphicsFile = item['fileName']
+                    self.loadGraphics()
+
+            elif key[0] == 'database':
+                item = key[1]
+                print(item['fileName'])
+                if item['fileName'] != None:
+                    self.obsTb.dbFilename = item['fileName']
+                    self.obsTb.opendbFile()
+
+            elif key[0] == 'window':
+                item = key[1]
+                x, y = item['mainWin_pos'].split(',')
+                w, h = item['mainWin_size'].split(',')
+                self.setGeometry(int(x), int(y), int(w), int(h))
+                if bool(item['obsTbx_open']):
+                    self.obsTb.show()
+                    x, y = item['obsTbx_pos'].split(',')
+                    w, h = item['obsTbx_size'].split(',')
+                    self.obsTb.setGeometry(int(x), int(y), int(w), int(h))
+
+
+    def saveProject(self):
+        fileName, _ = QFileDialog.getSaveFileName(self, "Open project file",
+                                                  QDir.homePath(), "Project files (*.prj)")
+        # fileName = "/Users/Abbas/project.xml"
+        if fileName == '':
+            return
+
+        self.setWindowTitle(fileName)
+
+        file = QFile(fileName)
+        if (not file.open(QIODevice.WriteOnly | QIODevice.Text)):
+            return
+
+        xmlWriter = QXmlStreamWriter(file)
+        xmlWriter.setAutoFormatting(True)
+        xmlWriter.writeStartDocument()
+
+        xmlWriter.writeStartElement('project')
+
+        xmlWriter.writeStartElement('video')
+        xmlWriter.writeTextElement("fileName", self.videoFile) #mediaPlayer.media().canonicalUrl().path())
+        xmlWriter.writeTextElement("sliderValue", str(self.positionSlider.sliderPosition()))
+        xmlWriter.writeEndElement()
+
+        xmlWriter.writeStartElement('graphics')
+        xmlWriter.writeTextElement("fileName", self.graphicsFile)
+        xmlWriter.writeEndElement()
+
+        xmlWriter.writeStartElement('database')
+        xmlWriter.writeTextElement("fileName", self.obsTb.dbFilename)
+        xmlWriter.writeEndElement()
+
+        xmlWriter.writeStartElement('window')
+        xmlWriter.writeTextElement("mainWin_size", "{},{}".format(int(self.width()),
+                                                                  int(self.height())))
+        xmlWriter.writeTextElement("mainWin_pos", "{},{}".format(int(self.x()),
+                                                                  int(self.y())))
+        xmlWriter.writeTextElement("obsTbx_open", str(self.obsTb.isVisible()))
+        xmlWriter.writeTextElement("obsTbx_size", "{},{}".format(int(self.obsTb.width()),
+                                                                  int(self.obsTb.height())))
+        xmlWriter.writeTextElement("obsTbx_pos", "{},{}".format(int(self.obsTb.x()),
+                                                                  int(self.obsTb.y())))
+        xmlWriter.writeEndElement()
+
+        xmlWriter.writeEndElement()
+
+    def saveGraphics(self):
+        fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
+                                                  QDir.homePath(), "Graphics files (*.grpc)")
+        if fileName == '':
+            return
+
+        self.graphicsFile = fileName
+
+        file = QFile(fileName)
+        if (not file.open(QIODevice.WriteOnly | QIODevice.Text)):
+            return
+
+        xmlWriter = QXmlStreamWriter(file)
+        xmlWriter.setAutoFormatting(True)
+        xmlWriter.writeStartDocument()
+
+        xmlWriter.writeStartElement('graphicItems')
+
+        for item in self.gScene.items():
+            if isinstance(item, QGraphicsLineItem):
+                xmlWriter.writeStartElement('line')
+
+                xmlWriter.writeTextElement("x1", str(item.line().x1()))
+                xmlWriter.writeTextElement("y1", str(item.line().y1()))
+                xmlWriter.writeTextElement("x2", str(item.line().x2()))
+                xmlWriter.writeTextElement("y2", str(item.line().y2()))
+                xmlWriter.writeTextElement("zValue", str(item.zValue()))
+                xmlWriter.writeTextElement("color", "{},{},{}".format(str(item.pen().color().red()),
+                                                                      str(item.pen().color().green()),
+                                                                      str(item.pen().color().blue())))
+
+                xmlWriter.writeEndElement()
+            elif isinstance(item, QGraphicsEllipseItem):
+                xmlWriter.writeStartElement('ellipse')
+                xmlWriter.writeTextElement("x", str(item.rect().x()))
+                xmlWriter.writeTextElement("y", str(item.rect().y()))
+                xmlWriter.writeTextElement("height", str(item.rect().height()))
+                xmlWriter.writeTextElement("width", str(item.rect().width()))
+                xmlWriter.writeTextElement("toolTip", str(item.toolTip()))
+                xmlWriter.writeTextElement("zValue", str(item.zValue()))
+                xmlWriter.writeTextElement("color_pen", "{},{},{}".
+                                           format(str(item.pen().color().red()),
+                                                  str(item.pen().color().green()),
+                                                  str(item.pen().color().blue())))
+                xmlWriter.writeTextElement("color_brush", "{},{},{}".
+                                           format(str(item.brush().color().red()),
+                                                  str(item.brush().color().green()),
+                                                  str(item.brush().color().blue())))
+                xmlWriter.writeEndElement()
+
+            elif isinstance(item, QGraphicsTextItem):
+                xmlWriter.writeStartElement('text')
+                xmlWriter.writeTextElement("x", str(item.x()))
+                xmlWriter.writeTextElement("y", str(item.y()))
+                xmlWriter.writeTextElement("PlainText", str(item.toPlainText()))
+                xmlWriter.writeTextElement("zValue", str(item.zValue()))
+                xmlWriter.writeTextElement("font_size", str(item.font().pointSize()))
+                xmlWriter.writeTextElement("font_bold", str(item.font().bold()))
+                xmlWriter.writeTextElement("color_text", "{},{},{}".
+                                           format(str(item.defaultTextColor().red()),
+                                                  str(item.defaultTextColor().green()),
+                                                  str(item.defaultTextColor().blue())))
+
+                xmlWriter.writeEndElement()
+
+
+        xmlWriter.writeEndDocument()
+
+    def loadGraphics(self):
+        if self.sender() == self.loadGraphAction:
+            self.graphicsFile, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                  QDir.homePath(), "Graphics files (*.grpc)")
+        if self.graphicsFile == '':
+            return
+
+        tree = ET.parse(self.graphicsFile)
+        root = tree.getroot()
+        gItems = []
+        for elem in root:
+            subEelTexts = {}
+            for subelem in elem:
+                subEelTexts[subelem.tag] = subelem.text
+            gItems.append([elem.tag, subEelTexts])
+
+        # print(gItems)
+        # self.gScene.clear()
+
+        for key in gItems:
+            if key[0] == 'line':
+                item = key[1]
+                lineItem = QGraphicsLineItem(float(item['x1']), float(item['y1']),
+                                             float(item['x2']), float(item['y2']))
+                pen = QPen()
+                r, g, b = item['color'].split(',')
+                pen.setColor(QColor(int(r), int(g), int(b)))
+                lineItem.setPen(pen)
+                lineItem.setZValue(float(item['zValue']))
+                self.gScene.addItem(lineItem)
+
+            elif key[0] == 'ellipse':
+                item = key[1]
+                ellipseItem = QGraphicsEllipseItem(float(item['x']), float(item['y']),
+                                                   float(item['width']), float(item['height']))
+
+                pen = QPen()
+                r, g, b = item['color_pen'].split(',')
+                pen.setColor(QColor(int(r), int(g), int(b)))
+                ellipseItem.setPen(pen)
+
+                r, g, b = item['color_brush'].split(',')
+                brush = QBrush(QColor(int(r), int(g), int(b)))
+                ellipseItem.setBrush(brush)
+                ellipseItem.setToolTip(item['toolTip'])
+
+                ellipseItem.setZValue(float(item['zValue']))
+                self.gScene.addItem(ellipseItem)
+
+            elif key[0] == 'text':
+                item = key[1]
+                textItem = QGraphicsTextItem(item['PlainText'])
+                textItem.setPos(float(item['x']), float(item['y']))
+                r, g, b = item['color_text'].split(',')
+                textItem.setDefaultTextColor(QColor(int(r), int(g), int(b)))
+                font = QFont()
+                font.setPointSize(int(item['font_size']))
+                font.setBold(bool(item['font_bold']))
+                textItem.setFont(font)
+                textItem.setZValue(1)
+
+                self.gScene.addItem(textItem)
+
+
+        # file = QFile('/Users/Abbas/test.xml')
+        # if (not file.open(QIODevice.ReadOnly | QIODevice.Text)):
+        #     return
+        #
+        # xmlReader = QXmlStreamReader(file)
+        #
+        # while not xmlReader.atEnd():# readNextStartElement():
+        #     xmlReader.readNext()
+        #     # print(xmlReader.name())
+        #     # print(xmlReader.tokenType())
+        #     # print(xmlReader.isCharacters())
+        #
+        #     if xmlReader.name() == 'ellipse':
+        #         xmlReader.readNextStartElement()
+        #         n = xmlReader.name()
+        #         while n != 'ellipse': #for i in range(6):
+        #             print(xmlReader.readElementText())
+        #             n = xmlReader.name()
+        #             print(n)
+        #
+        #             xmlReader.readNextStartElement()
+        #             print(xmlReader.name())
+        #
+        #         # print(xmlReader.tokenType())
+        #         # print(xmlReader.readElementText())
+        #
+        #         # xmlReader.readNext()
+        #         # xmlReader.readNext()
+        #         # print(xmlReader.isStartElement())
+        #         # print(xmlReader.readElementText())
+        #         # print(xmlReader.tokenType())
+        #         # print(xmlReader.name())
+        #
+        #         # xmlReader.readNextStartElement()
+        #         # print(xmlReader.readElementText())
+        #         # print(xmlReader.tokenType())
+        #         # print('line: ' + str(xmlReader.lineNumber()))
+        #         # print('col: ' + str(xmlReader.columnNumber()))
 
     @staticmethod
     def convertMillis(millis):

@@ -64,10 +64,10 @@ class ObsToolbox(QMainWindow):
         self.toolbox.setStyleSheet(styleSheet)
         layout.addWidget(self.toolbox)#, 0, 0)
 
-        openAction = QAction(QIcon('icons/database.png'), '&Open database file', self)
-        openAction.setShortcut('Ctrl+O')
-        openAction.setStatusTip('Open database file')
-        openAction.triggered.connect(self.opendbFile)
+        self.openAction = QAction(QIcon('icons/database.png'), '&Open database file', self)
+        self.openAction.setShortcut('Ctrl+O')
+        self.openAction.setStatusTip('Open database file')
+        self.openAction.triggered.connect(self.opendbFile)
 
         tempHistAction = QAction(QIcon('icons/histogram.png'), '&Temporal Histogram', self)
         # openAction.setShortcut('Ctrl+O')
@@ -82,7 +82,7 @@ class ObsToolbox(QMainWindow):
 
         self.toolbar = QToolBar()
         self.toolbar.setIconSize(QSize(24, 24))
-        self.toolbar.addAction(openAction)
+        self.toolbar.addAction(self.openAction)
         self.toolbar.addAction(tempHistAction)
         self.toolbar.addAction(stackHistAction)
         self.toolbar.addAction(odMatrixAction)
@@ -347,15 +347,13 @@ class ObsToolbox(QMainWindow):
 
 
     def opendbFile(self):
-        # dlg = QFileDialog()
-        # dlg.DontUseNativeDialog
-        # dlg.FileMode(QFileDialog.AnyFile)
-        fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
-                                                  QDir.homePath())#, "Sqlite files (*.sqlite)")
-        if fileName != '':
-            self.setWindowTitle(fileName)
+        if self.sender() == self.openAction:
+            self.dbFilename, _ = QFileDialog.getSaveFileName(self, "Open database file",
+                                                  QDir.homePath(), "Sqlite files (*.sqlite)")
+        if self.dbFilename != '':
+            self.setWindowTitle(self.dbFilename)
 
-            self.dbFilename = fileName
+            # self.dbFilename = fileName
 
             self.session = createDatabase(self.dbFilename)
             if self.session is None:
