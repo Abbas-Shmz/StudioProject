@@ -9,6 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator
+from sqlalchemy import func
 
 import pandas as pd
 from framework.dbSchema import connectDatabase, Pedestrian_obs, Vehicle, \
@@ -172,38 +173,43 @@ def stackedHist(user, attr, ax, session, bins=20):
 # ==============================================================
 def odMatrix(user, ax, session):
     if user == 'pedestrian':
-        ods_list = ['sidewalk', 'adjoining_ZOI', 'bus_stop',
-                    'on_street_parking_lot', 'bicycle_rack', 'road_lane']
         cls_ = Pedestrian_obs
         cls_fld = Pedestrian_obs.pedestrianId
+        cbarlabel = 'No. of pedestrians'
+        valfmt = "{x:.1f}"
 
     elif user == 'cyclist':
-        ods_list = ['cycling_path', 'sidewalk', 'road_lane',
-                    'bus_lane', 'bicycle_rack', 'informal_bicycle_parking']
         cls_ = Bike_obs
         cls_fld = Bike_obs.bikeId
+        cbarlabel = 'No. of cyclists'
+        valfmt = "{x:.1f}"
 
     elif user == 'vehicle':
-        ods_list = ['road_lane', 'on_street_parking_lot', 'bus_stop', 'adjoining_ZOI']
         cls_ = Vehicle_obs
         cls_fld = Vehicle_obs.vehicleId
+        cbarlabel = 'No. of vehicles'
+        valfmt = "{x:.1f}"
 
     else:
         return 'ERROR: The argument is not correct!'
 
-    q_ods = session.query(Site_ODs.id, Site_ODs.odType, Site_ODs.odName). \
-        filter(Site_ODs.odType.in_(ods_list))
+    q_ods = session.query(Site_ODs.id, Site_ODs.odName)
 
     if q_ods.all() == []:
         return 'There is no data for ODs!'
 
     ods_id = [str(i[0]) for i in q_ods.all()]
-    ods_name = [str(i[2]) for i in q_ods.all()]
+    ods_name = [str(i[1]) for i in q_ods.all()]
 
     od_df = pd.DataFrame(columns=ods_id, index=ods_id)
     od_df[:] = 0
 
     q = session.query(cls_fld, cls_.originId, cls_.destinationId)
+    first_obs_time = session.query(func.min(cls_.instant)).all()[0][0]
+    last_obs_time = session.query(func.max(cls_.instant)).all()[0][0]
+    duration = last_obs_time - first_obs_time
+    duration_in_s = duration.total_seconds()
+    duration_hours = duration_in_s/3600
 
     if q.all() == []:
         return 'There is no observation for {}!'.format(user)
@@ -228,14 +234,31 @@ def odMatrix(user, ax, session):
 
     od_df = od_df.apply(pd.to_numeric)
 
-    org_sum = [str(i) for i in od_df.sum(1).values]
-    dst_sum = [str(i) for i in od_df.sum(0).values]
+    org_sum = [i for i in od_df.sum(1).values]
+    dst_sum = [i for i in od_df.sum(0).values]
+
+    indices_zero = [i for i, x in enumerate([sum(s) for s in zip(org_sum, dst_sum)]) if x == 0]
+    indices_toDrop = od_df.index[indices_zero]
+    od_df.drop(index=indices_toDrop, inplace=True)
+    od_df.drop(columns=indices_toDrop, inplace=True)
+
+    ids_toRemove = []
+    names_toRemove = []
+    for idx in indices_zero:
+        ids_toRemove.append(ods_id[idx])
+        names_toRemove.append(ods_name[idx])
+    for i in range(len(ids_toRemove)):
+        ods_id.remove(ids_toRemove[i])
+        ods_name.remove(names_toRemove[i])
+
+    data = od_df/duration_hours
+    data = data.to_numpy()
 
     ticks = ['{}\n(ID: {})'.format(ods_name[i], ods_id[i]) for i in range(len(ods_name))]
 
-    im = heatmap(od_df, ticks, ticks, ax=ax,
-                       cmap="Wistia", cbarlabel="harvest [t/year]") #, cbar  "YlGn"
-    texts = annotate_heatmap(im, valfmt="{x}")
+    im, cbar = heatmap(od_df, ticks, ticks, ax=ax,
+                       cmap="Wistia", cbarlabel=cbarlabel) #, cbar  "YlGn"
+    texts = annotate_heatmap(im, data=data, valfmt=valfmt)
 
 
     # ax.matshow(od_df, cmap=plt.cm.coolwarm)
@@ -291,8 +314,8 @@ def heatmap(data, row_labels, col_labels, ax=None,
     im = ax.imshow(data, **kwargs)
 
     # Create colorbar
-    # cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
-    # cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+    cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
+    cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
 
     # We want to show all ticks...
     ax.set_xticks(np.arange(data.shape[1]))
@@ -318,7 +341,7 @@ def heatmap(data, row_labels, col_labels, ax=None,
     ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
     ax.tick_params(which="minor", bottom=False, left=False)
 
-    return im #, cbar
+    return im, cbar
 
 
 def annotate_heatmap(im, data=None, valfmt="{x:.2f}",

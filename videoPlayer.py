@@ -211,8 +211,9 @@ class VideoWindow(QMainWindow):
         self.videoStartDatetime = None
         self.videoCurrentDatetime = None
 
-        self.graphicsFile = None
-        self.videoFile = None
+        self.projectFile = ''
+        self.graphicsFile = ''
+        self.videoFile = ''
 
         # ===================== Setting video item ==============================
         self.videoItem = QGraphicsVideoItem()
@@ -270,13 +271,13 @@ class VideoWindow(QMainWindow):
         openProjectAction.setStatusTip('Open project')
         openProjectAction.triggered.connect(self.openProject)
 
-        saveProjectAction = QAction(QIcon('icons/save.png'), 'Save project', self)
+        saveProjectAction = QAction(QIcon('icons/save-project.png'), 'Save project', self)
         saveProjectAction.setStatusTip('Save project')
         saveProjectAction.triggered.connect(self.saveProject)
 
-        saveGraphAction = QAction(QIcon('icons/save.png'), 'Save graphics', self)
-        saveGraphAction.setStatusTip('Save graphics')
-        saveGraphAction.triggered.connect(self.saveGraphics)
+        self.saveGraphAction = QAction(QIcon('icons/save-graphics.png'), 'Save graphics', self)
+        self.saveGraphAction.setStatusTip('Save graphics')
+        self.saveGraphAction.triggered.connect(self.saveGraphics)
 
         self.loadGraphAction = QAction(QIcon('icons/folders.png'), 'Load graphics', self)
         self.loadGraphAction.setStatusTip('Load graphics')
@@ -305,7 +306,7 @@ class VideoWindow(QMainWindow):
 
         self.toolbar.insertSeparator(self.loadGraphAction)
         self.toolbar.addAction(self.loadGraphAction)
-        self.toolbar.addAction(saveGraphAction)
+        self.toolbar.addAction(self.saveGraphAction)
         self.toolbar.addAction(self.drawLineAction)
         self.toolbar.addAction(self.labelingAction)
 
@@ -339,6 +340,7 @@ class VideoWindow(QMainWindow):
         # self.gView.fitInView(self.videoItem, Qt.KeepAspectRatio)
 
     def openVideoFile(self):
+        # self.mediaPlayer.setMedia(QMediaContent())
         if self.sender() == self.openVideoAction:
             self.videoFile, _ = QFileDialog.getOpenFileName(self, "Open video", QDir.homePath())
             if self.videoFile != '':
@@ -412,15 +414,15 @@ class VideoWindow(QMainWindow):
         self.gView.setCursor(cursor)
 
     def openProject(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open project file",
-                                                  QDir.homePath(), "Project files (*.prj)")
+        self.projectFile, _ = QFileDialog.getOpenFileName(self, "Open project file",
+                                                  QDir.homePath(), "Project (*.prj)")
         # fileName = "/Users/Abbas/project.xml"
-        if fileName == '':
+        if self.projectFile == '':
             return
 
-        self.setWindowTitle(fileName)
+        self.setWindowTitle(self.projectFile)
 
-        tree = ET.parse(fileName)
+        tree = ET.parse(self.projectFile)
         root = tree.getroot()
         gItems = []
         for elem in root:
@@ -457,7 +459,7 @@ class VideoWindow(QMainWindow):
                 x, y = item['mainWin_pos'].split(',')
                 w, h = item['mainWin_size'].split(',')
                 self.setGeometry(int(x), int(y), int(w), int(h))
-                if bool(item['obsTbx_open']):
+                if item['obsTbx_open'] == 'True':
                     self.obsTb.show()
                     x, y = item['obsTbx_pos'].split(',')
                     w, h = item['obsTbx_size'].split(',')
@@ -465,15 +467,22 @@ class VideoWindow(QMainWindow):
 
 
     def saveProject(self):
-        fileName, _ = QFileDialog.getSaveFileName(self, "Open project file",
-                                                  QDir.homePath(), "Project files (*.prj)")
+        self.saveGraphics()
+
+        if self.projectFile == '':
+            fileDir = QDir.homePath()
+        else:
+            fileDir = self.projectFile
+
+        self.projectFile, _ = QFileDialog.getSaveFileName(self, "Save project file",fileDir,
+                                                          "Project (*.prj)")
         # fileName = "/Users/Abbas/project.xml"
-        if fileName == '':
+        if self.projectFile == '':
             return
 
-        self.setWindowTitle(fileName)
+        self.setWindowTitle(self.projectFile)
 
-        file = QFile(fileName)
+        file = QFile(self.projectFile)
         if (not file.open(QIODevice.WriteOnly | QIODevice.Text)):
             return
 
@@ -485,7 +494,7 @@ class VideoWindow(QMainWindow):
 
         xmlWriter.writeStartElement('video')
         xmlWriter.writeTextElement("fileName", self.videoFile) #mediaPlayer.media().canonicalUrl().path())
-        xmlWriter.writeTextElement("sliderValue", str(self.positionSlider.sliderPosition()))
+        xmlWriter.writeTextElement("sliderValue", str(self.mediaPlayer.position()))
         xmlWriter.writeEndElement()
 
         xmlWriter.writeStartElement('graphics')
@@ -511,14 +520,18 @@ class VideoWindow(QMainWindow):
         xmlWriter.writeEndElement()
 
     def saveGraphics(self):
-        fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
-                                                  QDir.homePath(), "Graphics files (*.grpc)")
-        if fileName == '':
-            return
+        if self.sender() == self.saveGraphAction or self.graphicsFile == '':
+            if self.graphicsFile == '':
+                fileDir = QDir.homePath()
+            else:
+                fileDir = self.graphicsFile
 
-        self.graphicsFile = fileName
+            self.graphicsFile, _ = QFileDialog.getSaveFileName(self, "Save graphics file",fileDir,
+                                                               "Graphics (*.grpc)")
+            if self.graphicsFile == '':
+                return
 
-        file = QFile(fileName)
+        file = QFile(self.graphicsFile)
         if (not file.open(QIODevice.WriteOnly | QIODevice.Text)):
             return
 
@@ -580,7 +593,7 @@ class VideoWindow(QMainWindow):
 
     def loadGraphics(self):
         if self.sender() == self.loadGraphAction:
-            self.graphicsFile, _ = QFileDialog.getOpenFileName(self, "Open database file",
+            self.graphicsFile, _ = QFileDialog.getOpenFileName(self, "Open graphics file",
                                                   QDir.homePath(), "Graphics files (*.grpc)")
         if self.graphicsFile == '':
             return
