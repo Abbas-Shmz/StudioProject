@@ -120,6 +120,34 @@ class ObsToolbox(QMainWindow):
         wid.setLayout(layout)
 
 
+    def getRelatedTable(self, grpBx):
+        grid_wdgt = grpBx.layout().itemAt(1).widget()
+        class_ = getattr(dbSchema, grpBx.title())
+
+        grid_lyt = grid_wdgt.layout()
+        grid_labels = [grid_lyt.itemAtPosition(i, 0).widget() for i in range(grid_lyt.rowCount())]
+
+        relatedTables = []
+        i = 0
+        for label in grid_labels:
+            input_wdgt = grid_lyt.itemAtPosition(i, 1).widget()
+            if isinstance(input_wdgt, QComboBox):
+                if len(getattr(class_, label.text()).foreign_keys) > 0:
+                    fk_set = getattr(class_, label.text()).foreign_keys
+                    fk = next(iter(fk_set))
+                    fkTableName = fk.column.table.name
+                    fkColumnName = label.text()
+                    for indx in range(self.toolbox.count()):
+                        tabLayout = self.toolbox.widget(indx).layout()
+                        for itmIndx in range(tabLayout.count()):
+                            groupBox = tabLayout.itemAt(itmIndx).widget()
+                            if groupBox.title().lower() == fkTableName:
+                                relatedTables.append([fkColumnName, groupBox])
+            i = i + 1
+
+        return relatedTables
+
+
     @staticmethod
     def getTableColumns(TableCls):
         pk_list = [key.name for key in inspect(TableCls).primary_key]
@@ -143,13 +171,17 @@ class ObsToolbox(QMainWindow):
 
     def generateWidgets(self, tableClass):
         groupBox_layout = QVBoxLayout()
-
+        btnsLayout = QHBoxLayout()
+        newBtnsLayout = QHBoxLayout()
         gridLayout = QGridLayout()
         gridWidget = QWidget()
         gridWidget.setEnabled(False)
 
-        newButton = QPushButton(QIcon('icons/new.png'), 'New record')
-        groupBox_layout.addWidget(newButton)
+        newRecButton = QPushButton(QIcon('icons/new.png'), 'New record')
+        newObjButton = QPushButton(QIcon('icons/new-object.png'), 'New object')
+        newBtnsLayout.addWidget(newRecButton)
+        newBtnsLayout.addWidget(newObjButton)
+        groupBox_layout.addLayout(newBtnsLayout)
 
         i = 0
         for column in self.getTableColumns(tableClass):
@@ -159,7 +191,7 @@ class ObsToolbox(QMainWindow):
             if column['enum'] != None:
                 wdgt = QComboBox()
                 wdgt.addItems(column['enum'])
-                # wdgt.setCurrentIndex(-1)
+                wdgt.setCurrentIndex(-1)
             elif column['is_foreign_key']:
                 wdgt = QComboBox()
             elif column['is_datetime']:
@@ -178,10 +210,10 @@ class ObsToolbox(QMainWindow):
 
         groupBox_layout.addWidget(gridWidget)
 
-        btnsLayout = QHBoxLayout()
 
-        addButton = QPushButton(QIcon('icons/save.png'), 'Save')
-        addButton.setEnabled(False)
+
+        saveButton = QPushButton(QIcon('icons/save.png'), 'Save')
+        saveButton.setEnabled(False)
 
         editButton = QPushButton(QIcon('icons/edit.png'), 'Edit')
         editButton.setEnabled(False)
@@ -191,25 +223,35 @@ class ObsToolbox(QMainWindow):
 
         btnsLayout.addWidget(delButton)
         btnsLayout.addWidget(editButton)
-        btnsLayout.addWidget(addButton)
+        btnsLayout.addWidget(saveButton)
 
-        groupBox_layout.addLayout(btnsLayout) #.addWidget(addButton)
+        groupBox_layout.addLayout(btnsLayout) #.addWidget(saveButton)
 
         groupBox = QGroupBox(tableClass.__name__)
+        groupBox.setAlignment(Qt.AlignHCenter)
         groupBox.setLayout(groupBox_layout)
 
-        newButton.clicked.connect(lambda: self.newObject(groupBox, gridWidget, addButton, editButton))
-        addButton.clicked.connect(lambda: self.addObject(groupBox, gridWidget, newButton, editButton,
-                                                         delButton))
-        editButton.clicked.connect(lambda: self.editObject(groupBox, gridWidget, newButton, addButton))
-        delButton.clicked.connect(lambda: self.deleteObject(groupBox, gridWidget, newButton, editButton))
+        newRecButton.clicked.connect(lambda: self.newRecord(groupBox))
+        newObjButton.clicked.connect(lambda: self.newObject(groupBox))
+        saveButton.clicked.connect(lambda: self.saveRecord(groupBox))
+        editButton.clicked.connect(lambda: self.editObject(groupBox, gridWidget, newRecButton,
+                                                           saveButton))
+        delButton.clicked.connect(lambda: self.deleteObject(groupBox, gridWidget, newRecButton,
+                                                            editButton))
 
         return  groupBox
 
-    def newObject(self, grpBx, grid_wdgt, addBtn, editBtn):
-        self.sender().setEnabled(False)
+    def newRecord(self, grpBx, fieldVals = {}):
+        newRecBtn = grpBx.layout().itemAt(0).layout().itemAt(0).widget()
+        newObjBtn = grpBx.layout().itemAt(0).layout().itemAt(1).widget()
+        saveBtn = grpBx.layout().itemAt(2).layout().itemAt(2).widget()
+        editBtn = grpBx.layout().itemAt(2).layout().itemAt(1).widget()
+        grid_wdgt = grpBx.layout().itemAt(1).widget()
+
+        if self.sender() == newRecBtn:
+            self.sender().setEnabled(False)
         grid_wdgt.setEnabled(True)
-        addBtn.setEnabled(True)
+        saveBtn.setEnabled(True)
         editBtn.setEnabled(False)
 
         class_ = getattr(dbSchema, grpBx.title())
@@ -217,30 +259,43 @@ class ObsToolbox(QMainWindow):
         self.session.add(instance)
         self.session.flush()
 
+        pk_list = [key.name for key in inspect(class_).primary_key]
         grid_lyt = grid_wdgt.layout()
         grid_labels = [grid_lyt.itemAtPosition(i, 0).widget() for i in range(grid_lyt.rowCount())]
 
         i = 0
         for label in grid_labels:
             input_wdgt = grid_lyt.itemAtPosition(i, 1).widget()
-            if  isinstance(input_wdgt, QLineEdit) and input_wdgt.isReadOnly():
-                input_wdgt.setText(str(getattr(instance, label.text())))
+            if  isinstance(input_wdgt, QLineEdit) and label.text() in pk_list:
+                pk_val = str(getattr(instance, label.text()))
+                input_wdgt.setText(pk_val)
             elif isinstance(input_wdgt, QComboBox):
                 if len(getattr(class_, label.text()).foreign_keys) > 0:
+                    if label.text() in ['driverId', 'cyclistId']:
+                        continue
                     fk_set = getattr(class_, label.text()).foreign_keys
                     fk = next(iter(fk_set))
+                    fk_items = [input_wdgt.itemText(i) for i in range(input_wdgt.count())]
+
                     items = [i[0] for i in self.session.query(fk.column).all()]
                     items.sort(reverse=True)
                     items = [str(i) for i in items]
-                    input_wdgt.clear()
-                    input_wdgt.addItems(items)
+
+                    if fk_items != items:
+                        input_wdgt.clear()
+                        input_wdgt.addItems(items)
+
+                        if len(fieldVals.keys()) > 0:
+                            fldName = next(iter(fieldVals.keys()))
+                            if fldName == label.text():
+                                input_wdgt.setCurrentText(str(fieldVals[fldName]))
             elif  isinstance(input_wdgt, QDateTimeEdit):
                 if self.parent() == None or self.parent().videoCurrentDatetime == None:
                     input_wdgt.setDateTime(QDateTime.currentDateTime())
                 else:
                     input_wdgt.setDateTime(QDateTime(self.parent().videoCurrentDatetime))
             i = i + 1
-
+        return pk_val
         # grid_wdgt.repaint()
 
 
@@ -255,14 +310,41 @@ class ObsToolbox(QMainWindow):
         # print(fk.column)
         # print([i[0] for i in self.session.query(fk.column).all()])
 
+    def newObject(self, grpBx):
+        relatedTables = []
+        grpBoxToCheck = grpBx
 
-    def addObject(self, grpBx, grid_wdgt, newBtn, editBtn, delBtn):
+        while True:
+            relTable = self.getRelatedTable(grpBoxToCheck)
+            if relTable != []:
+                relatedTables.insert(0,[grpBoxToCheck, relTable[0][0]])
+                grpBoxToCheck = relTable[0][1]
+            else:
+                relatedTables.insert(0, [grpBoxToCheck, None])
+                break
+
+        for tbl in relatedTables:
+            if tbl[1] == None:
+                pk_id = self.newRecord(tbl[0])
+            else:
+                pk_id = self.newRecord(tbl[0], {tbl[1]:pk_id})
+            self.saveRecord(tbl[0])
+
+
+    def saveRecord(self, grpBx):
+        newBtn = grpBx.layout().itemAt(0).layout().itemAt(0).widget()
+        grid_wdgt = grpBx.layout().itemAt(1).widget()
+        delBtn = grpBx.layout().itemAt(2).layout().itemAt(0).widget()
+        editBtn = grpBx.layout().itemAt(2).layout().itemAt(1).widget()
+        saveBtn = grpBx.layout().itemAt(2).layout().itemAt(2).widget()
+
         newBtn.setEnabled(True)
         editBtn.setEnabled(True)
         delBtn.setEnabled(True)
         grid_wdgt.setEnabled(False)
-        self.sender().setEnabled(False)
-        self.sender().setText('Save')
+        saveBtn.setEnabled(False)
+        if saveBtn.text() == 'Update':
+            saveBtn.setText('Save')
 
         class_ = getattr(dbSchema, grpBx.title())
         pk_list = [key.name for key in inspect(class_).primary_key]
@@ -290,6 +372,8 @@ class ObsToolbox(QMainWindow):
                 else:
                     input_wdgt_val = input_wdgt.text()
             elif isinstance(input_wdgt, QComboBox):
+                if input_wdgt.currentText() == '':
+                    continue
                 if input_wdgt.currentText() == 'True':
                     input_wdgt_val = True
                 elif input_wdgt.currentText() == 'False':
