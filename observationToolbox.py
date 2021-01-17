@@ -1,32 +1,38 @@
 import sys
+import os
+import pandas as pd
+import datetime
 from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel,
-                             QSizePolicy)
+                             QSizePolicy, QStatusBar)
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtCore import QDateTime, QSize, QDir, Qt
 
 from framework.dbSchema import createDatabase, connectDatabase, \
     Study_site, Site_ODs, Person, Pedestrian, Vehicle, Bike, \
     Activity, Group, Pedestrian_obs, Vehicle_obs, Bike_obs, \
-    Passenger, GroupBelongings
+    GroupBelongings  #Passenger
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
-from framework.indicators import tempDistHist, stackedHist, odMatrix
+from framework.indicators import tempDistHist, stackedHist, odMatrix, pieChart
 from framework import dbSchema
 
 from sqlalchemy import Enum, Boolean, DateTime
 from sqlalchemy.inspection import inspect
+from sqlalchemy import func
 
 
 class ObsToolbox(QMainWindow):
     def __init__(self, parent=None):
         super(ObsToolbox, self).__init__(parent)
         self.resize(400, 650)
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
         self.dbFilename = '/Users/Abbas/test.sqlite'
         self.session = None
         self.roadUser = None
@@ -35,7 +41,8 @@ class ObsToolbox(QMainWindow):
         layout = QVBoxLayout() #QGridLayout()
 
         #--------------------------------------------
-        self.setWindowTitle(self.dbFilename)
+        self.setWindowTitle(os.path.basename(self.dbFilename))
+
         self.session = createDatabase(self.dbFilename)
         if self.session is None:
             self.session = connectDatabase(self.dbFilename)
@@ -80,12 +87,20 @@ class ObsToolbox(QMainWindow):
         odMatrixAction = QAction(QIcon('icons/square-grid.png'), '&OD Matrix', self)
         odMatrixAction.triggered.connect(self.odMatrix)
 
+        pieChartAction = QAction(QIcon('icons/pie-chart.png'), '&Pie Chart', self)
+        pieChartAction.triggered.connect(self.pieChart)
+
+        compHistAction = QAction(QIcon('icons/comparison.png'), '&Comparative Histogram', self)
+        compHistAction.triggered.connect(self.compHist)
+
         self.toolbar = QToolBar()
         self.toolbar.setIconSize(QSize(24, 24))
         self.toolbar.addAction(self.openAction)
         self.toolbar.addAction(tempHistAction)
         self.toolbar.addAction(stackHistAction)
         self.toolbar.addAction(odMatrixAction)
+        self.toolbar.addAction(pieChartAction)
+        self.toolbar.addAction(compHistAction)
         self.toolbar.insertSeparator(tempHistAction)
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
 
@@ -271,8 +286,6 @@ class ObsToolbox(QMainWindow):
                 input_wdgt.setText(pk_val)
             elif isinstance(input_wdgt, QComboBox):
                 if len(getattr(class_, label.text()).foreign_keys) > 0:
-                    if label.text() in ['driverId', 'cyclistId']:
-                        continue
                     fk_set = getattr(class_, label.text()).foreign_keys
                     fk = next(iter(fk_set))
                     fk_items = [input_wdgt.itemText(i) for i in range(input_wdgt.count())]
@@ -295,6 +308,10 @@ class ObsToolbox(QMainWindow):
                 else:
                     input_wdgt.setDateTime(QDateTime(self.parent().videoCurrentDatetime))
             i = i + 1
+
+        msg = 'New: {}({})'.format(grpBx.title(), pk_val)
+        self.statusBar.showMessage(msg, 120000)
+
         return pk_val
         # grid_wdgt.repaint()
 
@@ -313,6 +330,7 @@ class ObsToolbox(QMainWindow):
     def newObject(self, grpBx):
         relatedTables = []
         grpBoxToCheck = grpBx
+        msg = 'New: '
 
         while True:
             relTable = self.getRelatedTable(grpBoxToCheck)
@@ -329,6 +347,9 @@ class ObsToolbox(QMainWindow):
             else:
                 pk_id = self.newRecord(tbl[0], {tbl[1]:pk_id})
             self.saveRecord(tbl[0])
+            msg = msg + '{}({}), '.format(tbl[0].title(), pk_id)
+
+        self.statusBar.showMessage(msg[:-2], 120000)
 
 
     def saveRecord(self, grpBx):
@@ -435,7 +456,11 @@ class ObsToolbox(QMainWindow):
             self.dbFilename, _ = QFileDialog.getSaveFileName(self, "Open database file",
                                                   QDir.homePath(), "Sqlite files (*.sqlite)")
         if self.dbFilename != '':
-            self.setWindowTitle(self.dbFilename)
+            if self.parent() != None:
+                self.setWindowTitle('{} - {}'.format(os.path.basename(self.dbFilename),
+                                                     os.path.basename(self.parent().projectFile)))
+            else:
+                self.setWindowTitle(os.path.basename(self.dbFilename))
 
             # self.dbFilename = fileName
 
@@ -483,38 +508,65 @@ class ObsToolbox(QMainWindow):
 
         odMtrxWin.exec_()
 
-    def okBtnClickTHist(self, userCombobx, odNamesCombobx, canv):
-        self.roadUser = userCombobx.currentText()
-        self.odName = odNamesCombobx.currentText()
+    def pieChart(self):
+        if self.session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+        pieChartWin = PieChartWindow(self)
+        # tempHistWin.setModal(True)
+        # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        canv.figure.axes.clear()
+        pieChartWin.exec_()
 
-        if self.roadUser != None and self.odName != None:
-            fig, err = tempDistHist(user=self.roadUser, od_name=self.odName, session=self.session)
-            if err != None:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setText(err)
-                msg.exec_()
-            else:
-                canv.figure = fig
-                canv.draw()
-                print(canv.get_width_height())
+    def compHist(self):
+        if self.session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+        compHistWin = CompHistWindow(self)
 
-    def okBtnClickSHist(self, userCombobx, attrCombobx):
-        self.roadUser = userCombobx.currentText()
-        self.userAttr = attrCombobx.currentText()
-        self.sender().parent().close()
+        # tempHistWin.setModal(True)
+        # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-    def okBtnClickODmatrix(self, userCombobx):
-        self.roadUser = userCombobx.currentText()
-        self.sender().parent().close()
+        compHistWin.exec_()
 
-    def cancelBtnClick(self):
-        self.roadUser = None
-        self.userAttr = None
-        self.odName = None
-        self.sender().parent().close()
+    # def okBtnClickTHist(self, userCombobx, odNamesCombobx, canv):
+    #     self.roadUser = userCombobx.currentText()
+    #     self.odName = odNamesCombobx.currentText()
+    #
+    #     canv.figure.axes.clear()
+    #
+    #     if self.roadUser != None and self.odName != None:
+    #         fig, err = tempDistHist(user=self.roadUser, od_name=self.odName, session=self.session)
+    #         if err != None:
+    #             msg = QMessageBox()
+    #             msg.setIcon(QMessageBox.Information)
+    #             msg.setText(err)
+    #             msg.exec_()
+    #         else:
+    #             canv.figure = fig
+    #             canv.draw()
+    #             print(canv.get_width_height())
+    #
+    # def okBtnClickSHist(self, userCombobx, attrCombobx):
+    #     self.roadUser = userCombobx.currentText()
+    #     self.userAttr = attrCombobx.currentText()
+    #     self.sender().parent().close()
+    #
+    # def okBtnClickODmatrix(self, userCombobx):
+    #     self.roadUser = userCombobx.currentText()
+    #     self.sender().parent().close()
+    #
+    # def cancelBtnClick(self):
+    #     self.roadUser = None
+    #     self.userAttr = None
+    #     self.odName = None
+    #     self.sender().parent().close()
 
 
 class TempHistWindow(QDialog):
@@ -713,6 +765,196 @@ class OdMatrixWindow(QDialog):
                                                   QDir.homePath(), "PNG files (*.png)")
         if fileName != '':
             self.canvas.print_png(fileName)
+
+
+class PieChartWindow(QDialog):
+    def __init__(self, parent=None):
+        super(PieChartWindow, self).__init__(parent)
+
+        self.setWindowTitle('Pie Chart')
+
+        self.figure = plt.figure(tight_layout=False)
+
+        self.canvas = FigureCanvas(self.figure)
+
+        # self.toolbar = NavigationToolbar(self.canvas, self)
+
+        winLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+
+        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
+        self.userCombobx = QComboBox()
+        self.userCombobx.addItems(['All users', 'Pedestrian', 'Vehicle', 'Bike', 'Activity'])
+        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Attribute:'), 0, 2, Qt.AlignRight)
+        self.attrCombobx = QComboBox()
+        self.attrCombobx.addItems(['age', 'gender', 'vehicleType', 'activityType'])
+        gridLayout.addWidget(self.attrCombobx, 0, 3, Qt.AlignLeft)
+
+        self.plotBtn = QPushButton('Plot')
+        self.plotBtn.clicked.connect(self.plotPieChart)
+        gridLayout.addWidget(self.plotBtn, 0, 4)
+
+        self.saveBtn = QPushButton()
+        self.saveBtn.setIcon(QIcon('icons/save.png'))
+        self.saveBtn.setToolTip('Save plot')
+        self.saveBtn.clicked.connect(self.savePieChart)
+        gridLayout.addWidget(self.saveBtn, 0, 5)
+
+        # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(gridLayout)
+        winLayout.addWidget(self.canvas)
+
+        self.setLayout(winLayout)
+
+    def plotPieChart(self):
+        self.figure.clear()
+        self.canvas.draw()
+
+        ax = self.figure.add_subplot(111)
+
+        # plot data
+        roadUser = self.userCombobx.currentText()
+        attr = self.attrCombobx.currentText()
+
+        err = pieChart(roadUser, attr, ax, self.parent().session)
+        if err != None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(err)
+            msg.exec_()
+        else:
+            # refresh canvas
+            self.canvas.draw()
+
+    def savePieChart(self):
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save image file",
+                                                  QDir.homePath(), "PNG files (*.png)")
+        if fileName != '':
+            self.canvas.print_png(fileName)
+
+
+class CompHistWindow(QDialog):
+    def __init__(self, parent=None):
+        super(CompHistWindow, self).__init__(parent)
+
+        self.setWindowTitle('Comparative Temporal Distribution Histogram')
+        self.session2 = None
+
+        self.figure = plt.figure(tight_layout=False)
+
+        self.canvas = FigureCanvas(self.figure)
+
+        # self.toolbar = NavigationToolbar(self.canvas, self)
+
+        winLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+
+        gridLayout.addWidget(QLabel('Database file:'), 0, 0, Qt.AlignRight)
+        self.dbFile2Ledit = QLineEdit()
+        gridLayout.addWidget(self.dbFile2Ledit, 0, 1, Qt.AlignLeft)
+
+        self.openDbFileBtn = QPushButton()
+        self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn.setToolTip('Open database file')
+        self.openDbFileBtn.clicked.connect(self.opendbFile)
+        gridLayout.addWidget(self.openDbFileBtn, 0, 2)
+
+        gridLayout.addWidget(QLabel('Road user:'), 1, 0, Qt.AlignRight)
+        self.userCombobx = QComboBox()
+        self.userCombobx.addItems(['pedestrian', 'vehicle', 'cyclist'])
+        gridLayout.addWidget(self.userCombobx, 1, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('OD name:'), 1, 2, Qt.AlignRight)
+        self.odNamesCombobx = QComboBox()
+        self.odNamesCombobx.addItems([name[0]
+                                      for name in self.parent().session.query(Site_ODs.odName).all()])
+        gridLayout.addWidget(self.odNamesCombobx, 1, 3, Qt.AlignLeft)
+
+        self.plotBtn = QPushButton('Plot')
+        self.plotBtn.clicked.connect(self.plotCompHist)
+        gridLayout.addWidget(self.plotBtn, 1, 4)
+
+        self.saveBtn = QPushButton()
+        self.saveBtn.setIcon(QIcon('icons/save.png'))
+        self.saveBtn.setToolTip('Save plot')
+        self.saveBtn.clicked.connect(self.saveCompHist)
+        gridLayout.addWidget(self.saveBtn, 1, 5)
+
+        # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(gridLayout)
+        winLayout.addWidget(self.canvas)
+
+        self.setLayout(winLayout)
+
+    def plotCompHist(self):
+        self.figure.clear()
+        self.canvas.draw()
+
+        ax = self.figure.add_subplot(111)
+
+        # plot data
+        roadUser = self.userCombobx.currentText()
+        odName = self.odNamesCombobx.currentText()
+
+        if roadUser == 'pedestrian':
+            cls_ = Pedestrian_obs
+
+        first_obs_time1 = self.parent().session.query(func.min(cls_.instant)).all()[0][0]
+        last_obs_time1 = self.parent().session.query(func.max(cls_.instant)).all()[0][0]
+
+        first_obs_time2 = self.session2.query(func.min(cls_.instant)).all()[0][0]
+        last_obs_time2 = self.session2.query(func.max(cls_.instant)).all()[0][0]
+
+        if first_obs_time1.time() >= first_obs_time2.time():
+            bins_start = first_obs_time1
+        else:
+            bins_start = first_obs_time2
+
+        if last_obs_time1.time() <= last_obs_time2.time():
+            bins_end = last_obs_time1
+        else:
+            bins_end = last_obs_time2
+
+        start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
+        end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
+
+        bins = pd.date_range(start, end, periods=21).to_pydatetime()
+        label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
+        label2 = os.path.basename(self.dbFile2Ledit.text()).split('.')[0]
+
+        err = tempDistHist(roadUser, odName, ax, self.parent().session, bins=bins, alpha=0.5,
+                           color = 'blue', ec='blue', label=label1, rwidth=1, histtype='stepfilled',
+                           comparison=True)
+        err = tempDistHist(roadUser, odName, ax, self.session2, bins=bins, alpha=0.5,
+                           color='red', ec='red', label=label2, rwidth=1, histtype='stepfilled',
+                           comparison=True)
+        plt.legend(loc='upper right')
+        if err != None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(err)
+            msg.exec_()
+        else:
+            # refresh canvas
+            self.canvas.draw()
+
+    def saveCompHist(self):
+        fileName, _ = QFileDialog.getSaveFileName(self, "Save image file",
+                                                  QDir.homePath(), "PNG files (*.png)")
+        if fileName != '':
+            self.canvas.print_png(fileName)
+
+    def opendbFile(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile2Ledit.setText(dbFilename)
+
+            self.session2 = createDatabase(dbFilename)
+            if self.session2 is None:
+                self.session2 = connectDatabase(dbFilename)
 
 
 if __name__ == '__main__':

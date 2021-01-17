@@ -21,6 +21,7 @@ from hachoir.metadata import extractMetadata
 from hachoir.core import config as HachoirConfig
 
 import sys
+import os
 from datetime import datetime, timedelta
 
 from framework.dbSchema import connectDatabase, Site_ODs
@@ -205,15 +206,14 @@ class VideoWindow(QMainWindow):
         self.gView.setSceneRect(0, 0, 320, 240)
         # self.gView.setBackgroundBrush(QBrush(Qt.black))
 
-
-        self.obsTb = ObsToolbox(self)
-
         self.videoStartDatetime = None
         self.videoCurrentDatetime = None
 
         self.projectFile = ''
         self.graphicsFile = ''
         self.videoFile = ''
+
+        self.obsTb = ObsToolbox(self)
 
         # ===================== Setting video item ==============================
         self.videoItem = QGraphicsVideoItem()
@@ -222,7 +222,6 @@ class VideoWindow(QMainWindow):
 
         self.mediaPlayer = QMediaPlayer(self, QMediaPlayer.VideoSurface)
         self.mediaPlayer.setVideoOutput(self.videoItem)
-        # self.mediaPlayer.stateChanged.connect(self.on_stateChanged)
         self.mediaPlayer.stateChanged.connect(self.mediaStateChanged)
         self.mediaPlayer.positionChanged.connect(self.positionChanged)
         self.mediaPlayer.durationChanged.connect(self.durationChanged)
@@ -232,6 +231,16 @@ class VideoWindow(QMainWindow):
         self.playButton.setEnabled(False)
         self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.clicked.connect(self.play)
+
+        self.incrPlayRateBtn = QPushButton()
+        # self.incrPlayRateBtn.setEnabled(False)
+        self.incrPlayRateBtn.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekForward))
+        self.incrPlayRateBtn.clicked.connect(self.incrPlayRate)
+
+        self.decrPlayRateBtn = QPushButton()
+        # self.incrPlayRateBtn.setEnabled(False)
+        self.decrPlayRateBtn.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekBackward))
+        self.decrPlayRateBtn.clicked.connect(self.decrPlayRate)
 
         self.positionSlider = QSlider(Qt.Horizontal)
         self.positionSlider.setRange(0, 0)
@@ -324,7 +333,9 @@ class VideoWindow(QMainWindow):
         # Create layouts to place inside widget
         controlLayout = QHBoxLayout()
         controlLayout.setContentsMargins(0, 0, 0, 0)
+        controlLayout.addWidget(self.decrPlayRateBtn)
         controlLayout.addWidget(self.playButton)
+        controlLayout.addWidget(self.incrPlayRateBtn)
         controlLayout.addWidget(self.timerLabel)
         controlLayout.addWidget(self.positionSlider)
         # controlLayout.addWidget(self.durationLabel)
@@ -344,7 +355,8 @@ class VideoWindow(QMainWindow):
         if self.sender() == self.openVideoAction:
             self.videoFile, _ = QFileDialog.getOpenFileName(self, "Open video", QDir.homePath())
             if self.videoFile != '':
-                self.setWindowTitle(self.videoFile)
+                self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
+                                                     os.path.basename(self.projectFile)))
 
         if self.videoFile != '':
             creation_datetime = self.getVideoMetadata(self.videoFile)
@@ -369,6 +381,18 @@ class VideoWindow(QMainWindow):
 
         else:
             self.mediaPlayer.play()
+
+    def incrPlayRate(self):
+        if self.mediaPlayer.playbackRate() < 2:
+            self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() + 0.2)
+            self.statusBar.showMessage('Play back rate = x{}'.\
+                                       format(round(self.mediaPlayer.playbackRate(),1)), 2000)
+
+    def decrPlayRate(self):
+        if self.mediaPlayer.playbackRate() > 0.2:
+            self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() - 0.2)
+            self.statusBar.showMessage('Play back rate = x{}'.\
+                                       format(round(self.mediaPlayer.playbackRate(), 1)), 2000)
 
     def mediaStateChanged(self, state):
         if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
@@ -420,8 +444,6 @@ class VideoWindow(QMainWindow):
         if self.projectFile == '':
             return
 
-        self.setWindowTitle(self.projectFile)
-
         tree = ET.parse(self.projectFile)
         root = tree.getroot()
         gItems = []
@@ -465,6 +487,9 @@ class VideoWindow(QMainWindow):
                     w, h = item['obsTbx_size'].split(',')
                     self.obsTb.setGeometry(int(x), int(y), int(w), int(h))
 
+        self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
+                                             os.path.basename(self.projectFile)))
+
 
     def saveProject(self):
         self.saveGraphics()
@@ -480,7 +505,6 @@ class VideoWindow(QMainWindow):
         if self.projectFile == '':
             return
 
-        self.setWindowTitle(self.projectFile)
 
         file = QFile(self.projectFile)
         if (not file.open(QIODevice.WriteOnly | QIODevice.Text)):
@@ -518,6 +542,9 @@ class VideoWindow(QMainWindow):
         xmlWriter.writeEndElement()
 
         xmlWriter.writeEndElement()
+
+        self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
+                                             os.path.basename(self.projectFile)))
 
     def saveGraphics(self):
         if self.sender() == self.saveGraphAction or self.graphicsFile == '':

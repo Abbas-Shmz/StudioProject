@@ -5,6 +5,7 @@
 @author: Abbas
 """
 import numpy as np
+import datetime
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -12,16 +13,17 @@ from matplotlib.ticker import MaxNLocator
 from sqlalchemy import func
 
 import pandas as pd
-from framework.dbSchema import connectDatabase, Pedestrian_obs, Vehicle, \
-    Person, Vehicle_obs, Bike_obs, Pedestrian, \
-    Activity, Site_ODs
+from framework import dbSchema
+from framework.dbSchema import connectDatabase, Pedestrian_obs, Vehicle, Person, Bike, \
+    Vehicle_obs, Bike_obs, Pedestrian, Activity, Site_ODs
 from framework import enums as en
 
 # session = connectDatabase('/Users/Abbas/stuart.sqlite')
 
 
 # ==============================================================
-def tempDistHist(user, od_name, ax, session):
+def tempDistHist(user, od_name, ax, session, bins=20, alpha=1, color='skyblue', ec='grey',
+                 label=None, rwidth=0.9, histtype='bar', comparison = False):
     if user == 'pedestrian':
         q1 = session.query(Pedestrian_obs.instant). \
             join(Site_ODs, Pedestrian_obs.originId == Site_ODs.id). \
@@ -54,9 +56,16 @@ def tempDistHist(user, od_name, ax, session):
 
     time_list = [i[0] for i in q1.all()] + [i[0] for i in q2.all()]
 
+    if comparison:
+        i = 0
+        for t in time_list:
+            time_list[i] = datetime.datetime(2000,1,1,t.hour, t.minute, t.second)
+            i += 1
+
     # fig = plt.figure()#figsize=(5, 5), dpi=200, tight_layout=True)
     # ax = fig.add_subplot(111) #plt.subplots(1, 1)
-    ax.hist(time_list, bins=20, color='skyblue', ec='grey', rwidth=0.9)
+    ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth, alpha=alpha, label=label,
+            histtype=histtype)
 
     locator = mdates.AutoDateLocator()
     ax.xaxis.set_major_locator(locator)
@@ -74,11 +83,12 @@ def tempDistHist(user, od_name, ax, session):
     ax.set_title('Temporal distribution of ' + user + ' passings from ' + od_name, fontsize=10)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
-    ax.text(0.05, 0.95, str(time_list[0].strftime('%A, %b %d, %Y')),
-            horizontalalignment='left',
-            verticalalignment='center',
-            transform=ax.transAxes,
-            fontsize=8)
+    if not comparison:
+        ax.text(0.05, 0.95, str(time_list[0].strftime('%A, %b %d, %Y')),
+                horizontalalignment='left',
+                verticalalignment='center',
+                transform=ax.transAxes,
+                fontsize=8)
 
     ax.text(0.03, 0.03, str('StudioProject'),
             fontsize=10, color='gray',
@@ -282,6 +292,54 @@ def odMatrix(user, ax, session):
     #         plt.text(i, j, str(c), va='center', ha='center', fontsize=8, weight="bold", color='k')
     #
     # plt.show()
+
+#=====================================================================
+def pieChart(user, attr, ax, session):
+    if user == 'All users':
+        ped_count = session.query(Pedestrian).count()
+        veh_count = session.query(Vehicle).count()
+        bik_count = session.query(Bike).count()
+
+        all_count = ped_count + veh_count + bik_count
+        ped_pct = round((ped_count / all_count) * 100, 1)
+        veh_pct = round((veh_count / all_count) * 100, 1)
+        bik_pct = round((bik_count / all_count) * 100, 1)
+
+        labels = 'Pedestrian', 'Vehicle', 'Bike'
+        sizes = [ped_pct, veh_pct, bik_pct]
+        explode = [0.01, 0.01, 0.01]  # only "explode" the 2nd slice
+    else:
+        labels, sizes = getLabelSizePie(user, attr, session)
+        explode = [0.01]*len(labels)
+
+    wedges, texts, autotexts = ax.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
+                                      shadow=False, startangle=90, textprops={'size': 8})
+
+    ax.axis('equal')
+    # ax.legend(wedges, labels,
+    #           title="title",
+    #           loc="upper right")
+
+    plt.setp(autotexts, size=8, weight="bold")
+
+
+def getLabelSizePie(className, fieldName, session):
+    class_ = getattr(dbSchema, className)
+    if className == 'Pedestrian':
+        field_ = getattr(Person, fieldName)
+        q = session.query(func.count(field_), field_).join(Pedestrian, Person.id == Pedestrian.personId).\
+            group_by(field_)
+    else:
+        field_ = getattr(class_, fieldName)
+        q = session.query(func.count(field_), field_).group_by(field_)
+
+    # q = session.query(cls_fld).join(Pedestrian, Person.id == Pedestrian.personId). \
+    #     distinct()
+    labels = [i[1].name for i in q.all()]
+    sizes = [int(i[0]) for i in q.all()]
+
+    return labels, sizes
+
 
 def heatmap(data, row_labels, col_labels, ax=None,
             cbar_kw={}, cbarlabel="", **kwargs):

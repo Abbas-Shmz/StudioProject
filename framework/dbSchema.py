@@ -63,10 +63,10 @@ class Person(Base):
     withBag = Column(Boolean, default=False)
 
     pedestrian = relationship('Pedestrian', uselist=False, back_populates='person')
-    vehicle = relationship('Vehicle', uselist=False, back_populates='driver')
-    bike = relationship('Bike', uselist=False, back_populates='cyclist')
+    # vehicle = relationship('Vehicle', uselist=False, back_populates='driver')
+    # bike = relationship('Bike', uselist=False, back_populates='cyclist')
     activity = relationship('Activity', back_populates='person')
-    passenger = relationship('Passenger', uselist=False, back_populates='person')
+    # passenger = relationship('Passenger', uselist=False, back_populates='person')
 
     def __repr__(self):
         return "person(Id = {}, age = {}, gender = {}, disability = {})".format(self.id, self.age, self.gender,
@@ -85,29 +85,29 @@ class Pedestrian(Base):
 class Vehicle(Base):
     vehicleType = Column(Enum(en.vehicleTypes))
     noPassengers = Column(Integer)
-    driverId = Column(Integer, ForeignKey('person.id'))
+    # driverId = Column(Integer, ForeignKey('person.id'))
     noStops = Column(Integer, default=0)
 
-    driver = relationship('Person', back_populates='vehicle')
+    # driver = relationship('Person', back_populates='vehicle')
     observation = relationship('Vehicle_obs', back_populates='vehicle')
-    passengers = relationship('Passenger', back_populates='vehicle')
+    # passengers = relationship('Passenger', back_populates='vehicle')
 
 
 class Bike(Base):
     bikeType = Column(String)
-    cyclistId = Column(Integer, ForeignKey('person.id'))
+    # cyclistId = Column(Integer, ForeignKey('person.id'))
     wearHelmet = Column(Boolean, default=True)
 
-    cyclist = relationship('Person', back_populates='bike')
+    # cyclist = relationship('Person', back_populates='bike')
     observation = relationship('Bike_obs', back_populates='bike')
 
 
-class Passenger(Base):
-    vehicleId = Column(Integer, ForeignKey('vehicle.id'))
-    personId = Column(Integer, ForeignKey('person.id'))
-
-    vehicle = relationship('Vehicle', back_populates='passengers')
-    person = relationship('Person', back_populates='passenger')
+# class Passenger(Base):
+#     vehicleId = Column(Integer, ForeignKey('vehicle.id'))
+#     personId = Column(Integer, ForeignKey('person.id'))
+#
+#     vehicle = relationship('Vehicle', back_populates='passengers')
+#     person = relationship('Person', back_populates='passenger')
 
 
 class Pedestrian_obs(Base, ObsMixin):
@@ -143,8 +143,8 @@ class Activity(Base):
 #                           Column('groupId', Integer, ForeignKey('group.id')))
 
 class GroupBelongings(Base):
-    personId = Column(Integer, ForeignKey('person.id'))
     groupId = Column(Integer, ForeignKey('group.id'))
+    personId = Column(Integer, ForeignKey('person.id'))
 
 association_table = GroupBelongings.__table__
 
