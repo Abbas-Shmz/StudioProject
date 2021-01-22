@@ -60,8 +60,8 @@ class GraphicView(QGraphicsView):
                 return
 
             p = self.mapToScene(event.x(), event.y())
-            labelShape = self.scene().addEllipse(p.x()-5, p.y()-5, 10, 10,
-                                                 QPen(Qt.white, 0.75), QBrush(Qt.black))
+            labelShape = self.scene().addEllipse(p.x()-3.5, p.y()-3.5, 7, 7,
+                                                 QPen(Qt.white, 0.5), QBrush(Qt.black))
             # labelShape.moveBy(-5, -5)
 
             labelWin = QDialog(self)
@@ -107,7 +107,7 @@ class GraphicView(QGraphicsView):
     def labelAdd(self, p, id_lineedit, labelShape, session):
         labelText = self.scene().addText(id_lineedit.text())
         labelFont = QFont()
-        labelFont.setPointSize(6)
+        labelFont.setPointSize(5)
         labelFont.setBold(True)
         labelText.setFont(labelFont)
         labelText.setDefaultTextColor(Qt.white)
@@ -226,6 +226,7 @@ class VideoWindow(QMainWindow):
         self.mediaPlayer.positionChanged.connect(self.positionChanged)
         self.mediaPlayer.durationChanged.connect(self.durationChanged)
         self.mediaPlayer.error.connect(self.handleError)
+        self.mediaPlayer.setMuted(True)
 
         self.playButton = QPushButton()
         self.playButton.setEnabled(False)

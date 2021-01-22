@@ -6,7 +6,8 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel,
-                             QSizePolicy, QStatusBar)
+                             QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
+                             QAbstractItemView)
 from PyQt5.QtGui import QColor, QIcon
 from PyQt5.QtCore import QDateTime, QSize, QDir, Qt
 
@@ -19,7 +20,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
-from framework.indicators import tempDistHist, stackedHist, odMatrix, pieChart
+from framework.indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport
 from framework import dbSchema
 
 from sqlalchemy import Enum, Boolean, DateTime
@@ -84,7 +85,7 @@ class ObsToolbox(QMainWindow):
         stackHistAction = QAction(QIcon('icons/stacked.png'), '&Stacked Histogram', self)
         stackHistAction.triggered.connect(self.stackedHist)
 
-        odMatrixAction = QAction(QIcon('icons/square-grid.png'), '&OD Matrix', self)
+        odMatrixAction = QAction(QIcon('icons/grid.png'), '&OD Matrix', self)
         odMatrixAction.triggered.connect(self.odMatrix)
 
         pieChartAction = QAction(QIcon('icons/pie-chart.png'), '&Pie Chart', self)
@@ -92,6 +93,9 @@ class ObsToolbox(QMainWindow):
 
         compHistAction = QAction(QIcon('icons/comparison.png'), '&Comparative Histogram', self)
         compHistAction.triggered.connect(self.compHist)
+
+        reportAction = QAction(QIcon('icons/report.png'), '&Generate Report', self)
+        reportAction.triggered.connect(self.genReport)
 
         self.toolbar = QToolBar()
         self.toolbar.setIconSize(QSize(24, 24))
@@ -101,6 +105,7 @@ class ObsToolbox(QMainWindow):
         self.toolbar.addAction(odMatrixAction)
         self.toolbar.addAction(pieChartAction)
         self.toolbar.addAction(compHistAction)
+        self.toolbar.addAction(reportAction)
         self.toolbar.insertSeparator(tempHistAction)
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
 
@@ -535,6 +540,21 @@ class ObsToolbox(QMainWindow):
 
         compHistWin.exec_()
 
+    def genReport(self):
+        if self.session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+        genRepWin = genReportWindow(self)
+        genRepWin.setGeometry(100, 100, 640, 480)
+
+        # tempHistWin.setModal(True)
+        # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
+
+        genRepWin.exec_()
+
     # def okBtnClickTHist(self, userCombobx, odNamesCombobx, canv):
     #     self.roadUser = userCombobx.currentText()
     #     self.odName = odNamesCombobx.currentText()
@@ -900,6 +920,10 @@ class CompHistWindow(QDialog):
 
         if roadUser == 'pedestrian':
             cls_ = Pedestrian_obs
+        elif roadUser == 'vehicle':
+            cls_ = Vehicle_obs
+        elif roadUser == 'cyclist':
+            cls_ = Bike_obs
 
         first_obs_time1 = self.parent().session.query(func.min(cls_.instant)).all()[0][0]
         last_obs_time1 = self.parent().session.query(func.max(cls_.instant)).all()[0][0]
@@ -955,6 +979,80 @@ class CompHistWindow(QDialog):
             self.session2 = createDatabase(dbFilename)
             if self.session2 is None:
                 self.session2 = connectDatabase(dbFilename)
+
+
+class genReportWindow(QDialog):
+    def __init__(self, parent=None):
+        super(genReportWindow, self).__init__(parent)
+
+        self.setWindowTitle('List of indicators')
+        self.setWindowIcon(QIcon('icons/report.png'))
+        self.table = QTableWidget()
+        # self.table.horizontalHeader().setStretchLastSection(True)
+        # self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.verticalHeader().hide()
+
+
+        winLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+
+        gridLayout.addWidget(QLabel('Subject:'), 0, 0, Qt.AlignRight)
+        self.subjCombobx = QComboBox()
+        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activities', 'ODs'])
+        gridLayout.addWidget(self.subjCombobx, 0, 1, Qt.AlignLeft)
+
+        self.genRepBtn = QPushButton('Generate report')
+        self.genRepBtn.clicked.connect(self.genReport)
+        gridLayout.addWidget(self.genRepBtn, 0, 2)
+
+        self.saveBtn = QPushButton()
+        self.saveBtn.setIcon(QIcon('icons/save.png'))
+        self.saveBtn.setToolTip('Save report')
+        self.saveBtn.clicked.connect(self.saveReport)
+        gridLayout.addWidget(self.saveBtn, 0, 3)
+
+        # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(gridLayout)
+        winLayout.addWidget(self.table)
+
+        self.setLayout(winLayout)
+
+    def genReport(self):
+        for _ in range(self.table.columnCount()):
+            self.table.removeColumn(0)
+
+        for _ in range(self.table.rowCount()):
+            self.table.removeRow(0)
+
+        subject = self.subjCombobx.currentText()
+
+        indicatorsList = generateReport(subject, self.parent().session)
+        for key in indicatorsList[0].keys():
+            self.table.insertColumn(self.table.columnCount())
+        self.table.setHorizontalHeaderLabels(indicatorsList[0].keys())
+
+        row = 0
+        for indicator in indicatorsList:
+            self.table.insertRow(self.table.rowCount())
+            col = 0
+            for val in indicator.values():
+                tabelItem = QTableWidgetItem(val)
+                if col == 0:
+                    self.table.horizontalHeader().setSectionResizeMode(col,
+                                                                       QHeaderView.ResizeToContents)
+                else:
+                    self.table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Stretch)
+                    tabelItem.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(row, col, tabelItem)
+                col += 1
+            row += 1
+
+        # print(self.table.horizontalHeader().stretchSectionCount())
+
+
+    def saveReport(self):
+        pass
 
 
 if __name__ == '__main__':

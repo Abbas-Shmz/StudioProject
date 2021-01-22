@@ -322,6 +322,111 @@ def pieChart(user, attr, ax, session):
 
     plt.setp(autotexts, size=8, weight="bold")
 
+#=====================================================================
+def generateReport(subj, session):
+    indicatorsList = []
+
+    if subj in ['Pedestrian', 'Vehicle', 'Bike']:
+        cls_ = getattr(dbSchema, subj)
+        cls_obs = getattr(dbSchema, subj+'_obs')
+        cls_obs_fld = getattr(cls_obs, subj.lower()+'Id')
+        q = session.query(cls_obs_fld).distinct()
+        no_all_users = q.count()
+
+        first_obs_time = session.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).all()[0][0]
+        duration = last_obs_time - first_obs_time
+        duration_in_s = duration.total_seconds()
+        duration_hours = duration_in_s / 3600
+        flow = round(no_all_users/duration_hours)
+
+        indicatorDict = {}
+        indicatorDict['Indicator'] = 'No. of all {}s'.format(subj.lower())
+        indicatorDict['Value'] = str(no_all_users)
+        indicatorDict['Percent(%)'] = '{}'.format(100)
+        indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
+        indicatorsList.append(indicatorDict)
+
+        morningPeakStart = datetime.time(7,0)
+        morningPeakEnd = datetime.time(9, 0)
+        eveningPeakStart = datetime.time(15, 0)
+        eveningPeakEnd = datetime.time(19, 0)
+
+        peakHours = {}
+        if first_obs_time.time() < morningPeakStart:
+            peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
+            peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+            peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+        elif morningPeakStart < first_obs_time.time() < morningPeakEnd:
+            peakHours['Morning peak'] = [first_obs_time.time(), morningPeakEnd]
+            peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+            peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+        elif morningPeakEnd < first_obs_time.time() < eveningPeakStart:
+            peakHours['Morning peak'] = None
+            peakHours['Off-peak'] = [first_obs_time.time(), eveningPeakStart]
+            peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+        elif eveningPeakStart < first_obs_time.time() < eveningPeakEnd:
+            peakHours['Morning peak'] = None
+            peakHours['Off-peak'] = None
+            peakHours['Evening peak'] = [first_obs_time.time(), eveningPeakEnd]
+
+        if eveningPeakStart < last_obs_time.time() < eveningPeakEnd:
+            peakHours['Evening peak'][1] = last_obs_time.time()
+
+        elif morningPeakEnd < last_obs_time.time() < eveningPeakStart:
+            peakHours['Evening peak'] = None
+            peakHours['Off-peak'][1] = last_obs_time.time()
+
+        elif morningPeakStart < last_obs_time.time() < morningPeakEnd:
+            peakHours['Evening peak'] = None
+            peakHours['Off-peak'][1] = None
+            peakHours['Morning peak'][1] = last_obs_time.time()
+
+        for p in peakHours.keys():
+            if peakHours[p] == None:
+                no_users = 'No Data'
+                percent = 'No Data'
+                flow = 'No Data'
+                duration_text = ''
+            else:
+                y = first_obs_time.year
+                m = first_obs_time.month
+                d = first_obs_time.day
+                lh = peakHours[p][0].hour
+                lm = peakHours[p][0].minute
+                ls = peakHours[p][0].second
+                uh = peakHours[p][1].hour
+                um = peakHours[p][1].minute
+                us = peakHours[p][1].second
+                ums = peakHours[p][1].microsecond
+                lowerBound = datetime.datetime(y, m, d, lh, lm, ls)
+                upperBound = datetime.datetime(y, m, d, uh, um, us, ums)
+                q = session.query(cls_obs).filter(cls_obs.instant >= lowerBound)\
+                                          .filter(cls_obs.instant <= upperBound)
+                no_users = q.count()
+                percent = round((no_users/no_all_users)*100)
+                duration = (peakHours[p][1].hour + peakHours[p][1].minute / 60) - \
+                           (peakHours[p][0].hour + peakHours[p][0].minute / 60)
+                flow = round(no_users / duration)
+                duration_text = '({}-{})'.format(peakHours[p][0].strftime('%I:%M %p'),
+                                                 peakHours[p][1].strftime('%I:%M %p'))
+
+            indicatorDict = {}
+            indicatorDict['Indicator'] = '{} {}'.format(p, duration_text)
+            indicatorDict['Value'] = str(no_users)
+            indicatorDict['Percent(%)'] = '{}'.format(percent)
+            indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
+            indicatorsList.append(indicatorDict)
+
+    return indicatorsList
+
+
+
+
+
 
 def getLabelSizePie(className, fieldName, session):
     class_ = getattr(dbSchema, className)
