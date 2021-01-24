@@ -387,6 +387,8 @@ class ObsToolbox(QMainWindow):
             i = i + 1
 
         instance = self.session.query(class_).filter(getattr(class_, pk_name) == pk_val).first()
+        obs_instance = self.session.query(Study_site).first()
+        current_obs_end = obs_instance.obsEnd
 
         i = 0
         for label in grid_labels:
@@ -407,7 +409,13 @@ class ObsToolbox(QMainWindow):
                 else:
                     input_wdgt_val = input_wdgt.currentText()
             elif isinstance(input_wdgt, QDateTimeEdit):
-                    input_wdgt_val = input_wdgt.dateTime().toPyDateTime()
+                input_wdgt_val = input_wdgt.dateTime().toPyDateTime()
+                if current_obs_end != None:
+                    if current_obs_end < input_wdgt_val:
+                        obs_instance.obsEnd = input_wdgt_val
+                else:
+                    obs_instance.obsEnd = input_wdgt_val
+
             setattr(instance, label.text(), input_wdgt_val)
             i = i + 1
 
@@ -999,7 +1007,8 @@ class genReportWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Subject:'), 0, 0, Qt.AlignRight)
         self.subjCombobx = QComboBox()
-        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activities', 'ODs'])
+        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity'])
+        self.subjCombobx.currentTextChanged.connect(self.genReport)
         gridLayout.addWidget(self.subjCombobx, 0, 1, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Generate report')

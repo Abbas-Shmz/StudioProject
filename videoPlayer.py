@@ -595,6 +595,7 @@ class VideoWindow(QMainWindow):
                                            format(str(item.pen().color().red()),
                                                   str(item.pen().color().green()),
                                                   str(item.pen().color().blue())))
+                xmlWriter.writeTextElement("lineWidth_pen", str(item.pen().widthF()))
                 xmlWriter.writeTextElement("color_brush", "{},{},{}".
                                            format(str(item.brush().color().red()),
                                                   str(item.brush().color().green()),
@@ -658,6 +659,7 @@ class VideoWindow(QMainWindow):
                 pen = QPen()
                 r, g, b = item['color_pen'].split(',')
                 pen.setColor(QColor(int(r), int(g), int(b)))
+                pen.setWidthF(float(item['lineWidth_pen']))
                 ellipseItem.setPen(pen)
 
                 r, g, b = item['color_brush'].split(',')

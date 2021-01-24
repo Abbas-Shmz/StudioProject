@@ -15,7 +15,7 @@ from sqlalchemy import func
 import pandas as pd
 from framework import dbSchema
 from framework.dbSchema import connectDatabase, Pedestrian_obs, Vehicle, Person, Bike, \
-    Vehicle_obs, Bike_obs, Pedestrian, Activity, Site_ODs
+    Vehicle_obs, Bike_obs, Pedestrian, Activity, Site_ODs, Study_site
 from framework import enums as en
 
 # session = connectDatabase('/Users/Abbas/stuart.sqlite')
@@ -215,9 +215,11 @@ def odMatrix(user, ax, session):
     od_df[:] = 0
 
     q = session.query(cls_fld, cls_.originId, cls_.destinationId)
-    first_obs_time = session.query(func.min(cls_.instant)).all()[0][0]
-    last_obs_time = session.query(func.max(cls_.instant)).all()[0][0]
-    duration = last_obs_time - first_obs_time
+
+    site_instance = session.query(Study_site).first()
+    start_obs_time = site_instance.obsStart
+    end_obs_time = site_instance.obsEnd
+    duration = end_obs_time - start_obs_time
     duration_in_s = duration.total_seconds()
     duration_hours = duration_in_s/3600
 
@@ -326,6 +328,13 @@ def pieChart(user, attr, ax, session):
 def generateReport(subj, session):
     indicatorsList = []
 
+    site_instance = session.query(Study_site).first()
+    start_obs_time = site_instance.obsStart
+    end_obs_time = site_instance.obsEnd
+    duration = end_obs_time - start_obs_time
+    duration_in_s = duration.total_seconds()
+    duration_hours = duration_in_s / 3600
+
     if subj in ['Pedestrian', 'Vehicle', 'Bike']:
         cls_ = getattr(dbSchema, subj)
         cls_obs = getattr(dbSchema, subj+'_obs')
@@ -333,12 +342,7 @@ def generateReport(subj, session):
         q = session.query(cls_obs_fld).distinct()
         no_all_users = q.count()
 
-        first_obs_time = session.query(func.min(cls_obs.instant)).all()[0][0]
-        last_obs_time = session.query(func.max(cls_obs.instant)).all()[0][0]
-        duration = last_obs_time - first_obs_time
-        duration_in_s = duration.total_seconds()
-        duration_hours = duration_in_s / 3600
-        flow = round(no_all_users/duration_hours)
+        flow = round(no_all_users/duration_hours, 1)
 
         indicatorDict = {}
         indicatorDict['Indicator'] = 'No. of all {}s'.format(subj.lower())
@@ -353,37 +357,37 @@ def generateReport(subj, session):
         eveningPeakEnd = datetime.time(19, 0)
 
         peakHours = {}
-        if first_obs_time.time() < morningPeakStart:
+        if start_obs_time.time() < morningPeakStart:
             peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
             peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
             peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
 
-        elif morningPeakStart < first_obs_time.time() < morningPeakEnd:
-            peakHours['Morning peak'] = [first_obs_time.time(), morningPeakEnd]
+        elif morningPeakStart < start_obs_time.time() < morningPeakEnd:
+            peakHours['Morning peak'] = [start_obs_time.time(), morningPeakEnd]
             peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
             peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
 
-        elif morningPeakEnd < first_obs_time.time() < eveningPeakStart:
+        elif morningPeakEnd < start_obs_time.time() < eveningPeakStart:
             peakHours['Morning peak'] = None
-            peakHours['Off-peak'] = [first_obs_time.time(), eveningPeakStart]
+            peakHours['Off-peak'] = [start_obs_time.time(), eveningPeakStart]
             peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
 
-        elif eveningPeakStart < first_obs_time.time() < eveningPeakEnd:
+        elif eveningPeakStart < start_obs_time.time() < eveningPeakEnd:
             peakHours['Morning peak'] = None
             peakHours['Off-peak'] = None
-            peakHours['Evening peak'] = [first_obs_time.time(), eveningPeakEnd]
+            peakHours['Evening peak'] = [start_obs_time.time(), eveningPeakEnd]
 
-        if eveningPeakStart < last_obs_time.time() < eveningPeakEnd:
-            peakHours['Evening peak'][1] = last_obs_time.time()
+        if eveningPeakStart < end_obs_time.time() < eveningPeakEnd:
+            peakHours['Evening peak'][1] = end_obs_time.time()
 
-        elif morningPeakEnd < last_obs_time.time() < eveningPeakStart:
+        elif morningPeakEnd < end_obs_time.time() < eveningPeakStart:
             peakHours['Evening peak'] = None
-            peakHours['Off-peak'][1] = last_obs_time.time()
+            peakHours['Off-peak'][1] = end_obs_time.time()
 
-        elif morningPeakStart < last_obs_time.time() < morningPeakEnd:
+        elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
             peakHours['Evening peak'] = None
             peakHours['Off-peak'][1] = None
-            peakHours['Morning peak'][1] = last_obs_time.time()
+            peakHours['Morning peak'][1] = end_obs_time.time()
 
         for p in peakHours.keys():
             if peakHours[p] == None:
@@ -392,9 +396,9 @@ def generateReport(subj, session):
                 flow = 'No Data'
                 duration_text = ''
             else:
-                y = first_obs_time.year
-                m = first_obs_time.month
-                d = first_obs_time.day
+                y = start_obs_time.year
+                m = start_obs_time.month
+                d = start_obs_time.day
                 lh = peakHours[p][0].hour
                 lm = peakHours[p][0].minute
                 ls = peakHours[p][0].second
@@ -407,10 +411,10 @@ def generateReport(subj, session):
                 q = session.query(cls_obs).filter(cls_obs.instant >= lowerBound)\
                                           .filter(cls_obs.instant <= upperBound)
                 no_users = q.count()
-                percent = round((no_users/no_all_users)*100)
+                percent = round((no_users/no_all_users)*100, 1)
                 duration = (peakHours[p][1].hour + peakHours[p][1].minute / 60) - \
                            (peakHours[p][0].hour + peakHours[p][0].minute / 60)
-                flow = round(no_users / duration)
+                flow = round(no_users / duration, 1)
                 duration_text = '({}-{})'.format(peakHours[p][0].strftime('%I:%M %p'),
                                                  peakHours[p][1].strftime('%I:%M %p'))
 
@@ -421,9 +425,57 @@ def generateReport(subj, session):
             indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
             indicatorsList.append(indicatorDict)
 
+    if subj == 'Activity':
+        q = session.query(Activity.activityType, Activity.startTime, Activity.endTime)
+
+        activity_dict = {}
+        for act in q.all():
+            act_type = act[0].name
+            if act_type in activity_dict.keys():
+                activity_dict[act_type]['count'] += 1
+                activity_dict[act_type]['actTotalTime'] += (act[2] - act[1]).total_seconds()
+            else:
+                activity_dict[act_type] = {'count':1, 'actTotalTime':(act[2] - act[1]).total_seconds()}
+
+        total_acts = 0
+        total_time = 0
+        for val in activity_dict.values():
+            total_acts += val['count']
+            total_time += val['actTotalTime']
+
+        indicatorDict = {}
+        indicatorDict['Indicator'] = 'No. of all activities'
+        indicatorDict['Value'] = '{}'.format(total_acts)
+        indicatorDict['Percent(%)'] = '{}'.format(100)
+        if total_time > 0:
+            indicatorDict['Total time (min.)'] = '{}'.format(round(total_time/60, 1))
+            indicatorDict['Avg. time (min.)'] = '{}'.format(round(total_time/(60*total_acts), 1))
+        else:
+            indicatorDict['Total time (min.)'] = 'NA'
+            indicatorDict['Avg. time (min.)'] = 'NA'
+        indicatorDict['Rate (act/h)'] = '{}'.format(round(total_acts/duration_hours, 1))
+        indicatorsList.append(indicatorDict)
+
+        # field_ = Activity.activityType
+        # q = session.query(field_, func.count(field_)).group_by(field_)
+        # actTypes = [[i[0].name, int(i[1])] for i in q.all()]
+
+        for act in activity_dict.keys():
+            act_count = activity_dict[act]['count']
+            act_totalTime_min = activity_dict[act]['actTotalTime']/60
+            indicatorDict = {}
+            indicatorDict['Indicator'] = 'No. of people {}'.format(act)
+            indicatorDict['Value'] = '{}'.format(act_count)
+            indicatorDict['Percent(%)'] = '{}'.format(round((act_count/total_acts)*100, 1))
+            if act_totalTime_min > 0:
+                indicatorDict['Total time (min.)'] = '{}'.format(round(act_totalTime_min, 1))
+                indicatorDict['Avg. time (min.)'] = '{}'.format(round(act_totalTime_min/act_count,1))
+            else:
+                indicatorDict['Total time (min.)'] = 'NA'
+                indicatorDict['Avg. time (min.)'] = 'NA'
+            indicatorDict['Rate (act/h)'] = '{}'.format(round(act_count/duration_hours,1))
+            indicatorsList.append(indicatorDict)
     return indicatorsList
-
-
 
 
 

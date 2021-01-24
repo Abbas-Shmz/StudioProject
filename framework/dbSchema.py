@@ -162,6 +162,9 @@ class Study_site(Base):
     shape = Column(String)
     siteName = Column(String)
     siteType = Column(Enum(en.siteTypes))
+    obsStart = Column(DateTime)
+    obsEnd = Column(DateTime)
+    obsvrLoc = Column(String)
 
     ods = relationship('Site_ODs', back_populates='site')
 
