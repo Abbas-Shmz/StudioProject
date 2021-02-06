@@ -27,6 +27,12 @@ from sqlalchemy import Enum, Boolean, DateTime
 from sqlalchemy.inspection import inspect
 from sqlalchemy import func
 
+session = None
+morningPeakStart = datetime.time(7, 0)
+morningPeakEnd = datetime.time(9, 0)
+eveningPeakStart = datetime.time(15, 0)
+eveningPeakEnd = datetime.time(19, 0)
+binsMinutes = 10
 
 class ObsToolbox(QMainWindow):
     def __init__(self, parent=None):
@@ -34,19 +40,19 @@ class ObsToolbox(QMainWindow):
         self.resize(400, 650)
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
+
+        global session, morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd
         self.dbFilename = '/Users/Abbas/test.sqlite'
-        self.session = None
-        self.roadUser = None
-        self.odName = None
-        self.userAttr = None
+
         layout = QVBoxLayout() #QGridLayout()
 
         #--------------------------------------------
         self.setWindowTitle(os.path.basename(self.dbFilename))
 
-        self.session = createDatabase(self.dbFilename)
-        if self.session is None:
-            self.session = connectDatabase(self.dbFilename)
+        session = createDatabase(self.dbFilename)
+
+        if session is None:
+            session = connectDatabase(self.dbFilename)
         #-----------------------------------------------
 
         # styleSheet = """
@@ -276,8 +282,8 @@ class ObsToolbox(QMainWindow):
 
         class_ = getattr(dbSchema, grpBx.title())
         instance = class_()
-        self.session.add(instance)
-        self.session.flush()
+        session.add(instance)
+        session.flush()
 
         pk_list = [key.name for key in inspect(class_).primary_key]
         grid_lyt = grid_wdgt.layout()
@@ -295,7 +301,7 @@ class ObsToolbox(QMainWindow):
                     fk = next(iter(fk_set))
                     fk_items = [input_wdgt.itemText(i) for i in range(input_wdgt.count())]
 
-                    items = [i[0] for i in self.session.query(fk.column).all()]
+                    items = [i[0] for i in session.query(fk.column).all()]
                     items.sort(reverse=True)
                     items = [str(i) for i in items]
 
@@ -321,7 +327,7 @@ class ObsToolbox(QMainWindow):
         # grid_wdgt.repaint()
 
 
-        # self.session.commit()
+        # session.commit()
 
         # rels = inspect(class_).relationships
         # clss = [rel.mapper.class_ for rel in rels]
@@ -330,9 +336,28 @@ class ObsToolbox(QMainWindow):
         # fk_set = inspect(class_).columns.personId.foreign_keys
         # fk = next(iter(fk_set))
         # print(fk.column)
-        # print([i[0] for i in self.session.query(fk.column).all()])
+        # print([i[0] for i in session.query(fk.column).all()])
 
     def newObject(self, grpBx):
+        grid_wdgt = grpBx.layout().itemAt(1).widget()
+        grid_lyt = grid_wdgt.layout()
+        grid_labels = [grid_lyt.itemAtPosition(i, 0).widget() for i in range(grid_lyt.rowCount())]
+        i = 0
+        for label in grid_labels:
+            input_wdgt = grid_lyt.itemAtPosition(i, 1).widget()
+            if isinstance(input_wdgt, QDateTimeEdit):
+                input_wdgt_val = input_wdgt.dateTime().toPyDateTime()
+                if self.parent() != None:
+                    if self.parent().videoCurrentDatetime == input_wdgt_val:
+                        msg = QMessageBox()
+                        rep = msg.question(self, 'Duplicate object',
+                                           'Are you sure to duplicate the current object?', msg.Yes | msg.No)
+                        if rep == msg.No:
+                            return
+                        elif rep == msg.Yes:
+                            break
+            i =+ 1
+
         relatedTables = []
         grpBoxToCheck = grpBx
         msg = 'New: '
@@ -386,8 +411,14 @@ class ObsToolbox(QMainWindow):
                 break
             i = i + 1
 
-        instance = self.session.query(class_).filter(getattr(class_, pk_name) == pk_val).first()
-        obs_instance = self.session.query(Study_site).first()
+        instance = session.query(class_).filter(getattr(class_, pk_name) == pk_val).first()
+        obs_instance = session.query(Study_site).first()
+        if obs_instance == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The observatoin start time is not set!')
+            msg.exec_()
+            return
         current_obs_end = obs_instance.obsEnd
 
         i = 0
@@ -410,6 +441,7 @@ class ObsToolbox(QMainWindow):
                     input_wdgt_val = input_wdgt.currentText()
             elif isinstance(input_wdgt, QDateTimeEdit):
                 input_wdgt_val = input_wdgt.dateTime().toPyDateTime()
+                input_wdgt_val = input_wdgt_val.replace(microsecond=0)
                 if current_obs_end != None:
                     if current_obs_end < input_wdgt_val:
                         obs_instance.obsEnd = input_wdgt_val
@@ -419,8 +451,9 @@ class ObsToolbox(QMainWindow):
             setattr(instance, label.text(), input_wdgt_val)
             i = i + 1
 
-        self.session.commit()
+        session.commit()
 
+        self.statusBar.showMessage('Save/Update is done!', 10000)
         # grid_wdgt.repaint()
 
     def editObject(self, grpBx, grid_wdgt, newBtn, addBtn):
@@ -430,6 +463,12 @@ class ObsToolbox(QMainWindow):
         self.sender().setEnabled(False)
 
     def deleteObject(self, grpBx, grid_wdgt, newBtn, editBtn):
+        msg = QMessageBox()
+        rep = msg.question(self, 'Delete', 'Are you sure to delete the record?', msg.Yes | msg.No)
+
+        if rep == msg.No:
+            return
+
         self.sender().setEnabled(False)
         editBtn.setEnabled(False)
         newBtn.setEnabled(True)
@@ -451,8 +490,10 @@ class ObsToolbox(QMainWindow):
                 input_wdgt.setCurrentIndex(-1)
             i = i + 1
 
-        self.session.query(class_).filter(getattr(class_, pk_name) == pk_val).delete()
-        self.session.commit()
+        session.query(class_).filter(getattr(class_, pk_name) == pk_val).delete()
+        session.commit()
+
+        self.statusBar.showMessage('Record deleted!', 5000)
 
     def newTab(self, classList, tabName, iconFilename):
         wdgt = QWidget()
@@ -465,6 +506,7 @@ class ObsToolbox(QMainWindow):
 
 
     def opendbFile(self):
+        global session
         if self.sender() == self.openAction:
             self.dbFilename, _ = QFileDialog.getSaveFileName(self, "Open database file",
                                                   QDir.homePath(), "Sqlite files (*.sqlite)")
@@ -477,12 +519,12 @@ class ObsToolbox(QMainWindow):
 
             # self.dbFilename = fileName
 
-            self.session = createDatabase(self.dbFilename)
-            if self.session is None:
-                self.session = connectDatabase(self.dbFilename)
+            session = createDatabase(self.dbFilename)
+            if session is None:
+                session = connectDatabase(self.dbFilename)
 
     def tempHist(self):
-        if self.session == None:
+        if session == None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The database file is not defined.')
@@ -496,7 +538,7 @@ class ObsToolbox(QMainWindow):
 
 
     def stackedHist(self):
-        if self.session == None:
+        if session == None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The database file is not defined.')
@@ -509,7 +551,7 @@ class ObsToolbox(QMainWindow):
         stackHistWin.exec_()
 
     def odMatrix(self):
-        if self.session == None:
+        if session == None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The database file is not defined.')
@@ -522,7 +564,7 @@ class ObsToolbox(QMainWindow):
         odMtrxWin.exec_()
 
     def pieChart(self):
-        if self.session == None:
+        if session == None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The database file is not defined.')
@@ -535,7 +577,7 @@ class ObsToolbox(QMainWindow):
         pieChartWin.exec_()
 
     def compHist(self):
-        if self.session == None:
+        if session == None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The database file is not defined.')
@@ -549,7 +591,7 @@ class ObsToolbox(QMainWindow):
         compHistWin.exec_()
 
     def genReport(self):
-        if self.session == None:
+        if session == None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The database file is not defined.')
@@ -560,8 +602,9 @@ class ObsToolbox(QMainWindow):
 
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
-
         genRepWin.exec_()
+
+
 
     # def okBtnClickTHist(self, userCombobx, odNamesCombobx, canv):
     #     self.roadUser = userCombobx.currentText()
@@ -570,7 +613,7 @@ class ObsToolbox(QMainWindow):
     #     canv.figure.axes.clear()
     #
     #     if self.roadUser != None and self.odName != None:
-    #         fig, err = tempDistHist(user=self.roadUser, od_name=self.odName, session=self.session)
+    #         fig, err = tempDistHist(user=self.roadUser, od_name=self.odName, session=session)
     #         if err != None:
     #             msg = QMessageBox()
     #             msg.setIcon(QMessageBox.Information)
@@ -607,31 +650,37 @@ class TempHistWindow(QDialog):
 
         self.canvas = FigureCanvas(self.figure)
 
+        self.ods_dict = getOdNamesDirections(session)
         # self.toolbar = NavigationToolbar(self.canvas, self)
 
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
+        self.odDirCombobx = QComboBox()
+
         gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
         self.userCombobx = QComboBox()
-        self.userCombobx.addItems(['pedestrian', 'vehicle', 'cyclist'])
+        self.userCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike'])
         gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('OD name:'), 0, 2, Qt.AlignRight)
         self.odNamesCombobx = QComboBox()
-        self.odNamesCombobx.addItems([name[0]
-                                      for name in self.parent().session.query(Site_ODs.odName).all()])
+        self.odNamesCombobx.currentTextChanged.connect(self.odNameChanged)
+        self.odNamesCombobx.addItems(self.ods_dict.keys())
         gridLayout.addWidget(self.odNamesCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Direction:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(self.odDirCombobx, 0, 5, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotTHist)
-        gridLayout.addWidget(self.plotBtn, 0, 4)
+        gridLayout.addWidget(self.plotBtn, 0, 6)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save plot')
         self.saveBtn.clicked.connect(self.saveTHist)
-        gridLayout.addWidget(self.saveBtn, 0, 5)
+        gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -648,8 +697,23 @@ class TempHistWindow(QDialog):
         # plot data
         roadUser = self.userCombobx.currentText()
         odName = self.odNamesCombobx.currentText()
+        odDirComboText = self.odDirCombobx.currentText()
+        direction = []
+        dirSymb = odDirComboText.split(' ')[1]
+        od1 = int(odDirComboText.split(' ')[0])
+        od2 = int(odDirComboText.split(' ')[2])
+        if dirSymb == '<-->':
+            direction.append([od1, od2])
+            direction.append([od2, od1])
+        elif dirSymb == '-->':
+            direction.append([od1, od2])
+        # elif dirSymb == '<--':
+        #     direction.append([od2, od1])
 
-        err = tempDistHist(roadUser, odName, ax, self.parent().session)
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+        bins = calculateNoBins(start_obs_time, end_obs_time, binsMinutes)
+
+        err = tempDistHist(roadUser, odName, direction, ax, session, bins=bins)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -664,6 +728,15 @@ class TempHistWindow(QDialog):
                                                   QDir.homePath(), "PNG files (*.png)")
         if fileName != '':
             self.canvas.print_png(fileName)
+
+    def odNameChanged(self):
+        odName = self.odNamesCombobx.currentText()
+        odDirItems = []
+        odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
+        self.odDirCombobx.clear()
+        self.odDirCombobx.addItems(odDirItems)
 
 class StackHistWindow(QDialog):
     def __init__(self, parent=None):
@@ -716,7 +789,7 @@ class StackHistWindow(QDialog):
         roadUser = self.userCombobx.currentText()
         attr = self.attrCombobx.currentText()
 
-        err = stackedHist(roadUser, attr, ax, self.parent().session)
+        err = stackedHist(roadUser, attr, ax, session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -778,7 +851,7 @@ class OdMatrixWindow(QDialog):
         # plot data
         roadUser = self.userCombobx.currentText()
 
-        err = odMatrix(roadUser, ax, self.parent().session)
+        err = odMatrix(roadUser, ax, session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -813,22 +886,39 @@ class PieChartWindow(QDialog):
         gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
         self.userCombobx = QComboBox()
         self.userCombobx.addItems(['All users', 'Pedestrian', 'Vehicle', 'Bike', 'Activity'])
+        self.userCombobx.currentTextChanged.connect(self.getAttrList)
         gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('Attribute:'), 0, 2, Qt.AlignRight)
         self.attrCombobx = QComboBox()
-        self.attrCombobx.addItems(['age', 'gender', 'vehicleType', 'activityType'])
+        self.attrCombobx.addItems(['count'])
         gridLayout.addWidget(self.attrCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Time span:'), 0, 4, Qt.AlignRight)
+        self.timeSpanCombobx = QComboBox()
+
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+        peakHours = getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
+                                 start_obs_time, end_obs_time)
+        timeSpans = ['{} - {}'.format(start_obs_time.strftime('%I:%M %p'),
+                                      end_obs_time.strftime('%I:%M %p'))]
+        for pVal in peakHours.values():
+            if pVal != None:
+                timeSpans.append('{} - {}'.format(pVal[0].strftime('%I:%M %p'),
+                                                  pVal[1].strftime('%I:%M %p')))
+        self.timeSpanCombobx.addItems(timeSpans)
+        self.timeSpanCombobx.currentTextChanged.connect(self.plotPieChart)
+        gridLayout.addWidget(self.timeSpanCombobx, 0, 5, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotPieChart)
-        gridLayout.addWidget(self.plotBtn, 0, 4)
+        gridLayout.addWidget(self.plotBtn, 0, 6)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save plot')
         self.saveBtn.clicked.connect(self.savePieChart)
-        gridLayout.addWidget(self.saveBtn, 0, 5)
+        gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -846,7 +936,17 @@ class PieChartWindow(QDialog):
         roadUser = self.userCombobx.currentText()
         attr = self.attrCombobx.currentText()
 
-        err = pieChart(roadUser, attr, ax, self.parent().session)
+        sTimeText = self.timeSpanCombobx.currentText().split(' - ')[0]
+        sTime = datetime.datetime.strptime(sTimeText, '%I:%M %p').time()
+        sDate = getObsStartEnd(session)[0].date()
+        startTime = datetime.datetime.combine(sDate, sTime)
+
+        eTimeText = self.timeSpanCombobx.currentText().split(' - ')[1]
+        eTime = datetime.datetime.strptime(eTimeText, '%I:%M %p').time()
+        eDate = getObsStartEnd(session)[1].date()
+        endTime = datetime.datetime.combine(eDate, eTime)
+
+        err = pieChart(roadUser, attr, startTime, endTime, ax, session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -862,6 +962,23 @@ class PieChartWindow(QDialog):
         if fileName != '':
             self.canvas.print_png(fileName)
 
+    def getAttrList(self):
+        if self.userCombobx.currentText() == 'All users':
+            self.attrCombobx.clear()
+            self.attrCombobx.addItems(['count'])
+        elif self.userCombobx.currentText() == 'Pedestrian':
+            self.attrCombobx.clear()
+            self.attrCombobx.addItems(['age', 'gender'])
+        elif self.userCombobx.currentText() == 'Vehicle':
+            self.attrCombobx.clear()
+            self.attrCombobx.addItems(['vehicleType'])
+        elif self.userCombobx.currentText() == 'Bike':
+            self.attrCombobx.clear()
+            self.attrCombobx.addItems(['bikeType', 'wearHelmet'])
+        elif self.userCombobx.currentText() == 'Activity':
+            self.attrCombobx.clear()
+            self.attrCombobx.addItems(['activityType'])
+
 
 class CompHistWindow(QDialog):
     def __init__(self, parent=None):
@@ -874,43 +991,51 @@ class CompHistWindow(QDialog):
 
         self.canvas = FigureCanvas(self.figure)
 
+        self.ods_dict = getOdNamesDirections(session)
         # self.toolbar = NavigationToolbar(self.canvas, self)
 
         winLayout = QVBoxLayout()
+        dbLayout = QHBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(QLabel('Database file:'), 0, 0, Qt.AlignRight)
+        dbLayout.addWidget(QLabel('Database file:'))
         self.dbFile2Ledit = QLineEdit()
-        gridLayout.addWidget(self.dbFile2Ledit, 0, 1, Qt.AlignLeft)
+        dbLayout.addWidget(self.dbFile2Ledit)
 
         self.openDbFileBtn = QPushButton()
         self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
         self.openDbFileBtn.setToolTip('Open database file')
         self.openDbFileBtn.clicked.connect(self.opendbFile)
-        gridLayout.addWidget(self.openDbFileBtn, 0, 2)
+        dbLayout.addWidget(self.openDbFileBtn)
 
-        gridLayout.addWidget(QLabel('Road user:'), 1, 0, Qt.AlignRight)
+        self.odDirCombobx = QComboBox()
+
+        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
         self.userCombobx = QComboBox()
-        self.userCombobx.addItems(['pedestrian', 'vehicle', 'cyclist'])
-        gridLayout.addWidget(self.userCombobx, 1, 1, Qt.AlignLeft)
+        self.userCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike'])
+        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('OD name:'), 1, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('OD name:'), 0, 2, Qt.AlignRight)
         self.odNamesCombobx = QComboBox()
-        self.odNamesCombobx.addItems([name[0]
-                                      for name in self.parent().session.query(Site_ODs.odName).all()])
-        gridLayout.addWidget(self.odNamesCombobx, 1, 3, Qt.AlignLeft)
+        self.odNamesCombobx.currentTextChanged.connect(self.odNameChanged)
+        self.odNamesCombobx.addItems(self.ods_dict.keys())
+        gridLayout.addWidget(self.odNamesCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Direction:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(self.odDirCombobx, 0, 5, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotCompHist)
-        gridLayout.addWidget(self.plotBtn, 1, 4)
+        gridLayout.addWidget(self.plotBtn, 0, 6)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save plot')
         self.saveBtn.clicked.connect(self.saveCompHist)
-        gridLayout.addWidget(self.saveBtn, 1, 5)
+        gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(dbLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.canvas)
 
@@ -925,19 +1050,32 @@ class CompHistWindow(QDialog):
         # plot data
         roadUser = self.userCombobx.currentText()
         odName = self.odNamesCombobx.currentText()
+        odDirComboText = self.odDirCombobx.currentText()
+        direction = []
+        dirSymb = odDirComboText.split(' ')[1]
+        od1 = int(odDirComboText.split(' ')[0])
+        od2 = int(odDirComboText.split(' ')[2])
+        if dirSymb == '<-->':
+            direction.append([od1, od2])
+            direction.append([od2, od1])
+        elif dirSymb == '-->':
+            direction.append([od1, od2])
 
-        if roadUser == 'pedestrian':
-            cls_ = Pedestrian_obs
-        elif roadUser == 'vehicle':
-            cls_ = Vehicle_obs
-        elif roadUser == 'cyclist':
-            cls_ = Bike_obs
+        if roadUser in ['Pedestrian', 'Vehicle', 'Bike']:
+            cls_obs = getattr(dbSchema, roadUser + '_obs')
 
-        first_obs_time1 = self.parent().session.query(func.min(cls_.instant)).all()[0][0]
-        last_obs_time1 = self.parent().session.query(func.max(cls_.instant)).all()[0][0]
+        # if roadUser == 'pedestrian':
+        #     cls_ = Pedestrian_obs
+        # elif roadUser == 'vehicle':
+        #     cls_ = Vehicle_obs
+        # elif roadUser == 'cyclist':
+        #     cls_ = Bike_obs
 
-        first_obs_time2 = self.session2.query(func.min(cls_.instant)).all()[0][0]
-        last_obs_time2 = self.session2.query(func.max(cls_.instant)).all()[0][0]
+        first_obs_time1 = session.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time1 = session.query(func.max(cls_obs.instant)).all()[0][0]
+
+        first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
 
         if first_obs_time1.time() >= first_obs_time2.time():
             bins_start = first_obs_time1
@@ -952,14 +1090,16 @@ class CompHistWindow(QDialog):
         start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
         end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
 
-        bins = pd.date_range(start, end, periods=21).to_pydatetime()
+        periods = calculateNoBins(start, end, binsMinutes)
+
+        bins = pd.date_range(start, end, periods=periods).to_pydatetime()
         label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
         label2 = os.path.basename(self.dbFile2Ledit.text()).split('.')[0]
 
-        err = tempDistHist(roadUser, odName, ax, self.parent().session, bins=bins, alpha=0.5,
+        err = tempDistHist(roadUser, odName, direction, ax, session, bins=bins, alpha=0.5,
                            color = 'blue', ec='blue', label=label1, rwidth=1, histtype='stepfilled',
                            comparison=True)
-        err = tempDistHist(roadUser, odName, ax, self.session2, bins=bins, alpha=0.5,
+        err = tempDistHist(roadUser, odName, direction, ax, self.session2, bins=bins, alpha=0.5,
                            color='red', ec='red', label=label2, rwidth=1, histtype='stepfilled',
                            comparison=True)
         plt.legend(loc='upper right')
@@ -988,6 +1128,15 @@ class CompHistWindow(QDialog):
             if self.session2 is None:
                 self.session2 = connectDatabase(dbFilename)
 
+    def odNameChanged(self):
+        odName = self.odNamesCombobx.currentText()
+        odDirItems = []
+        odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
+        self.odDirCombobx.clear()
+        self.odDirCombobx.addItems(odDirItems)
+
 
 class genReportWindow(QDialog):
     def __init__(self, parent=None):
@@ -1007,7 +1156,7 @@ class genReportWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Subject:'), 0, 0, Qt.AlignRight)
         self.subjCombobx = QComboBox()
-        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity'])
+        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity', 'Access'])
         self.subjCombobx.currentTextChanged.connect(self.genReport)
         gridLayout.addWidget(self.subjCombobx, 0, 1, Qt.AlignLeft)
 
@@ -1036,7 +1185,15 @@ class genReportWindow(QDialog):
 
         subject = self.subjCombobx.currentText()
 
-        indicatorsList = generateReport(subject, self.parent().session)
+        indicatorsList = generateReport(subject, session)
+
+        if indicatorsList == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('No observation is available for {}'.format(subject))
+            msg.exec_()
+            return
+
         for key in indicatorsList[0].keys():
             self.table.insertColumn(self.table.columnCount())
         self.table.setHorizontalHeaderLabels(indicatorsList[0].keys())
@@ -1063,6 +1220,75 @@ class genReportWindow(QDialog):
     def saveReport(self):
         pass
 
+
+def getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
+                 start_obs_time, end_obs_time):
+    peakHours = {}
+    if start_obs_time.time() < morningPeakStart:
+        peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
+        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+    elif morningPeakStart < start_obs_time.time() < morningPeakEnd:
+        peakHours['Morning peak'] = [start_obs_time.time(), morningPeakEnd]
+        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+    elif morningPeakEnd < start_obs_time.time() < eveningPeakStart:
+        peakHours['Morning peak'] = None
+        peakHours['Off-peak'] = [start_obs_time.time(), eveningPeakStart]
+        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+    elif eveningPeakStart < start_obs_time.time() < eveningPeakEnd:
+        peakHours['Morning peak'] = None
+        peakHours['Off-peak'] = None
+        peakHours['Evening peak'] = [start_obs_time.time(), eveningPeakEnd]
+
+    if eveningPeakStart < end_obs_time.time() < eveningPeakEnd:
+        peakHours['Evening peak'][1] = end_obs_time.time()
+
+    elif morningPeakEnd < end_obs_time.time() < eveningPeakStart:
+        peakHours['Evening peak'] = None
+        peakHours['Off-peak'][1] = end_obs_time.time()
+
+    elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
+        peakHours['Evening peak'] = None
+        peakHours['Off-peak'] = None
+        peakHours['Morning peak'][1] = end_obs_time.time()
+
+    return peakHours
+
+def getObsStartEnd(session):
+    site_instance = session.query(Study_site).first()
+    start_obs_time = site_instance.obsStart
+    end_obs_time = site_instance.obsEnd
+    return start_obs_time, end_obs_time
+
+def getOdNamesDirections(session):
+    q = session.query(Site_ODs.odType, Site_ODs.odName, Site_ODs.id, Site_ODs.direction)
+
+    ods_dict = {}
+    for od in q.all():
+        if od[0].name in ['sidewalk', 'road_lane', 'bus_lane', 'cycling_path']:
+            if od[1] in ods_dict.keys():
+                ods_list = ods_dict[od[1]]
+                if None in ods_list:
+                    ods_list[ods_list.index(None)] = od[2]
+            else:
+                if od[3] == 'end_point':
+                    ods_dict[od[1]] = [None, od[2]]
+                else:
+                    ods_dict[od[1]] = [od[2], None]
+    return ods_dict
+
+def calculateNoBins(start_obs_time, end_obs_time, minutes):
+
+    duration = end_obs_time - start_obs_time
+    duration_in_s = duration.total_seconds()
+    bins = round(duration_in_s/(60*minutes))
+    if bins == 0:
+        bins = 1
+    return bins
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

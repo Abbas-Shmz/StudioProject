@@ -34,8 +34,8 @@ Base = declarative_base(cls=Base)
 class ObsMixin(object):
     # odStatus = Column(String)
     instant = Column(DateTime)
-    speed = Column(Integer)
-    location = Column(String)
+    # speed = Column(Integer)
+    # location = Column(String)
 
     @declared_attr
     def originId(cls):
@@ -59,8 +59,8 @@ class Person(Base):
     gender = Column(Enum(en.Gender))
     race = Column(String)
     disability = Column(Enum(en.Disability), default='none')
-    withPet = Column(Boolean, default=False)
     withBag = Column(Boolean, default=False)
+    withPet = Column(Boolean, default=False)
 
     pedestrian = relationship('Pedestrian', uselist=False, back_populates='person')
     # vehicle = relationship('Vehicle', uselist=False, back_populates='driver')
@@ -84,9 +84,9 @@ class Pedestrian(Base):
 
 class Vehicle(Base):
     vehicleType = Column(Enum(en.vehicleTypes))
-    noPassengers = Column(Integer)
+    # noPassengers = Column(Integer)
     # driverId = Column(Integer, ForeignKey('person.id'))
-    noStops = Column(Integer, default=0)
+    hasTrailer = Column(Boolean)
 
     # driver = relationship('Person', back_populates='vehicle')
     observation = relationship('Vehicle_obs', back_populates='vehicle')
@@ -96,7 +96,7 @@ class Vehicle(Base):
 class Bike(Base):
     bikeType = Column(String)
     # cyclistId = Column(Integer, ForeignKey('person.id'))
-    wearHelmet = Column(Boolean, default=True)
+    hasTrailer = Column(Boolean)
 
     # cyclist = relationship('Person', back_populates='bike')
     observation = relationship('Bike_obs', back_populates='bike')
@@ -118,12 +118,18 @@ class Pedestrian_obs(Base, ObsMixin):
 
 class Vehicle_obs(Base, ObsMixin):
     vehicleId = Column(Integer, ForeignKey('vehicle.id'))
+    delayed = Column(Boolean)
+    # noStops = Column(Integer, default=0)
+    hasStop = Column(Enum(en.stopActions))
 
     vehicle = relationship('Vehicle', back_populates='observation')
 
 
 class Bike_obs(Base, ObsMixin):
     bikeId = Column(Integer, ForeignKey('bike.id'))
+    wearHelmet = Column(Boolean)
+    carryPerson = Column(Boolean)
+    carryObject = Column(Boolean)
 
     bike = relationship('Bike', back_populates='observation')
 
@@ -134,8 +140,10 @@ class Activity(Base):
     startTime = Column(DateTime)
     endTime = Column(DateTime)
     activityLocation = Column(String)
+    siteId = Column(Integer, ForeignKey('study_site.id'))
 
     person = relationship('Person', back_populates='activity')
+    site = relationship('Study_site', back_populates='activities')
 
 
 # association_table = Table('groupbelongings', Base.metadata,
@@ -167,6 +175,7 @@ class Study_site(Base):
     obsvrLoc = Column(String)
 
     ods = relationship('Site_ODs', back_populates='site')
+    activities = relationship('Activity', back_populates='site')
 
 
 class Site_ODs(Base):
@@ -175,6 +184,7 @@ class Site_ODs(Base):
     shape = Column(String)
     # zoiType = Column(Enum(en.zoiTypes), default = 'NA')
     odName = Column(String)
+    direction = Column(Enum(en.OdDirection))
 
     site = relationship('Study_site', back_populates='ods')
 

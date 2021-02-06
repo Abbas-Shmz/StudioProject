@@ -4,140 +4,160 @@
 @author: Abbas
 """
 
-from enum import Enum
+from enum import Enum, auto
 
 
 class Gender(Enum):
-    female = 1
-    male = 2
-    unknown = 3
+    female  = auto()
+    male    = auto()
+    unknown = auto()
 
 
 class Age(Enum):
-    infant = 1
-    toddler = 2
-    child = 3
-    teen = 4
-    young_adult = 5
-    adult = 6
-    senior = 7
+    infant = auto()
+    toddler = auto()
+    child = auto()
+    teen = auto()
+    young_adult = auto()
+    adult = auto()
+    senior = auto()
 
 
 class Disability(Enum):
-    none = 1
-    Wheelchair = 2
-    Walker = 3
-    Cane = 4
-    While_cane = 5
+    none = auto()
+    Wheelchair = auto()
+    Walker = auto()
+    Cane = auto()
+    While_cane = auto()
 
 
 class activityTypes(Enum):
-    strolling = 1
-    jogging = 2
-    shopping = 3
-    talking = 4
-    resting = 5
-    eating = 6
-    playing = 7
-    doing_exercise = 8
-    smoking = 9
-    using_cellphone = 10
-    observing = 11
-    reading_writing = 12
-    performing = 13
-    selling = 14
+    strolling = auto()
+    jogging = auto()
+    shopping = auto()
+    talking = auto()
+    resting = auto()
+    eating = auto()
+    playing = auto()
+    doing_exercise = auto()
+    smoking = auto()
+    using_cellphone = auto()
+    observing = auto()
+    reading_writing = auto()
+    performing = auto()
+    selling = auto()
+    playing_with_pets = auto()
 
 
 class siteTypes(Enum):
-    street_section = 1
-    street_segment = 2
-    public_space = 3
-    intersection = 4
+    street_section = auto()
+    street_segment = auto()
+    public_space = auto()
+    intersection = auto()
 
 
 class zoiTypes(Enum):
-    school = 1
-    nursery = 2
-    shopping_center = 3
-    hypermarket = 4
-    convenience_store = 5
-    pharmacy = 6
-    beauty_center = 7
-    bank = 8
-    residential_building = 9
-    university_campus = 10
-    restaurant = 11
-    fast_food = 12
-    bistro = 13
-    bakery = 14
-    cinema = 15
-    park = 16
-    post_office = 17
-    gas_station = 18
-    library = 19
-    coffee_shop = 20
-    NA = 21
+    school = auto()
+    nursery = auto()
+    shopping_center = auto()
+    hypermarket = auto()
+    convenience_store = auto()
+    pharmacy = auto()
+    beauty_center = auto()
+    bank = auto()
+    residential_building = auto()
+    university_campus = auto()
+    restaurant = auto()
+    fast_food = auto()
+    bistro = auto()
+    bakery = auto()
+    cinema = auto()
+    park = auto()
+    post_office = auto()
+    gas_station = auto()
+    library = auto()
+    coffee_shop = auto()
+    NA = auto()
 
 
 class odTypes(Enum):
-    sidewalk = 1
-    road_lane = 2
-    bus_lane = 3
-    cycling_path = 4
-    adjoining_ZOI = 5
-    on_street_parking_lot = 6
-    bicycle_rack = 7
-    informal_bicycle_parking = 8
-    bus_stop = 9
-    subway_station = 10
-    street = 11
+    sidewalk = auto()
+    road_lane = auto()
+    bus_lane = auto()
+    cycling_path = auto()
+    adjoining_ZOI = auto()
+    on_street_parking_lot = auto()
+    bicycle_rack = auto()
+    informal_bicycle_parking = auto()
+    bus_stop = auto()
+    subway_station = auto()
+    street = auto()
+    alley = auto()
 
 
 class vehicleTypes(Enum):
-    car_Sedan = 1
-    car_SUV = 2
-    bus = 3
-    taxi = 4
-    motorbike = 5
-    mini_truck = 6
-    moped = 7
-    big_truck = 8
-    electric_bike = 9
-    shared_eCar = 10
-    van = 11
-    ambulance = 12
-    school_buse = 13
-    police_car = 14
-    fire_engine = 15
-    cleaning_service = 16
-    waste_collection = 17
-    autonomous_car = 18
+    # car_Sedan = auto()
+    # car_SUV = auto()
+    # mini = auto()
+    private_car = auto()
+    pickup_truck = auto()
+    van = auto()
+    taxi = auto()
+    motorbike = auto()
+    cargo_van = auto()
+    mini_truck = auto()
+    big_truck = auto()
+    bus = auto()
+    moped = auto()
+    shared_eCar = auto()
+    ambulance = auto()
+    school_bus = auto()
+    police_car = auto()
+    fire_engine = auto()
+    cleaning_service = auto()
+    waste_collection = auto()
+    autonomous_car = auto()
 
 
 class streetCrossings(Enum):
-    from_crosswalk = 1
-    jaywalking = 2
+    from_crosswalk = auto()
+    jaywalking = auto()
 
 
 class pedCarrying(Enum):
-    none = 1
-    stroller = 2
-    luggage = 3
-    cart = 4
-    food_drink = 5
-    ball = 6
-    umbrella = 7
-    parasol = 8
-    box = 9
-    bicycle = 10
-    shopping_bag = 11
+    none = auto()
+    stroller = auto()
+    shopping_bag = auto()
+    bicycle = auto()
+    skateboard = auto()
+    luggage = auto()
+    cart = auto()
+    food_drink = auto()
+    ball = auto()
+    umbrella = auto()
+    parasol = auto()
+    box = auto()
 
 
 class pedRolling(Enum):
-    none = 1
-    scooter = 2
-    skateboard = 3
-    rollerblades = 4
-    segway = 5
-    uniwheel = 6
-    heelies = 7
+    none = auto()
+    scooter = auto()
+    skateboard = auto()
+    rollerblades = auto()
+    segway = auto()
+    uniwheel = auto()
+    heelies = auto()
+
+
+class OdDirection(Enum):
+    NA = auto()
+    start_point = auto()
+    end_point = auto()
+
+
+class stopActions(Enum):
+    no = auto()
+    loading_passenger = auto()
+    unloading_passenger = auto()
+    loading_objects = auto()
+    unloading_objects = auto()

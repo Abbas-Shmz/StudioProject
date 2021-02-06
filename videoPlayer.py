@@ -67,32 +67,33 @@ class GraphicView(QGraphicsView):
             labelWin = QDialog(self)
             labelWin.setModal(True)
             labelWinLayout = QVBoxLayout()
-
             labelWinGrid = QGridLayout()
-            labelWinGrid.addWidget(QLabel('id'), 1,0)
 
-            id_lineedit = QLineEdit()
-            id_lineedit.setReadOnly(True)
-            labelWinGrid.addWidget(id_lineedit, 1, 1)
-
-            labelWinGrid.addWidget(QLabel('odName'), 0, 0)
-
+            labelWinGrid.addWidget(QLabel('OD Name:'), 0, 0)
             odName_cmbbx = QComboBox()
             labelWinGrid.addWidget(odName_cmbbx, 0, 1)
-
             odName_cmbbx.addItems([name[0] for name in session.query(Site_ODs.odName).all()])
             odName_cmbbx.setCurrentIndex(-1)
+
+            labelWinGrid.addWidget(QLabel('OD Id:'), 1,0)
+            id_cmbbx = QComboBox()
+            labelWinGrid.addWidget(id_cmbbx, 1, 1)
+
+            labelWinGrid.addWidget(QLabel('Direction:'), 2, 0)
+            odDirect_lineedit = QLineEdit()
+            odDirect_lineedit.setReadOnly(True)
+            labelWinGrid.addWidget(odDirect_lineedit, 2, 1)
 
             labelWinLayout.addItem(labelWinGrid)
             addBtn = QPushButton('Add', labelWin)
             addBtn.setEnabled(False)
-            addBtn.clicked.connect(lambda: self.labelAdd(p, id_lineedit, labelShape, session))
+            addBtn.clicked.connect(lambda: self.labelAdd(p, id_cmbbx, labelShape, session))
 
             cancelBtn = QPushButton('Cancel', labelWin)
             cancelBtn.clicked.connect(lambda: self.labelCancel(labelShape))
 
-            odName_cmbbx.currentIndexChanged.connect(lambda: self.cmbbxIndexChanged(session, addBtn,
-                                                                                    id_lineedit))
+            odName_cmbbx.currentIndexChanged.connect(lambda: self.nameCmbIndexChanged(session, addBtn, id_cmbbx))
+            id_cmbbx.currentIndexChanged.connect(lambda: self.idCmbIndexChanged(session, odDirect_lineedit))
 
             btnsLayout = QHBoxLayout()
             btnsLayout.addWidget(cancelBtn)
@@ -104,8 +105,8 @@ class GraphicView(QGraphicsView):
         elif event.buttons() == Qt.LeftButton:
             self.parent().parent().play()
 
-    def labelAdd(self, p, id_lineedit, labelShape, session):
-        labelText = self.scene().addText(id_lineedit.text())
+    def labelAdd(self, p, id_cmbbx, labelShape, session):
+        labelText = self.scene().addText(id_cmbbx.currentText())
         labelFont = QFont()
         labelFont.setPointSize(5)
         labelFont.setBold(True)
@@ -116,10 +117,10 @@ class GraphicView(QGraphicsView):
                          -labelText.boundingRect().height() / 2)
 
         od_type = session.query(Site_ODs.odType). \
-            filter(Site_ODs.id == id_lineedit.text()).all()[0][0].name
+            filter(Site_ODs.id == id_cmbbx.currentText()).all()[0][0].name
 
         od_name = session.query(Site_ODs.odName). \
-            filter(Site_ODs.id == id_lineedit.text()).all()[0][0]
+            filter(Site_ODs.id == id_cmbbx.currentText()).all()[0][0]
 
         # labelShape.setToolTip("<h3>Name: {} <hr>Type: {}</h3>"
         #                 "".format(od_name, od_type))
@@ -148,12 +149,18 @@ class GraphicView(QGraphicsView):
         self.sender().parent().close()
 
 
-    def cmbbxIndexChanged(self, session, addBtn, id_lineedit):
+    def nameCmbIndexChanged(self, session, addBtn, id_cmbbx):
         addBtn.setEnabled(True)
-        id = session.query(Site_ODs.id).\
-                           filter(Site_ODs.odName == self.sender().currentText()).all()[0][0]
-        id_lineedit.setText(str(id))
+        id_cmbbx.clear()
+        id_cmbbx.addItems([str(id[0]) for id in session.query(Site_ODs.id)\
+                          .filter(Site_ODs.odName == self.sender().currentText())\
+                          .all()])
 
+    def idCmbIndexChanged(self, session, odDirect_lineedit):
+        if self.sender().currentIndex() != -1:
+            dir = session.query(Site_ODs.direction)\
+                  .filter(Site_ODs.id == self.sender().currentText()).all()[0][0]
+            odDirect_lineedit.setText(str(dir.name))
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton and self.parent().parent().drawLineAction.isChecked():
@@ -227,6 +234,7 @@ class VideoWindow(QMainWindow):
         self.mediaPlayer.durationChanged.connect(self.durationChanged)
         self.mediaPlayer.error.connect(self.handleError)
         self.mediaPlayer.setMuted(True)
+        self.mediaPlayer.setNotifyInterval(100)
 
         self.playButton = QPushButton()
         self.playButton.setEnabled(False)
@@ -416,6 +424,7 @@ class VideoWindow(QMainWindow):
 
     def durationChanged(self, duration):
         self.positionSlider.setRange(0, duration)
+
         # s, m, h = self.convertMillis(duration)
         # self.durationLabel.setText('{:02d}:{:02d}'.format(m, s))
 
@@ -746,7 +755,8 @@ class VideoWindow(QMainWindow):
             print("Unable to extract metadata")
 
         creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
-        creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S%f')
+        creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
+
         return creationDatetime
 
 

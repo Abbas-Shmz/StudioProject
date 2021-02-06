@@ -22,39 +22,52 @@ from framework import enums as en
 
 
 # ==============================================================
-def tempDistHist(user, od_name, ax, session, bins=20, alpha=1, color='skyblue', ec='grey',
+def tempDistHist(user, od_name, direction, ax, session, bins=20, alpha=1, color='skyblue', ec='grey',
                  label=None, rwidth=0.9, histtype='bar', comparison = False):
-    if user == 'pedestrian':
-        q1 = session.query(Pedestrian_obs.instant). \
-            join(Site_ODs, Pedestrian_obs.originId == Site_ODs.id). \
-            filter(Site_ODs.odName == od_name)
+    cls_obs = getattr(dbSchema, user + '_obs')
 
-        q2 = session.query(Pedestrian_obs.instant). \
-            join(Site_ODs, Pedestrian_obs.destinationId == Site_ODs.id). \
-            filter(Site_ODs.odName == od_name)
+    time_list = []
+    for ods in direction:
+        q = session.query(cls_obs.instant).\
+            filter(cls_obs.originId == ods[0]). \
+            filter(cls_obs.destinationId == ods[1])
 
-    elif user == 'vehicle':
-        q1 = session.query(Vehicle_obs.instant). \
-            join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
-            filter(Site_ODs.odName == od_name)
+        time_list = time_list + [i[0] for i in q.all()]
 
-        q2 = session.query(Vehicle_obs.instant). \
-            join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id). \
-            filter(Site_ODs.odName == od_name)
+    if time_list == []:
+        return 'No {} is observed in {} for the selected direction(s)!'.format(user, od_name)
 
-    elif user == 'cyclist':
-        q1 = session.query(Bike_obs.instant). \
-            join(Site_ODs, Bike_obs.originId == Site_ODs.id). \
-            filter(Site_ODs.odName == od_name)
-
-        q2 = session.query(Bike_obs.instant). \
-            join(Site_ODs, Bike_obs.destinationId == Site_ODs.id). \
-            filter(Site_ODs.odName == od_name)
-
-    if q1.all() == [] and q2.all() == []:
-        return 'No {} is observed passing through the {} section!'.format(user, od_name)
-
-    time_list = [i[0] for i in q1.all()] + [i[0] for i in q2.all()]
+    # if user == 'pedestrian':
+    #     q1 = session.query(Pedestrian_obs.instant). \
+    #         join(Site_ODs, Pedestrian_obs.originId == Site_ODs.id). \
+    #         filter(Site_ODs.odName == od_name)
+    #
+    #     q2 = session.query(Pedestrian_obs.instant). \
+    #         join(Site_ODs, Pedestrian_obs.destinationId == Site_ODs.id). \
+    #         filter(Site_ODs.odName == od_name)
+    #
+    # elif user == 'vehicle':
+    #     q1 = session.query(Vehicle_obs.instant). \
+    #         join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
+    #         filter(Site_ODs.odName == od_name)
+    #
+    #     q2 = session.query(Vehicle_obs.instant). \
+    #         join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id). \
+    #         filter(Site_ODs.odName == od_name)
+    #
+    # elif user == 'cyclist':
+    #     q1 = session.query(Bike_obs.instant). \
+    #         join(Site_ODs, Bike_obs.originId == Site_ODs.id). \
+    #         filter(Site_ODs.odName == od_name)
+    #
+    #     q2 = session.query(Bike_obs.instant). \
+    #         join(Site_ODs, Bike_obs.destinationId == Site_ODs.id). \
+    #         filter(Site_ODs.odName == od_name)
+    #
+    # if q1.all() == [] and q2.all() == []:
+    #     return 'No {} is observed passing through the {} section!'.format(user, od_name)
+    #
+    # time_list = [i[0] for i in q1.all()] + [i[0] for i in q2.all()]
 
     if comparison:
         i = 0
@@ -116,11 +129,15 @@ def stackedHist(user, attr, ax, session, bins=20):
         if attr == 'vehicleType':
             cls_fld = Vehicle.vehicleType
             comp_list = [v.name for v in en.vehicleTypes]
+        else:
+            return 'ERROR: The argument is not correct!'
         q = session.query(cls_fld).distinct()
     elif user == 'activities':
         if attr == 'activityType':
             cls_fld = Activity.activityType
             comp_list = [v.name for v in en.activityTypes]
+        else:
+            return 'ERROR: The argument is not correct!'
         q = session.query(cls_fld).distinct()
 
     if q.all() == []:
@@ -139,7 +156,7 @@ def stackedHist(user, attr, ax, session, bins=20):
             q = session.query(Vehicle_obs.instant). \
                 join(Vehicle, Vehicle_obs.vehicleId == Vehicle.id). \
                 filter(cls_fld == val)
-        elif user == 'activity':
+        elif user == 'activities':
             q = session.query(Activity.startTime).filter(cls_fld == val)
         else:
             return 'ERROR: The argument is not correct!'
@@ -296,11 +313,17 @@ def odMatrix(user, ax, session):
     # plt.show()
 
 #=====================================================================
-def pieChart(user, attr, ax, session):
+def pieChart(user, attr, startTime, endTime, ax, session):
     if user == 'All users':
-        ped_count = session.query(Pedestrian).count()
-        veh_count = session.query(Vehicle).count()
-        bik_count = session.query(Bike).count()
+        ped_count = session.query(Pedestrian_obs.id).filter(Pedestrian_obs.instant >= startTime)\
+                                                 .filter(Pedestrian_obs.instant <= endTime)\
+                                                 .filter(Pedestrian_obs.destinationId != '').count()
+        veh_count = session.query(Vehicle_obs.id).filter(Vehicle_obs.instant >= startTime)\
+                                                 .filter(Vehicle_obs.instant <= endTime)\
+                                                 .filter(Vehicle_obs.destinationId != '').count()
+        bik_count = session.query(Bike_obs.id).filter(Bike_obs.instant >= startTime)\
+                                                 .filter(Bike_obs.instant <= endTime)\
+                                                 .filter(Bike_obs.destinationId != '').count()
 
         all_count = ped_count + veh_count + bik_count
         ped_pct = round((ped_count / all_count) * 100, 1)
@@ -311,7 +334,7 @@ def pieChart(user, attr, ax, session):
         sizes = [ped_pct, veh_pct, bik_pct]
         explode = [0.01, 0.01, 0.01]  # only "explode" the 2nd slice
     else:
-        labels, sizes = getLabelSizePie(user, attr, session)
+        labels, sizes = getLabelSizePie(user, attr, startTime, endTime, session)
         explode = [0.01]*len(labels)
 
     wedges, texts, autotexts = ax.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
@@ -341,6 +364,9 @@ def generateReport(subj, session):
         cls_obs_fld = getattr(cls_obs, subj.lower()+'Id')
         q = session.query(cls_obs_fld).distinct()
         no_all_users = q.count()
+
+        if no_all_users == 0:
+            return None
 
         flow = round(no_all_users/duration_hours, 1)
 
@@ -386,7 +412,7 @@ def generateReport(subj, session):
 
         elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
             peakHours['Evening peak'] = None
-            peakHours['Off-peak'][1] = None
+            peakHours['Off-peak'] = None
             peakHours['Morning peak'][1] = end_obs_time.time()
 
         for p in peakHours.keys():
@@ -424,6 +450,40 @@ def generateReport(subj, session):
             indicatorDict['Percent(%)'] = '{}'.format(percent)
             indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
             indicatorsList.append(indicatorDict)
+
+    if subj == 'Bike':
+        q = session.query(Bike_obs.originId, Bike_obs.destinationId)
+        q_swk = session.query(Site_ODs.id).filter(Site_ODs.odType == 'sidewalk')
+        swk_ids = [int(i[0]) for i in q_swk.all()]
+
+        biks_on_swk = 0
+        for rec in q.all():
+            if int(rec[0]) in swk_ids or int(rec[1]) in swk_ids:
+                biks_on_swk += 1
+
+        flow = round(biks_on_swk / duration_hours, 1)
+
+        indicatorDict = {}
+        indicatorDict['Indicator'] = 'No. of cyclists riding on sidewalk'
+        indicatorDict['Value'] = '{}'.format(biks_on_swk)
+        indicatorDict['Percent(%)'] = '{}'.format(round(biks_on_swk / q.count() * 100, 1))
+        indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
+        indicatorsList.append(indicatorDict)
+
+
+        q_against = session.query(Bike_obs.originId).join(Site_ODs, Bike_obs.originId == Site_ODs.id).\
+                    filter(Site_ODs.direction == 'end_point')
+
+        biks_against = q_against.count()
+
+        flow = round(biks_against / duration_hours, 1)
+
+        indicatorDict = {}
+        indicatorDict['Indicator'] = 'No. of cyclists riding against traffic'
+        indicatorDict['Value'] = '{}'.format(biks_against)
+        indicatorDict['Percent(%)'] = '{}'.format(round(biks_against / q.count() * 100, 1))
+        indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
+        indicatorsList.append(indicatorDict)
 
     if subj == 'Activity':
         q = session.query(Activity.activityType, Activity.startTime, Activity.endTime)
@@ -475,20 +535,70 @@ def generateReport(subj, session):
                 indicatorDict['Avg. time (min.)'] = 'NA'
             indicatorDict['Rate (act/h)'] = '{}'.format(round(act_count/duration_hours,1))
             indicatorsList.append(indicatorDict)
+
+    if subj == 'Access':
+        q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id).\
+            filter(Site_ODs.odType == 'on_street_parking_lot')
+        no_arriv_vehs = q.count()
+        flow = round(no_arriv_vehs/duration_hours, 1)
+        indicatorDict = {}
+        indicatorDict['Indicator'] = 'No. of arriving vehicles'
+        indicatorDict['Value'] = '{}'.format(no_arriv_vehs)
+        indicatorDict['Percent(%)'] = '{}'.format(100)
+        indicatorDict['Flow'] = '{} ({}/h)'.format(flow, 'veh')
+        indicatorsList.append(indicatorDict)
+
+        q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
+            filter(Site_ODs.odType == 'on_street_parking_lot')
+        no_depart_vehs = q.count()
+        flow = round(no_depart_vehs / duration_hours, 1)
+        indicatorDict = {}
+        indicatorDict['Indicator'] = 'No. of departing vehicles'
+        indicatorDict['Value'] = '{}'.format(no_depart_vehs)
+        indicatorDict['Percent(%)'] = '{}'.format(100)
+        indicatorDict['Flow'] = '{} ({}/h)'.format(flow, 'veh')
+        indicatorsList.append(indicatorDict)
+
     return indicatorsList
 
 
 
 
-def getLabelSizePie(className, fieldName, session):
+def getLabelSizePie(className, fieldName, startTime, endTime, session):
+    if className in ['Pedestrian', 'Vehicle', 'Bike']:
+        className = className+'_obs'
     class_ = getattr(dbSchema, className)
-    if className == 'Pedestrian':
+    if className == 'Pedestrian_obs':
         field_ = getattr(Person, fieldName)
-        q = session.query(func.count(field_), field_).join(Pedestrian, Person.id == Pedestrian.personId).\
-            group_by(field_)
-    else:
-        field_ = getattr(class_, fieldName)
-        q = session.query(func.count(field_), field_).group_by(field_)
+        q = session.query(func.count(field_), field_)\
+                   .join(Pedestrian, Person.id == Pedestrian.personId)\
+                   .join(Pedestrian_obs, Pedestrian_obs.pedestrianId == Pedestrian.id) \
+                   .filter(Pedestrian_obs.instant >= startTime) \
+                   .filter(Pedestrian_obs.instant <= endTime) \
+                   .filter(Pedestrian_obs.destinationId != '') \
+                   .group_by(field_)
+    elif className == 'Vehicle_obs':
+        field_ = getattr(Vehicle, fieldName)
+        q = session.query(func.count(field_), field_)\
+                   .join(Vehicle_obs, Vehicle_obs.vehicleId == Vehicle.id) \
+                   .filter(Vehicle_obs.instant >= startTime) \
+                   .filter(Vehicle_obs.instant <= endTime) \
+                   .filter(Vehicle_obs.destinationId != '') \
+                   .group_by(field_)
+    elif className == 'Bike_obs':
+        field_ = getattr(Bike, fieldName)
+        q = session.query(func.count(field_), field_)\
+                   .join(Bike_obs, Bike_obs.bikeId == Bike.id) \
+                   .filter(Bike_obs.instant >= startTime) \
+                   .filter(Bike_obs.instant <= endTime) \
+                   .filter(Bike_obs.destinationId != '') \
+                   .group_by(field_)
+    elif className == 'Activity':
+        field_ = getattr(Activity, fieldName)
+        q = session.query(func.count(field_), field_) \
+                   .filter(Activity.startTime >= startTime) \
+                   .filter(Activity.startTime <= endTime) \
+                   .group_by(field_)
 
     # q = session.query(cls_fld).join(Pedestrian, Person.id == Pedestrian.personId). \
     #     distinct()
