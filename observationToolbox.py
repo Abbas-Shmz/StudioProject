@@ -7,9 +7,9 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
-                             QAbstractItemView)
+                             QAbstractItemView, QTableView)
 from PyQt5.QtGui import QColor, QIcon
-from PyQt5.QtCore import QDateTime, QSize, QDir, Qt
+from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel
 
 from framework.dbSchema import createDatabase, connectDatabase, \
     Study_site, Site_ODs, Person, Pedestrian, Vehicle, Bike, \
@@ -732,9 +732,19 @@ class TempHistWindow(QDialog):
     def odNameChanged(self):
         odName = self.odNamesCombobx.currentText()
         odDirItems = []
-        odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
+        if self.ods_dict[odName][2] == 'directed':
+            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+        elif self.ods_dict[odName][2] == 'undirected':
+            odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
+        elif self.ods_dict[odName][2] == 'NA':
+            if self.ods_dict[odName][3] == 'on_street_parking_lot':
+                for dirList in self.ods_dict.values():
+                    if dirList[3] == 'road_lane':
+                        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], dirList[1]))
+                        odDirItems.append('{} --> {}'.format(dirList[0], self.ods_dict[odName][0]))
+
         self.odDirCombobx.clear()
         self.odDirCombobx.addItems(odDirItems)
 
@@ -1131,9 +1141,19 @@ class CompHistWindow(QDialog):
     def odNameChanged(self):
         odName = self.odNamesCombobx.currentText()
         odDirItems = []
-        odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
+        if self.ods_dict[odName][2] == 'directed':
+            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+        elif self.ods_dict[odName][2] == 'undirected':
+            odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
+            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
+        elif self.ods_dict[odName][2] == 'NA':
+            if self.ods_dict[odName][3] == 'on_street_parking_lot':
+                for dirList in self.ods_dict.values():
+                    if dirList[3] == 'road_lane':
+                        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], dirList[1]))
+                        odDirItems.append('{} --> {}'.format(dirList[0], self.ods_dict[odName][0]))
+
         self.odDirCombobx.clear()
         self.odDirCombobx.addItems(odDirItems)
 
@@ -1144,11 +1164,12 @@ class genReportWindow(QDialog):
 
         self.setWindowTitle('List of indicators')
         self.setWindowIcon(QIcon('icons/report.png'))
-        self.table = QTableWidget()
+        self.table = QTableView()
         # self.table.horizontalHeader().setStretchLastSection(True)
         # self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table.verticalHeader().hide()
+        # self.table.verticalHeader().hide()
+        self.indicatorsDf = None
 
 
         winLayout = QVBoxLayout()
@@ -1177,48 +1198,25 @@ class genReportWindow(QDialog):
         self.setLayout(winLayout)
 
     def genReport(self):
-        for _ in range(self.table.columnCount()):
-            self.table.removeColumn(0)
-
-        for _ in range(self.table.rowCount()):
-            self.table.removeRow(0)
 
         subject = self.subjCombobx.currentText()
 
-        indicatorsList = generateReport(subject, session)
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+        peakHours = getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
+                                 start_obs_time, end_obs_time)
 
-        if indicatorsList == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('No observation is available for {}'.format(subject))
-            msg.exec_()
-            return
+        self.indicatorsDf = generateReport(subject, start_obs_time, end_obs_time, peakHours, session)
 
-        for key in indicatorsList[0].keys():
-            self.table.insertColumn(self.table.columnCount())
-        self.table.setHorizontalHeaderLabels(indicatorsList[0].keys())
-
-        row = 0
-        for indicator in indicatorsList:
-            self.table.insertRow(self.table.rowCount())
-            col = 0
-            for val in indicator.values():
-                tabelItem = QTableWidgetItem(val)
-                if col == 0:
-                    self.table.horizontalHeader().setSectionResizeMode(col,
-                                                                       QHeaderView.ResizeToContents)
-                else:
-                    self.table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Stretch)
-                    tabelItem.setTextAlignment(Qt.AlignCenter)
-                self.table.setItem(row, col, tabelItem)
-                col += 1
-            row += 1
-
-        # print(self.table.horizontalHeader().stretchSectionCount())
-
+        model = dfTableModel(self.indicatorsDf)
+        self.table.setModel(model)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def saveReport(self):
-        pass
+        if not self.indicatorsDf is None:
+            self.indicatorsDf.to_clipboard()
+            msg = QMessageBox()
+            msg.setText('The table is copied to the clipboard.')
+            msg.exec_()
 
 
 def getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
@@ -1267,18 +1265,23 @@ def getObsStartEnd(session):
 def getOdNamesDirections(session):
     q = session.query(Site_ODs.odType, Site_ODs.odName, Site_ODs.id, Site_ODs.direction)
 
+    pointOds = ['adjoining_ZOI', 'on_street_parking_lot', 'bicycle_rack', 'informal_bicycle_parking',
+                'bus_stop', 'subway_station']
     ods_dict = {}
     for od in q.all():
-        if od[0].name in ['sidewalk', 'road_lane', 'bus_lane', 'cycling_path']:
-            if od[1] in ods_dict.keys():
-                ods_list = ods_dict[od[1]]
-                if None in ods_list:
-                    ods_list[ods_list.index(None)] = od[2]
-            else:
-                if od[3] == 'end_point':
-                    ods_dict[od[1]] = [None, od[2]]
-                else:
-                    ods_dict[od[1]] = [od[2], None]
+        if od[1] in ods_dict.keys():
+            ods_list = ods_dict[od[1]]
+            if None in ods_list:
+                ods_list[ods_list.index(None)] = od[2]
+        else:
+            if od[3].name == 'end_point':
+                ods_dict[od[1]] = [None, od[2], 'directed', od[0].name]
+            elif od[3].name == 'start_point':
+                ods_dict[od[1]] = [od[2], None, 'directed', od[0].name]
+            elif od[3].name == 'NA' and not(od[0].name in pointOds):
+                ods_dict[od[1]] = [od[2], None, 'undirected', od[0].name]
+            elif od[0].name in pointOds:
+                ods_dict[od[1]] = [od[2], -1, 'NA', od[0].name]
     return ods_dict
 
 def calculateNoBins(start_obs_time, end_obs_time, minutes):
@@ -1289,6 +1292,33 @@ def calculateNoBins(start_obs_time, end_obs_time, minutes):
     if bins == 0:
         bins = 1
     return bins
+
+class dfTableModel(QAbstractTableModel):
+
+    def __init__(self, data):
+        QAbstractTableModel.__init__(self)
+        self._data = data
+
+    def rowCount(self, parent=None):
+        return self._data.shape[0]
+
+    def columnCount(self, parnet=None):
+        return self._data.shape[1]
+
+    def data(self, index, role=Qt.DisplayRole):
+        if index.isValid():
+            if role == Qt.DisplayRole:
+                return str(self._data.iloc[index.row(), index.column()])
+            if role == Qt.TextAlignmentRole:
+                return Qt.AlignCenter
+        return None
+
+    def headerData(self, section, orientation, role):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self._data.columns[section]
+        if orientation == Qt.Vertical and role == Qt.DisplayRole:
+            return self._data.index[section]
+        return None
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

@@ -267,6 +267,7 @@ def odMatrix(user, ax, session):
     dst_sum = [i for i in od_df.sum(0).values]
 
     indices_zero = [i for i, x in enumerate([sum(s) for s in zip(org_sum, dst_sum)]) if x == 0]
+
     indices_toDrop = od_df.index[indices_zero]
     od_df.drop(index=indices_toDrop, inplace=True)
     od_df.drop(columns=indices_toDrop, inplace=True)
@@ -348,17 +349,15 @@ def pieChart(user, attr, startTime, endTime, ax, session):
     plt.setp(autotexts, size=8, weight="bold")
 
 #=====================================================================
-def generateReport(subj, session):
-    indicatorsList = []
+def generateReport(subj, start_obs_time, end_obs_time, peakHours, session):
 
-    site_instance = session.query(Study_site).first()
-    start_obs_time = site_instance.obsStart
-    end_obs_time = site_instance.obsEnd
     duration = end_obs_time - start_obs_time
     duration_in_s = duration.total_seconds()
     duration_hours = duration_in_s / 3600
 
     if subj in ['Pedestrian', 'Vehicle', 'Bike']:
+        indicatorsDf = pd.DataFrame(columns=['Count (%)', 'Flow ({}/h)'.format(subj[:3].lower())])
+
         cls_ = getattr(dbSchema, subj)
         cls_obs = getattr(dbSchema, subj+'_obs')
         cls_obs_fld = getattr(cls_obs, subj.lower()+'Id')
@@ -370,72 +369,26 @@ def generateReport(subj, session):
 
         flow = round(no_all_users/duration_hours, 1)
 
-        indicatorDict = {}
-        indicatorDict['Indicator'] = 'No. of all {}s'.format(subj.lower())
-        indicatorDict['Value'] = str(no_all_users)
-        indicatorDict['Percent(%)'] = '{}'.format(100)
-        indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
-        indicatorsList.append(indicatorDict)
+        duration_text = '({}-{})'.format(start_obs_time.strftime('%I:%M %p'),
+                                         end_obs_time.strftime('%I:%M %p'))
+        indicatorsDf.loc['All {}s {}'.format(subj.lower(), duration_text)] = [
+            '{} ({}%)'.format(no_all_users, 100),
+            '{}'.format(flow)]
 
-        morningPeakStart = datetime.time(7,0)
-        morningPeakEnd = datetime.time(9, 0)
-        eveningPeakStart = datetime.time(15, 0)
-        eveningPeakEnd = datetime.time(19, 0)
-
-        peakHours = {}
-        if start_obs_time.time() < morningPeakStart:
-            peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
-            peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
-            peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
-
-        elif morningPeakStart < start_obs_time.time() < morningPeakEnd:
-            peakHours['Morning peak'] = [start_obs_time.time(), morningPeakEnd]
-            peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
-            peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
-
-        elif morningPeakEnd < start_obs_time.time() < eveningPeakStart:
-            peakHours['Morning peak'] = None
-            peakHours['Off-peak'] = [start_obs_time.time(), eveningPeakStart]
-            peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
-
-        elif eveningPeakStart < start_obs_time.time() < eveningPeakEnd:
-            peakHours['Morning peak'] = None
-            peakHours['Off-peak'] = None
-            peakHours['Evening peak'] = [start_obs_time.time(), eveningPeakEnd]
-
-        if eveningPeakStart < end_obs_time.time() < eveningPeakEnd:
-            peakHours['Evening peak'][1] = end_obs_time.time()
-
-        elif morningPeakEnd < end_obs_time.time() < eveningPeakStart:
-            peakHours['Evening peak'] = None
-            peakHours['Off-peak'][1] = end_obs_time.time()
-
-        elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
-            peakHours['Evening peak'] = None
-            peakHours['Off-peak'] = None
-            peakHours['Morning peak'][1] = end_obs_time.time()
 
         for p in peakHours.keys():
             if peakHours[p] == None:
                 no_users = 'No Data'
-                percent = 'No Data'
+                percent = ''
                 flow = 'No Data'
                 duration_text = ''
             else:
-                y = start_obs_time.year
-                m = start_obs_time.month
-                d = start_obs_time.day
-                lh = peakHours[p][0].hour
-                lm = peakHours[p][0].minute
-                ls = peakHours[p][0].second
-                uh = peakHours[p][1].hour
-                um = peakHours[p][1].minute
-                us = peakHours[p][1].second
-                ums = peakHours[p][1].microsecond
-                lowerBound = datetime.datetime(y, m, d, lh, lm, ls)
-                upperBound = datetime.datetime(y, m, d, uh, um, us, ums)
-                q = session.query(cls_obs).filter(cls_obs.instant >= lowerBound)\
-                                          .filter(cls_obs.instant <= upperBound)
+
+                lowerBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][0])
+                upperBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][1])
+
+                q = session.query(cls_obs.id).filter(cls_obs.instant >= lowerBound)\
+                                             .filter(cls_obs.instant <= upperBound)
                 no_users = q.count()
                 percent = round((no_users/no_all_users)*100, 1)
                 duration = (peakHours[p][1].hour + peakHours[p][1].minute / 60) - \
@@ -444,12 +397,10 @@ def generateReport(subj, session):
                 duration_text = '({}-{})'.format(peakHours[p][0].strftime('%I:%M %p'),
                                                  peakHours[p][1].strftime('%I:%M %p'))
 
-            indicatorDict = {}
-            indicatorDict['Indicator'] = '{} {}'.format(p, duration_text)
-            indicatorDict['Value'] = str(no_users)
-            indicatorDict['Percent(%)'] = '{}'.format(percent)
-            indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
-            indicatorsList.append(indicatorDict)
+            indicatorsDf.loc['{} {}'.format(p, duration_text)] = [
+                '{} ({}%)'.format(no_users, '{}'.format(percent)),
+                '{}'.format(flow)]
+
 
     if subj == 'Bike':
         q = session.query(Bike_obs.originId, Bike_obs.destinationId)
@@ -463,12 +414,9 @@ def generateReport(subj, session):
 
         flow = round(biks_on_swk / duration_hours, 1)
 
-        indicatorDict = {}
-        indicatorDict['Indicator'] = 'No. of cyclists riding on sidewalk'
-        indicatorDict['Value'] = '{}'.format(biks_on_swk)
-        indicatorDict['Percent(%)'] = '{}'.format(round(biks_on_swk / q.count() * 100, 1))
-        indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
-        indicatorsList.append(indicatorDict)
+        indicatorsDf.loc['No. of cyclists riding on sidewalk'] = [
+            '{} ({}%)'.format(biks_on_swk, '{}'.format(round(biks_on_swk / q.count() * 100, 1))),
+            '{}'.format(flow)]
 
 
         q_against = session.query(Bike_obs.originId).join(Site_ODs, Bike_obs.originId == Site_ODs.id).\
@@ -478,14 +426,14 @@ def generateReport(subj, session):
 
         flow = round(biks_against / duration_hours, 1)
 
-        indicatorDict = {}
-        indicatorDict['Indicator'] = 'No. of cyclists riding against traffic'
-        indicatorDict['Value'] = '{}'.format(biks_against)
-        indicatorDict['Percent(%)'] = '{}'.format(round(biks_against / q.count() * 100, 1))
-        indicatorDict['Flow ({}/h)'.format(subj[:3].lower())] = '{}'.format(flow)
-        indicatorsList.append(indicatorDict)
+        indicatorsDf.loc['No. of cyclists riding against traffic'] = [
+            '{} ({}%)'.format(biks_against, '{}'.format(round(biks_against / q.count() * 100, 1))),
+            '{}'.format(flow)]
+
 
     if subj == 'Activity':
+        indicatorsDf = pd.DataFrame(columns=['Count (%)', 'Total time (min.)', 'Avg. time (min.)',
+                                             'Rate (act/h)'])
         q = session.query(Activity.activityType, Activity.startTime, Activity.endTime)
 
         activity_dict = {}
@@ -503,65 +451,47 @@ def generateReport(subj, session):
             total_acts += val['count']
             total_time += val['actTotalTime']
 
-        indicatorDict = {}
-        indicatorDict['Indicator'] = 'No. of all activities'
-        indicatorDict['Value'] = '{}'.format(total_acts)
-        indicatorDict['Percent(%)'] = '{}'.format(100)
-        if total_time > 0:
-            indicatorDict['Total time (min.)'] = '{}'.format(round(total_time/60, 1))
-            indicatorDict['Avg. time (min.)'] = '{}'.format(round(total_time/(60*total_acts), 1))
-        else:
-            indicatorDict['Total time (min.)'] = 'NA'
-            indicatorDict['Avg. time (min.)'] = 'NA'
-        indicatorDict['Rate (act/h)'] = '{}'.format(round(total_acts/duration_hours, 1))
-        indicatorsList.append(indicatorDict)
+        indicatorsDf.loc['No. of all activities'] = [
+            '{} ({}%)'.format(total_acts, 100),
+            '{}'.format(round(total_time/60, 1)) if total_time > 0 else 'NA',
+            '{}'.format(round(total_time/(60*total_acts), 1)) if total_time > 0 else 'NA',
+            '{}'.format(round(total_acts/duration_hours, 1))]
 
-        # field_ = Activity.activityType
-        # q = session.query(field_, func.count(field_)).group_by(field_)
-        # actTypes = [[i[0].name, int(i[1])] for i in q.all()]
 
         for act in activity_dict.keys():
             act_count = activity_dict[act]['count']
             act_totalTime_min = activity_dict[act]['actTotalTime']/60
-            indicatorDict = {}
-            indicatorDict['Indicator'] = 'No. of people {}'.format(act)
-            indicatorDict['Value'] = '{}'.format(act_count)
-            indicatorDict['Percent(%)'] = '{}'.format(round((act_count/total_acts)*100, 1))
-            if act_totalTime_min > 0:
-                indicatorDict['Total time (min.)'] = '{}'.format(round(act_totalTime_min, 1))
-                indicatorDict['Avg. time (min.)'] = '{}'.format(round(act_totalTime_min/act_count,1))
-            else:
-                indicatorDict['Total time (min.)'] = 'NA'
-                indicatorDict['Avg. time (min.)'] = 'NA'
-            indicatorDict['Rate (act/h)'] = '{}'.format(round(act_count/duration_hours,1))
-            indicatorsList.append(indicatorDict)
+
+            indicatorsDf.loc['No. of people {}'.format(act)] = [
+                '{} ({}%)'.format(act_count, round((act_count/total_acts)*100, 1)),
+                '{}'.format(round(act_totalTime_min, 1)) if act_totalTime_min > 0 else 'NA',
+                '{}'.format(round(act_totalTime_min/act_count, 1)) if act_totalTime_min > 0 else 'NA',
+                '{}'.format(round(act_count/duration_hours,1))]
+
 
     if subj == 'Access':
+        indicatorsDf = pd.DataFrame(columns=['Count (%)', 'Flow'])
+
         q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id).\
             filter(Site_ODs.odType == 'on_street_parking_lot')
         no_arriv_vehs = q.count()
         flow = round(no_arriv_vehs/duration_hours, 1)
-        indicatorDict = {}
-        indicatorDict['Indicator'] = 'No. of arriving vehicles'
-        indicatorDict['Value'] = '{}'.format(no_arriv_vehs)
-        indicatorDict['Percent(%)'] = '{}'.format(100)
-        indicatorDict['Flow'] = '{} ({}/h)'.format(flow, 'veh')
-        indicatorsList.append(indicatorDict)
+
+        indicatorsDf.loc['No. of arriving vehicles'] = [
+            '{} ({}%)'.format(no_arriv_vehs, 100),
+            '{} ({}/h)'.format(flow, 'veh')]
 
         q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
             filter(Site_ODs.odType == 'on_street_parking_lot')
         no_depart_vehs = q.count()
         flow = round(no_depart_vehs / duration_hours, 1)
-        indicatorDict = {}
-        indicatorDict['Indicator'] = 'No. of departing vehicles'
-        indicatorDict['Value'] = '{}'.format(no_depart_vehs)
-        indicatorDict['Percent(%)'] = '{}'.format(100)
-        indicatorDict['Flow'] = '{} ({}/h)'.format(flow, 'veh')
-        indicatorsList.append(indicatorDict)
 
-    return indicatorsList
+        indicatorsDf.loc['No. of departing vehicles'] = [
+            '{} ({}%)'.format(no_depart_vehs, 100),
+            '{} ({}/h)'.format(flow, 'veh')]
 
 
+    return indicatorsDf
 
 
 def getLabelSizePie(className, fieldName, startTime, endTime, session):

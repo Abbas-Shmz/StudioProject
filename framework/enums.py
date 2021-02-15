@@ -47,6 +47,7 @@ class activityTypes(Enum):
     performing = auto()
     selling = auto()
     playing_with_pets = auto()
+    taking_pet_for_walk = auto()
 
 
 class siteTypes(Enum):
