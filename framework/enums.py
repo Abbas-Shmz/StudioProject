@@ -162,3 +162,4 @@ class stopActions(Enum):
     unloading_passenger = auto()
     loading_objects = auto()
     unloading_objects = auto()
+    deliver_objects = auto()

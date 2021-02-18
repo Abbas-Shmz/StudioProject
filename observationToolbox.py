@@ -598,7 +598,7 @@ class ObsToolbox(QMainWindow):
             msg.exec_()
             return
         genRepWin = genReportWindow(self)
-        genRepWin.setGeometry(100, 100, 640, 480)
+        genRepWin.setGeometry(200, 200, 800, 480)
 
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
@@ -799,7 +799,10 @@ class StackHistWindow(QDialog):
         roadUser = self.userCombobx.currentText()
         attr = self.attrCombobx.currentText()
 
-        err = stackedHist(roadUser, attr, ax, session)
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+        bins = calculateNoBins(start_obs_time, end_obs_time, binsMinutes)
+
+        err = stackedHist(roadUser, attr, ax, session, bins)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -861,7 +864,9 @@ class OdMatrixWindow(QDialog):
         # plot data
         roadUser = self.userCombobx.currentText()
 
-        err = odMatrix(roadUser, ax, session)
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+
+        err = odMatrix(roadUser, ax, start_obs_time, end_obs_time, session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -1106,12 +1111,11 @@ class CompHistWindow(QDialog):
         label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
         label2 = os.path.basename(self.dbFile2Ledit.text()).split('.')[0]
 
-        err = tempDistHist(roadUser, odName, direction, ax, session, bins=bins, alpha=0.5,
-                           color = 'blue', ec='blue', label=label1, rwidth=1, histtype='stepfilled',
-                           comparison=True)
-        err = tempDistHist(roadUser, odName, direction, ax, self.session2, bins=bins, alpha=0.5,
-                           color='red', ec='red', label=label2, rwidth=1, histtype='stepfilled',
-                           comparison=True)
+        err = tempDistHist(roadUser, odName, direction, ax, [session, self.session2], bins=bins, alpha=0.7,
+                           color = ['skyblue', 'red'], ec='grey', label=[label1, label2], rwidth=0.9)
+        # err = tempDistHist(roadUser, odName, direction, ax, self.session2, bins=bins, alpha=0.5,
+        #                    color='red', ec='red', label=label2, rwidth=1, histtype='stepfilled',
+        #                    comparison=True)
         plt.legend(loc='upper right')
         if err != None:
             msg = QMessageBox()
