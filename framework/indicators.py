@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator
 from sqlalchemy import func
+from configparser import ConfigParser
 
 import pandas as pd
 from framework import dbSchema
@@ -18,8 +19,25 @@ from framework.dbSchema import connectDatabase, Pedestrian_obs, Vehicle, Person,
     Vehicle_obs, Bike_obs, Pedestrian, Activity, Site_ODs, Study_site
 from framework import enums as en
 
+
 # session = connectDatabase('/Users/Abbas/stuart.sqlite')
 noDataSign = '-'
+
+config_object = ConfigParser()
+cfg = config_object.read("config.ini")
+if cfg != []:
+    PH = config_object['PEAKHOURS']
+    morningPeakStart = datetime.datetime.strptime(PH['morningPeakStart'], '%I:%M %p').time()
+    morningPeakEnd = datetime.datetime.strptime(PH['morningPeakEnd'], '%I:%M %p').time()
+    eveningPeakStart = datetime.datetime.strptime(PH['eveningPeakStart'], '%I:%M %p').time()
+    eveningPeakEnd = datetime.datetime.strptime(PH['eveningPeakEnd'], '%I:%M %p').time()
+    binsMinutes = int(config_object['BINS']['binsminutes'])
+else:
+    morningPeakStart = datetime.time(7, 0)
+    morningPeakEnd = datetime.time(9, 0)
+    eveningPeakStart = datetime.time(15, 0)
+    eveningPeakEnd = datetime.time(19, 0)
+    binsMinutes = 10
 
 # ==============================================================
 def tempDistHist(user, od_name, direction, ax, session, bins=20, alpha=1, color='skyblue', ec='grey',
@@ -189,7 +207,9 @@ def stackedHist(user, attr, ax, session, bins=20):
     # plt.show()
 
 # ==============================================================
-def odMatrix(user, ax, start_obs_time, end_obs_time, session):
+def odMatrix(user, ax, session):
+    start_obs_time, end_obs_time = getObsStartEnd(session)
+
     if user == 'pedestrian':
         cls_ = Pedestrian_obs
         cls_fld = Pedestrian_obs.pedestrianId
@@ -303,7 +323,14 @@ def odMatrix(user, ax, start_obs_time, end_obs_time, session):
     # plt.show()
 
 #=====================================================================
-def pieChart(user, attr, startTime, endTime, ax, session):
+def pieChart(user, attr, sTime, eTime, ax, session):
+
+    sDate = getObsStartEnd(session)[0].date()
+    startTime = datetime.datetime.combine(sDate, sTime)
+
+    eDate = getObsStartEnd(session)[1].date()
+    endTime = datetime.datetime.combine(eDate, eTime)
+
     if user == 'All users':
         ped_count = session.query(Pedestrian_obs.id).filter(Pedestrian_obs.instant >= startTime)\
                                                  .filter(Pedestrian_obs.instant <= endTime)\
@@ -338,25 +365,31 @@ def pieChart(user, attr, startTime, endTime, ax, session):
     plt.setp(autotexts, size=8, weight="bold")
 
 #=====================================================================
-def generateReport(subj, start_obs_time, end_obs_time, peakHours, session):
-
+def generateReport(subj, session):
+    peakHours = getPeakHours(session)
+    start_obs_time, end_obs_time = getObsStartEnd(session)
     duration = end_obs_time - start_obs_time
     duration_in_s = duration.total_seconds()
     duration_hours = duration_in_s / 3600
 
     if subj == 'Pedestrian':
-        indicators = ['Start time', #0
-                      'End time',   #1
-                      'Duration',   #2
-                      'Flow of all pedestrians (ped/h)',   #3
-                      'No. of all pedestrians',    #4
-                      'No. of female pedestrians', #5
-                      'No. of male pedestrians',   #6
-                      'No. of child pedestrians',  #7
-                      'No. of elderly pedestrians',     #8
-                      'No. of pedestrians with rolling',#9
-                      'No. of pedestrians with pet',    #10
-                      'No. of disabled pedestrians'     #11
+        indicators = ['Start time', # 0
+                      'End time',   # 1
+                      'Duration',   # 2
+                      'Flow of all pedestrians (ped/h)',   # 3
+                      'No. of all pedestrians',    # 4
+                      'No. of female pedestrians', # 5
+                      'No. of male pedestrians',   # 6
+                      'No. of child pedestrians',  # 7
+                      'No. of elderly pedestrians',     # 8
+                      'No. of pedestrians with rolling',# 9
+                      'No. of pedestrians with pet',    # 10
+                      'No. of disabled pedestrians',    # 11
+                      'No. of ped. crossing street',    # 12
+                      'No. of groups with size = 1',    # 13
+                      'No. of groups with size = 2',    # 14
+                      'No. of groups with size = 3',    # 15
+                      'No. of groups with size > 3'     # 16
                       ]
         indDf = pd.DataFrame(columns=['Entire period',
                                       list(peakHours.keys())[0],
@@ -402,8 +435,12 @@ def generateReport(subj, start_obs_time, end_obs_time, peakHours, session):
                 duration_in_s = duration.total_seconds()
                 duration_hours = duration_in_s / 3600
 
-                q_all_peaks = q_join_person.filter(Pedestrian_obs.instant >= lowerBound) \
-                                           .filter(Pedestrian_obs.instant <= upperBound)
+                q_all_peaks = q_join_person.filter(Pedestrian_obs.instant >= lowerBound)
+                if peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
+                    q_all_peaks = q_all_peaks.filter(Pedestrian_obs.instant < upperBound)
+                else:
+                    q_all_peaks = q_all_peaks.filter(Pedestrian_obs.instant <= upperBound)
+
                 no_all_peak = q_all_peaks.count()
                 flow_all_peak = round(no_all_peak / duration_hours, 1)
                 no_fem_peak = q_all_peaks.filter(Person.gender == 'female').count()
@@ -414,39 +451,329 @@ def generateReport(subj, start_obs_time, end_obs_time, peakHours, session):
                 no_pet_peak = q_all_peaks.filter(Person.withPet == 1).count()
                 no_dis_peak = q_all_peaks.filter(Person.disability != 'none').count()
 
-                indDf.loc[indicators[0], p] = '{}'.format(peakHours[p][0].strftime('%I:%M %p'))
-                indDf.loc[indicators[1], p] = '{}'.format(peakHours[p][1].strftime('%I:%M %p'))
-                indDf.loc[indicators[2], p] = '{}h {}m'.format(int(duration_in_s / 3600),
+                indDf.iloc[0].loc[p] = '{}'.format(peakHours[p][0].strftime('%I:%M %p'))
+                indDf.iloc[1].loc[p] = '{}'.format(peakHours[p][1].strftime('%I:%M %p'))
+                indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
                                                             int(duration_in_s / 60) % 60)
-                indDf.loc[indicators[3], p] = '{}'.format(flow_all_peak)
-                indDf.loc[indicators[4], p] = '{} ({}%)'.format(no_all_peak,
+                indDf.iloc[3].loc[p] = '{}'.format(flow_all_peak)
+                indDf.iloc[4].loc[p] = '{} ({}%)'.format(no_all_peak,
                                       round((no_all_peak / no_peds_all) * 100, 1) if no_peds_all != 0 else 0)
-                indDf.loc[indicators[5], p] = '{} ({}%)'.format(no_fem_peak,
+                indDf.iloc[5].loc[p] = '{} ({}%)'.format(no_fem_peak,
                                       round((no_fem_peak / no_fem_all) * 100, 1) if no_fem_all != 0 else 0)
-                indDf.loc[indicators[6], p] = '{} ({}%)'.format(no_mal_peak,
+                indDf.iloc[6].loc[p] = '{} ({}%)'.format(no_mal_peak,
                                       round((no_mal_peak / no_mal_all) * 100, 1) if no_mal_all != 0 else 0)
-                indDf.loc[indicators[7], p] = '{} ({}%)'.format(no_chd_peak,
+                indDf.iloc[7].loc[p] = '{} ({}%)'.format(no_chd_peak,
                                       round((no_chd_peak / no_chd_all) * 100, 1) if no_chd_all != 0 else 0)
-                indDf.loc[indicators[8], p] = '{} ({}%)'.format(no_eld_peak,
+                indDf.iloc[8].loc[p] = '{} ({}%)'.format(no_eld_peak,
                                       round((no_eld_peak / no_eld_all) * 100, 1) if no_eld_all != 0 else 0)
-                indDf.loc[indicators[9], p] = '{} ({}%)'.format(no_rol_peak,
+                indDf.iloc[9].loc[p] = '{} ({}%)'.format(no_rol_peak,
                                       round((no_rol_peak / no_rol_all) * 100, 1) if no_rol_all != 0 else 0)
-                indDf.loc[indicators[10], p] = '{} ({}%)'.format(no_pet_peak,
+                indDf.iloc[10].loc[p] = '{} ({}%)'.format(no_pet_peak,
                                       round((no_pet_peak / no_pet_all) * 100, 1) if no_pet_all != 0 else 0)
-                indDf.loc[indicators[11], p] = '{} ({}%)'.format(no_dis_peak,
+                indDf.iloc[11].loc[p] = '{} ({}%)'.format(no_dis_peak,
                                       round((no_dis_peak / no_dis_all) * 100, 1) if no_dis_all != 0 else 0)
 
 
+        # indDf[indDf.isnull().values] = noDataSign
+        #
+        # indDf.columns = [indDf.columns[0] + ' (% of all)',
+        #                  indDf.columns[1] + ' (% of item)',
+        #                  indDf.columns[2] + ' (% of item)',
+        #                  indDf.columns[3] + ' (% of item)']
 
-        indDf[indDf.isnull().values] = noDataSign
-        print(indDf.columns)
-        indDf.columns = [indDf.columns[0] + ' (% of all)',
-                         indDf.columns[1] + ' (% of item)',
-                         indDf.columns[2] + ' (% of item)',
+    elif subj == 'Vehicle':
+        indicators = ['Start time',  # 0
+                      'End time',    # 1
+                      'Duration',    # 2
+                      'Flow of all vehicles (veh/h)',  # 3
+                      'No. of all vehicles',      # 4
+                      'No. of delayed vehicles',  # 5
+                      'No. of vehicles have stop' # 6
+                      ]
+        indDf = pd.DataFrame(columns=['Entire period',
+                                      list(peakHours.keys())[0],
+                                      list(peakHours.keys())[1],
+                                      list(peakHours.keys())[2]],
+                             index=indicators)
+
+        q = session.query(Vehicle.id).join(Vehicle_obs, Vehicle.id == Vehicle_obs.vehicleId) \
+                   .filter(Vehicle_obs.instant >= start_obs_time) \
+                   .filter(Vehicle_obs.instant <= end_obs_time)
+
+        no_vehs_all = q.count()
+        flow_all_vehs = round(no_vehs_all / duration_hours, 1)
+        no_dely_all = q.filter(Vehicle_obs.delayed == 1).count()
+        no_stop_all = q.filter(Vehicle_obs.hasStop != 'no').count()
+
+        indDf.iloc[0, 0] = '{}'.format(start_obs_time.strftime('%I:%M %p'))
+        indDf.iloc[1, 0] = '{}'.format(end_obs_time.strftime('%I:%M %p'))
+        indDf.iloc[2, 0] = '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+        indDf.iloc[3, 0] = '{}'.format(flow_all_vehs)
+        indDf.iloc[4, 0] = '{}'.format(no_vehs_all)
+        indDf.iloc[5, 0] = '{}'.format(no_dely_all)
+        indDf.iloc[6, 0] = '{}'.format(no_stop_all)
+
+        for p in peakHours.keys():
+            if not peakHours[p] is None:
+
+                lowerBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][0])
+                upperBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][1])
+
+                duration = upperBound - lowerBound
+                duration_in_s = duration.total_seconds()
+                duration_hours = duration_in_s / 3600
+
+                q_all_peaks = q.filter(Vehicle_obs.instant >= lowerBound)
+                if peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
+                    q_all_peaks = q_all_peaks.filter(Vehicle_obs.instant < upperBound)
+                else:
+                    q_all_peaks = q_all_peaks.filter(Vehicle_obs.instant <= upperBound)
+
+                no_all_peak = q_all_peaks.count()
+                flow_all_peak = round(no_all_peak / duration_hours, 1)
+                no_dely_peak = q_all_peaks.filter(Vehicle_obs.delayed == 1).count()
+                no_stop_peak = q_all_peaks.filter(Vehicle_obs.hasStop != 'no').count()
+
+                indDf.iloc[0].loc[p] = '{}'.format(peakHours[p][0].strftime('%I:%M %p'))
+                indDf.iloc[1].loc[p] = '{}'.format(peakHours[p][1].strftime('%I:%M %p'))
+                indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
+                                                        int(duration_in_s / 60) % 60)
+                indDf.iloc[3].loc[p] = '{}'.format(flow_all_peak)
+                indDf.iloc[4].loc[p] = '{} ({}%)'.format(no_all_peak,
+                                      round((no_all_peak / no_vehs_all) * 100, 1) if no_vehs_all != 0 else 0)
+                indDf.iloc[5].loc[p] = '{} ({}%)'.format(no_dely_peak,
+                                      round((no_dely_peak / no_dely_all) * 100, 1) if no_dely_all != 0 else 0)
+                indDf.iloc[6].loc[p] = '{} ({}%)'.format(no_stop_peak,
+                                      round((no_stop_peak / no_stop_all) * 100, 1) if no_stop_all != 0 else 0)
+
+    elif subj == 'Bike':
+        indicators = ['Start time',  # 0
+                      'End time',  # 1
+                      'Duration',  # 2
+                      'Flow of all bikes (bik/h)',  # 3
+                      'No. of all cyclists',    #4
+                      'No. of cyclists riding on sidewalk',  # 5
+                      'No. of cyclists riding against traffic'  # 6
+                      ]
+        indDf = pd.DataFrame(columns=['Entire period',
+                                      list(peakHours.keys())[0],
+                                      list(peakHours.keys())[1],
+                                      list(peakHours.keys())[2]],
+                             index=indicators)
+
+        q = session.query(Bike.id).join(Bike_obs, Bike.id == Bike_obs.bikeId) \
+                   .filter(Bike_obs.instant >= start_obs_time) \
+                   .filter(Bike_obs.instant <= end_obs_time)
+
+        no_biks_all = q.count()
+        flow_all_biks = round(no_biks_all / duration_hours, 1)
+
+        q_bik_ods = session.query(Bike_obs.originId, Bike_obs.destinationId) \
+                           .filter(Bike_obs.instant >= start_obs_time) \
+                           .filter(Bike_obs.instant <= end_obs_time)
+        q_swk = session.query(Site_ODs.id).filter(Site_ODs.odType == 'sidewalk')
+        swk_ids = [int(i[0]) for i in q_swk.all()]
+
+        no_sdwk_all = 0
+        for rec in q_bik_ods.all():
+            if int(rec[0]) in swk_ids or int(rec[1]) in swk_ids:
+                no_sdwk_all += 1
+
+        q_against = q_bik_ods.join(Site_ODs, Bike_obs.originId == Site_ODs.id) \
+                             .filter(Site_ODs.direction == 'end_point')
+
+        no_agst_all = q_against.count()
+
+        indDf.iloc[0, 0] = '{}'.format(start_obs_time.strftime('%I:%M %p'))
+        indDf.iloc[1, 0] = '{}'.format(end_obs_time.strftime('%I:%M %p'))
+        indDf.iloc[2, 0] = '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+        indDf.iloc[3, 0] = '{}'.format(flow_all_biks)
+        indDf.iloc[4, 0] = '{}'.format(no_biks_all)
+        indDf.iloc[5, 0] = '{}'.format(no_sdwk_all)
+        indDf.iloc[6, 0] = '{}'.format(no_agst_all)
+
+        for p in peakHours.keys():
+            if not peakHours[p] is None:
+
+                lowerBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][0])
+                upperBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][1])
+
+                duration = upperBound - lowerBound
+                duration_in_s = duration.total_seconds()
+                duration_hours = duration_in_s / 3600
+
+                q_all_peaks = session.query(Bike_obs.originId, Bike_obs.destinationId)\
+                                     .filter(Bike_obs.instant >= lowerBound)
+                if peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
+                    q_all_peaks = q_all_peaks.filter(Bike_obs.instant < upperBound)
+                else:
+                    q_all_peaks = q_all_peaks.filter(Bike_obs.instant <= upperBound)
+
+                no_all_peak = q_all_peaks.count()
+                flow_all_peak = round(no_all_peak / duration_hours, 1)
+
+                q_swk = session.query(Site_ODs.id).filter(Site_ODs.odType == 'sidewalk')
+
+                no_sdwk_peak = 0
+                for rec in q_all_peaks.all():
+                    if int(rec[0]) in swk_ids or int(rec[1]) in swk_ids:
+                        no_sdwk_peak += 1
+
+                q_against = q_all_peaks.join(Site_ODs, Bike_obs.originId == Site_ODs.id) \
+                                       .filter(Site_ODs.direction == 'end_point')
+
+                no_agst_peak = q_against.count()
+
+                indDf.iloc[0].loc[p] = '{}'.format(peakHours[p][0].strftime('%I:%M %p'))
+                indDf.iloc[1].loc[p] = '{}'.format(peakHours[p][1].strftime('%I:%M %p'))
+                indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
+                                                        int(duration_in_s / 60) % 60)
+                indDf.iloc[3].loc[p] = '{}'.format(flow_all_peak)
+                indDf.iloc[4].loc[p] = '{} ({}%)'.format(no_all_peak,
+                                    round((no_all_peak / no_biks_all) * 100, 1) if no_biks_all != 0 else 0)
+                indDf.iloc[5].loc[p] = '{} ({}%)'.format(no_sdwk_peak,
+                                    round((no_sdwk_peak / no_sdwk_all) * 100, 1) if no_sdwk_all != 0 else 0)
+                indDf.iloc[6].loc[p] = '{} ({}%)'.format(no_agst_peak,
+                                    round((no_agst_peak / no_agst_all) * 100, 1) if no_agst_all != 0 else 0)
+
+    elif subj == 'Activity':
+        indicators = ['Start time',  # 0
+                      'End time',    # 1
+                      'Duration'    # 2
+                      ]
+                      # 'No. of all activities (act/h)',       # 3
+                      # 'Total time of all activities (min.)',  # 4
+                      # 'Avg. time of all activities (min.)',   # 5
+                      # 'Rate of all activities (act/h)'        # 6
+                      # ]
+        indDf = pd.DataFrame(columns=['Entire period',
+                                      list(peakHours.keys())[0],
+                                      list(peakHours.keys())[1],
+                                      list(peakHours.keys())[2]],
+                             index=indicators)
+
+        entP_peakHours = {indDf.columns[0]:[start_obs_time.time(), end_obs_time.time()]}
+        entP_peakHours.update(peakHours)
+
+        for p in entP_peakHours.keys():
+            if not entP_peakHours[p] is None:
+
+                lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
+                upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
+
+                duration = upperBound - lowerBound
+                duration_in_s = duration.total_seconds()
+                duration_hours = duration_in_s / 3600
+
+                indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
+                indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
+                indDf.iloc[2].loc[p] = \
+                    '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+
+                q = session.query(Activity.activityType, Activity.startTime, Activity.endTime) \
+                           .filter(Activity.startTime >= lowerBound)
+                if p == indDf.columns[0]:
+                    q = q.filter(Activity.startTime <= upperBound)
+                else:
+                    q = q.filter(Activity.startTime < upperBound)
+
+                activity_dict = {}
+                for act in q.all():
+                    act_type = act[0].name
+                    if act_type in activity_dict.keys():
+                        activity_dict[act_type]['count'] += 1
+                        activity_dict[act_type]['actTotalTime'] += (act[2] - act[1]).total_seconds()
+                    else:
+                        activity_dict[act_type] = {'count': 1,
+                                                   'actTotalTime': (act[2] - act[1]).total_seconds()}
+
+                total_acts = 0
+                total_time = 0
+                for val in activity_dict.values():
+                    total_acts += val['count']
+                    total_time += val['actTotalTime']
+
+                all_activity_dict = {'all activities': {'count': total_acts, 'actTotalTime':total_time}}
+                all_activity_dict.update(activity_dict)
+
+                for act in all_activity_dict.keys():
+                    act_count = all_activity_dict[act]['count']
+                    act_totalTime_min = round(all_activity_dict[act]['actTotalTime'] / 60, 1)
+
+                    if act == 'all activities' and p == indDf.columns[0]:
+                        indDf.loc['No. of {}'.format(act), p] = '{}'.format(act_count)
+                    elif act == 'all activities' and p != indDf.columns[0]:
+                        indDf.loc['No. of {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                               round((act_count / int(indDf.loc['No. of {}'
+                                               .format(act)].iloc[0].split(' ')[0]))*100, 1))
+                    elif act != 'all activities' and p == indDf.columns[0]:
+                        indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                                                round((act_count / total_acts)*100, 1))
+                    elif act != 'all activities' and p != indDf.columns[0]:
+                        indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                               round((act_count / int(indDf.loc['No. of people {}'
+                                               .format(act)].iloc[0].split(' ')[0]))*100, 1))
+                    indDf.loc['Total time of {} (min.)'.format(act), p] = \
+                        '{}'.format(act_totalTime_min if act_totalTime_min > 0 else 'NA')
+                    indDf.loc['Avg. time of {} (min.)'.format(act), p] = \
+                      '{}'.format(round(act_totalTime_min / total_acts, 1) if act_totalTime_min > 0 else 'NA')
+                    indDf.loc['Rate of {} (act/h)'.format(act), p] = \
+                        '{}'.format(round(act_count / duration_hours, 1))
+
+        # rate_all_acts = round(no_vehs_all / duration_hours, 1)
+        # no_dely_all = q.filter(Vehicle_obs.delayed == 1).count()
+        # no_stop_all = q.filter(Vehicle_obs.hasStop != 'no').count()
+        #
+        #
+        # indDf.iloc[3, 0] = '{}'.format(flow_all_vehs)
+        # indDf.iloc[4, 0] = '{}'.format(no_vehs_all)
+        # indDf.iloc[5, 0] = '{}'.format(no_dely_all)
+        # indDf.iloc[6, 0] = '{}'.format(no_stop_all)
+        #
+        # for p in peakHours.keys():
+        #     if not peakHours[p] is None:
+        #
+        #         lowerBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][0])
+        #         upperBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][1])
+        #
+        #         duration = upperBound - lowerBound
+        #         duration_in_s = duration.total_seconds()
+        #         duration_hours = duration_in_s / 3600
+        #
+        #         q_all_peaks = q.filter(Vehicle_obs.instant >= lowerBound)
+        #         if peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
+        #             q_all_peaks = q_all_peaks.filter(Vehicle_obs.instant < upperBound)
+        #         else:
+        #             q_all_peaks = q_all_peaks.filter(Vehicle_obs.instant <= upperBound)
+        #
+        #         no_all_peak = q_all_peaks.count()
+        #         flow_all_peak = round(no_all_peak / duration_hours, 1)
+        #         no_dely_peak = q_all_peaks.filter(Vehicle_obs.delayed == 1).count()
+        #         no_stop_peak = q_all_peaks.filter(Vehicle_obs.hasStop != 'no').count()
+        #
+        #         indDf.iloc[0].loc[p] = '{}'.format(peakHours[p][0].strftime('%I:%M %p'))
+        #         indDf.iloc[1].loc[p] = '{}'.format(peakHours[p][1].strftime('%I:%M %p'))
+        #         indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
+        #                                                 int(duration_in_s / 60) % 60)
+        #         indDf.iloc[3].loc[p] = '{}'.format(flow_all_peak)
+        #         indDf.iloc[4].loc[p] = '{} ({}%)'.format(no_all_peak,
+        #                               round((no_all_peak / no_vehs_all) * 100, 1) if no_vehs_all != 0 else 0)
+        #         indDf.iloc[5].loc[p] = '{} ({}%)'.format(no_dely_peak,
+        #                               round((no_dely_peak / no_dely_all) * 100, 1) if no_dely_all != 0 else 0)
+        #         indDf.iloc[6].loc[p] = '{} ({}%)'.format(no_stop_peak,
+        #                               round((no_stop_peak / no_stop_all) * 100, 1) if no_stop_all != 0 else 0)
+
+
+    indDf[indDf.isnull().values] = noDataSign
+
+    indDf.columns = [indDf.columns[0] + ' (% of all)',
+                     indDf.columns[1] + ' (% of item)',
+                     indDf.columns[2] + ' (% of item)',
                          indDf.columns[3] + ' (% of item)']
 
 
-    elif subj in ['Vehicle', 'Bike']:
+
+    if subj in ['BBBBikes']:
         indDf = pd.DataFrame(columns=['Count (%)', 'Flow ({}/h)'.format(subj[:3].lower())])
 
         cls_ = getattr(dbSchema, subj)
@@ -479,7 +806,7 @@ def generateReport(subj, start_obs_time, end_obs_time, peakHours, session):
                 upperBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][1])
 
                 q = session.query(cls_obs.id).filter(cls_obs.instant >= lowerBound)\
-                                             .filter(cls_obs.instant <= upperBound)
+                                             .filter(cls_obs.instant < upperBound)
                 no_users = q.count()
                 percent = round((no_users/no_all_users)*100, 1)
                 duration = (peakHours[p][1].hour + peakHours[p][1].minute / 60) - \
@@ -493,7 +820,7 @@ def generateReport(subj, start_obs_time, end_obs_time, peakHours, session):
                 '{}'.format(flow)]
 
 
-    if subj == 'Bike':
+    if subj == 'BBBikes':
         q = session.query(Bike_obs.originId, Bike_obs.destinationId)
         q_swk = session.query(Site_ODs.id).filter(Site_ODs.odType == 'sidewalk')
         swk_ids = [int(i[0]) for i in q_swk.all()]
@@ -522,7 +849,7 @@ def generateReport(subj, start_obs_time, end_obs_time, peakHours, session):
             '{}'.format(flow)]
 
 
-    if subj == 'Activity':
+    if subj == 'AAActivity':
         indDf = pd.DataFrame(columns=['Count (%)', 'Total time (min.)', 'Avg. time (min.)',
                                              'Rate (act/h)'])
         q = session.query(Activity.activityType, Activity.startTime, Activity.endTime)
@@ -627,6 +954,87 @@ def getLabelSizePie(className, fieldName, startTime, endTime, session):
     sizes = [int(i[0]) for i in q.all()]
 
     return labels, sizes
+
+
+def getPeakHours(session,
+                 morningPeakStart = morningPeakStart,
+                 morningPeakEnd = morningPeakEnd,
+                 eveningPeakStart = eveningPeakStart,
+                 eveningPeakEnd = eveningPeakEnd):
+
+    start_obs_time, end_obs_time = getObsStartEnd(session)
+
+    peakHours = {}
+    if start_obs_time.time() < morningPeakStart:
+        peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
+        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+    elif morningPeakStart < start_obs_time.time() < morningPeakEnd:
+        peakHours['Morning peak'] = [start_obs_time.time(), morningPeakEnd]
+        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+    elif morningPeakEnd < start_obs_time.time() < eveningPeakStart:
+        peakHours['Morning peak'] = None
+        peakHours['Off-peak'] = [start_obs_time.time(), eveningPeakStart]
+        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+
+    elif eveningPeakStart < start_obs_time.time() < eveningPeakEnd:
+        peakHours['Morning peak'] = None
+        peakHours['Off-peak'] = None
+        peakHours['Evening peak'] = [start_obs_time.time(), eveningPeakEnd]
+
+    if eveningPeakStart < end_obs_time.time() < eveningPeakEnd:
+        peakHours['Evening peak'][1] = end_obs_time.time()
+
+    elif morningPeakEnd < end_obs_time.time() < eveningPeakStart:
+        peakHours['Evening peak'] = None
+        peakHours['Off-peak'][1] = end_obs_time.time()
+
+    elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
+        peakHours['Evening peak'] = None
+        peakHours['Off-peak'] = None
+        peakHours['Morning peak'][1] = end_obs_time.time()
+
+    return peakHours
+
+def getObsStartEnd(session):
+    site_instance = session.query(Study_site).first()
+    start_obs_time = site_instance.obsStart
+    end_obs_time = site_instance.obsEnd
+    return start_obs_time, end_obs_time
+
+def getOdNamesDirections(session):
+    q = session.query(Site_ODs.odType, Site_ODs.odName, Site_ODs.id, Site_ODs.direction)
+
+    pointOds = ['adjoining_ZOI', 'on_street_parking_lot', 'bicycle_rack', 'informal_bicycle_parking',
+                'bus_stop', 'subway_station']
+    ods_dict = {}
+    for od in q.all():
+        if od[1] in ods_dict.keys():
+            ods_list = ods_dict[od[1]]
+            if None in ods_list:
+                ods_list[ods_list.index(None)] = od[2]
+        else:
+            if od[3].name == 'end_point':
+                ods_dict[od[1]] = [None, od[2], 'directed', od[0].name]
+            elif od[3].name == 'start_point':
+                ods_dict[od[1]] = [od[2], None, 'directed', od[0].name]
+            elif od[3].name == 'NA' and not(od[0].name in pointOds):
+                ods_dict[od[1]] = [od[2], None, 'undirected', od[0].name]
+            elif od[0].name in pointOds:
+                ods_dict[od[1]] = [od[2], -1, 'NA', od[0].name]
+    return ods_dict
+
+def calculateNoBins(session, minutes=binsMinutes):
+    start_obs_time, end_obs_time = getObsStartEnd(session)
+    duration = end_obs_time - start_obs_time
+    duration_in_s = duration.total_seconds()
+    bins = round(duration_in_s/(60*minutes))
+    if bins == 0:
+        bins = 1
+    return bins
 
 
 def heatmap(data, row_labels, col_labels, ax=None,

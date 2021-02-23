@@ -2,6 +2,7 @@ import sys
 import os
 import pandas as pd
 import datetime
+from configparser import ConfigParser
 from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
@@ -20,7 +21,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
-from framework.indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport
+from framework.indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
+    getOdNamesDirections, calculateNoBins, getPeakHours, getObsStartEnd
 from framework import dbSchema
 
 from sqlalchemy import Enum, Boolean, DateTime
@@ -28,11 +30,9 @@ from sqlalchemy.inspection import inspect
 from sqlalchemy import func
 
 session = None
-morningPeakStart = datetime.time(7, 0)
-morningPeakEnd = datetime.time(9, 0)
-eveningPeakStart = datetime.time(15, 0)
-eveningPeakEnd = datetime.time(19, 0)
-binsMinutes = 10
+
+config_object = ConfigParser()
+cfg = config_object.read("config.ini")
 
 class ObsToolbox(QMainWindow):
     def __init__(self, parent=None):
@@ -41,8 +41,8 @@ class ObsToolbox(QMainWindow):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
 
-        global session, morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd
-        self.dbFilename = '/Users/Abbas/test.sqlite'
+        global session
+        self.dbFilename = '/Users/Abbas/AAAA/stuart-2020_0.sqlite'
 
         layout = QVBoxLayout() #QGridLayout()
 
@@ -710,8 +710,8 @@ class TempHistWindow(QDialog):
         # elif dirSymb == '<--':
         #     direction.append([od2, od1])
 
-        start_obs_time, end_obs_time = getObsStartEnd(session)
-        bins = calculateNoBins(start_obs_time, end_obs_time, binsMinutes)
+        # start_obs_time, end_obs_time = getObsStartEnd(session)
+        bins = calculateNoBins(session)
 
         err = tempDistHist(roadUser, odName, direction, ax, session, bins=bins)
         if err != None:
@@ -799,8 +799,8 @@ class StackHistWindow(QDialog):
         roadUser = self.userCombobx.currentText()
         attr = self.attrCombobx.currentText()
 
-        start_obs_time, end_obs_time = getObsStartEnd(session)
-        bins = calculateNoBins(start_obs_time, end_obs_time, binsMinutes)
+        # start_obs_time, end_obs_time = getObsStartEnd(session)
+        bins = calculateNoBins(session)
 
         err = stackedHist(roadUser, attr, ax, session, bins)
         if err != None:
@@ -864,9 +864,9 @@ class OdMatrixWindow(QDialog):
         # plot data
         roadUser = self.userCombobx.currentText()
 
-        start_obs_time, end_obs_time = getObsStartEnd(session)
+        # start_obs_time, end_obs_time = getObsStartEnd(session)
 
-        err = odMatrix(roadUser, ax, start_obs_time, end_obs_time, session)
+        err = odMatrix(roadUser, ax, session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -913,8 +913,7 @@ class PieChartWindow(QDialog):
         self.timeSpanCombobx = QComboBox()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
-        peakHours = getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
-                                 start_obs_time, end_obs_time)
+        peakHours = getPeakHours(session)
         timeSpans = ['{} - {}'.format(start_obs_time.strftime('%I:%M %p'),
                                       end_obs_time.strftime('%I:%M %p'))]
         for pVal in peakHours.values():
@@ -953,15 +952,11 @@ class PieChartWindow(QDialog):
 
         sTimeText = self.timeSpanCombobx.currentText().split(' - ')[0]
         sTime = datetime.datetime.strptime(sTimeText, '%I:%M %p').time()
-        sDate = getObsStartEnd(session)[0].date()
-        startTime = datetime.datetime.combine(sDate, sTime)
 
         eTimeText = self.timeSpanCombobx.currentText().split(' - ')[1]
         eTime = datetime.datetime.strptime(eTimeText, '%I:%M %p').time()
-        eDate = getObsStartEnd(session)[1].date()
-        endTime = datetime.datetime.combine(eDate, eTime)
 
-        err = pieChart(roadUser, attr, startTime, endTime, ax, session)
+        err = pieChart(roadUser, attr, sTime, eTime, ax, session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -1105,7 +1100,18 @@ class CompHistWindow(QDialog):
         start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
         end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
 
-        periods = calculateNoBins(start, end, binsMinutes)
+        duration = end - start
+        duration_in_s = duration.total_seconds()
+
+        if cfg != []:
+            minutes = int(config_object['BINS']['binsminutes'])
+        else:
+            minutes = 10
+        periods = round(duration_in_s / (60 * minutes))
+        if periods == 0:
+            periods = 1
+
+        # periods = calculateNoBins(session, start, end)
 
         bins = pd.date_range(start, end, periods=periods).to_pydatetime()
         label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
@@ -1205,11 +1211,11 @@ class genReportWindow(QDialog):
 
         subject = self.subjCombobx.currentText()
 
-        start_obs_time, end_obs_time = getObsStartEnd(session)
-        peakHours = getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
-                                 start_obs_time, end_obs_time)
+        # start_obs_time, end_obs_time = getObsStartEnd(session)
+        # peakHours = getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
+        #                          start_obs_time, end_obs_time)
 
-        self.indicatorsDf = generateReport(subject, start_obs_time, end_obs_time, peakHours, session)
+        self.indicatorsDf = generateReport(subject, session)
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
@@ -1222,80 +1228,6 @@ class genReportWindow(QDialog):
             msg.setText('The table is copied to the clipboard.')
             msg.exec_()
 
-
-def getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
-                 start_obs_time, end_obs_time):
-    peakHours = {}
-    if start_obs_time.time() < morningPeakStart:
-        peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
-        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
-        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
-
-    elif morningPeakStart < start_obs_time.time() < morningPeakEnd:
-        peakHours['Morning peak'] = [start_obs_time.time(), morningPeakEnd]
-        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
-        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
-
-    elif morningPeakEnd < start_obs_time.time() < eveningPeakStart:
-        peakHours['Morning peak'] = None
-        peakHours['Off-peak'] = [start_obs_time.time(), eveningPeakStart]
-        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
-
-    elif eveningPeakStart < start_obs_time.time() < eveningPeakEnd:
-        peakHours['Morning peak'] = None
-        peakHours['Off-peak'] = None
-        peakHours['Evening peak'] = [start_obs_time.time(), eveningPeakEnd]
-
-    if eveningPeakStart < end_obs_time.time() < eveningPeakEnd:
-        peakHours['Evening peak'][1] = end_obs_time.time()
-
-    elif morningPeakEnd < end_obs_time.time() < eveningPeakStart:
-        peakHours['Evening peak'] = None
-        peakHours['Off-peak'][1] = end_obs_time.time()
-
-    elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
-        peakHours['Evening peak'] = None
-        peakHours['Off-peak'] = None
-        peakHours['Morning peak'][1] = end_obs_time.time()
-
-    return peakHours
-
-def getObsStartEnd(session):
-    site_instance = session.query(Study_site).first()
-    start_obs_time = site_instance.obsStart
-    end_obs_time = site_instance.obsEnd
-    return start_obs_time, end_obs_time
-
-def getOdNamesDirections(session):
-    q = session.query(Site_ODs.odType, Site_ODs.odName, Site_ODs.id, Site_ODs.direction)
-
-    pointOds = ['adjoining_ZOI', 'on_street_parking_lot', 'bicycle_rack', 'informal_bicycle_parking',
-                'bus_stop', 'subway_station']
-    ods_dict = {}
-    for od in q.all():
-        if od[1] in ods_dict.keys():
-            ods_list = ods_dict[od[1]]
-            if None in ods_list:
-                ods_list[ods_list.index(None)] = od[2]
-        else:
-            if od[3].name == 'end_point':
-                ods_dict[od[1]] = [None, od[2], 'directed', od[0].name]
-            elif od[3].name == 'start_point':
-                ods_dict[od[1]] = [od[2], None, 'directed', od[0].name]
-            elif od[3].name == 'NA' and not(od[0].name in pointOds):
-                ods_dict[od[1]] = [od[2], None, 'undirected', od[0].name]
-            elif od[0].name in pointOds:
-                ods_dict[od[1]] = [od[2], -1, 'NA', od[0].name]
-    return ods_dict
-
-def calculateNoBins(start_obs_time, end_obs_time, minutes):
-
-    duration = end_obs_time - start_obs_time
-    duration_in_s = duration.total_seconds()
-    bins = round(duration_in_s/(60*minutes))
-    if bins == 0:
-        bins = 1
-    return bins
 
 class dfTableModel(QAbstractTableModel):
 

@@ -392,16 +392,18 @@ class VideoWindow(QMainWindow):
             self.mediaPlayer.play()
 
     def incrPlayRate(self):
-        if self.mediaPlayer.playbackRate() < 2:
-            self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() + 0.2)
-            self.statusBar.showMessage('Play back rate = x{}'.\
-                                       format(round(self.mediaPlayer.playbackRate(),1)), 2000)
+        self.mediaPlayer.setPlaybackRate(2)
+        # if self.mediaPlayer.playbackRate() < 2:
+        #     self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() + 0.2)
+        #     self.statusBar.showMessage('Play back rate = x{}'.\
+        #                                format(round(self.mediaPlayer.playbackRate(),1)), 2000)
 
     def decrPlayRate(self):
-        if self.mediaPlayer.playbackRate() > 0.2:
-            self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() - 0.2)
-            self.statusBar.showMessage('Play back rate = x{}'.\
-                                       format(round(self.mediaPlayer.playbackRate(), 1)), 2000)
+        self.mediaPlayer.setPlaybackRate(1)
+        # if self.mediaPlayer.playbackRate() > 0.2:
+        #     self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() - 0.2)
+        #     self.statusBar.showMessage('Play back rate = x{}'.\
+        #                                format(round(self.mediaPlayer.playbackRate(), 1)), 2000)
 
     def mediaStateChanged(self, state):
         if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
