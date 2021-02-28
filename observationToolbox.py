@@ -22,7 +22,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 
 from framework.indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
-    getOdNamesDirections, calculateNoBins, getPeakHours, getObsStartEnd
+    getOdNamesDirections, calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators
 from framework import dbSchema
 
 from sqlalchemy import Enum, Boolean, DateTime
@@ -103,6 +103,9 @@ class ObsToolbox(QMainWindow):
         reportAction = QAction(QIcon('icons/report.png'), '&Generate Report', self)
         reportAction.triggered.connect(self.genReport)
 
+        compIndAction = QAction(QIcon('icons/positive.png'), '&Compare Indicators', self)
+        compIndAction.triggered.connect(self.compIndicators)
+
         self.toolbar = QToolBar()
         self.toolbar.setIconSize(QSize(24, 24))
         self.toolbar.addAction(self.openAction)
@@ -112,6 +115,7 @@ class ObsToolbox(QMainWindow):
         self.toolbar.addAction(pieChartAction)
         self.toolbar.addAction(compHistAction)
         self.toolbar.addAction(reportAction)
+        self.toolbar.addAction(compIndAction)
         self.toolbar.insertSeparator(tempHistAction)
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
 
@@ -604,7 +608,19 @@ class ObsToolbox(QMainWindow):
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
         genRepWin.exec_()
 
+    def compIndicators(self):
+        if session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+        compIndWin = compIndicatorsWindow(self)
+        compIndWin.setGeometry(200, 100, 900, 600)
 
+        # tempHistWin.setModal(True)
+        # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
+        compIndWin.exec_()
 
     # def okBtnClickTHist(self, userCombobx, odNamesCombobx, canv):
     #     self.roadUser = userCombobx.currentText()
@@ -913,7 +929,7 @@ class PieChartWindow(QDialog):
         self.timeSpanCombobx = QComboBox()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
-        peakHours = getPeakHours(session)
+        peakHours = getPeakHours(session, start_obs_time, end_obs_time)
         timeSpans = ['{} - {}'.format(start_obs_time.strftime('%I:%M %p'),
                                       end_obs_time.strftime('%I:%M %p'))]
         for pVal in peakHours.values():
@@ -1187,7 +1203,7 @@ class genReportWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Subject:'), 0, 0, Qt.AlignRight)
         self.subjCombobx = QComboBox()
-        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity', 'Access'])
+        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity'])
         self.subjCombobx.currentTextChanged.connect(self.genReport)
         gridLayout.addWidget(self.subjCombobx, 0, 1, Qt.AlignLeft)
 
@@ -1211,11 +1227,8 @@ class genReportWindow(QDialog):
 
         subject = self.subjCombobx.currentText()
 
-        # start_obs_time, end_obs_time = getObsStartEnd(session)
-        # peakHours = getPeakHours(morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd,
-        #                          start_obs_time, end_obs_time)
-
-        self.indicatorsDf = generateReport(subject, session)
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+        self.indicatorsDf = generateReport(subject, start_obs_time, end_obs_time, session)
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
@@ -1227,6 +1240,110 @@ class genReportWindow(QDialog):
             msg = QMessageBox()
             msg.setText('The table is copied to the clipboard.')
             msg.exec_()
+
+
+class compIndicatorsWindow(QDialog):
+    def __init__(self, parent=None):
+        super(compIndicatorsWindow, self).__init__(parent)
+
+        self.setWindowTitle('Comparison of indicators')
+        self.setWindowIcon(QIcon('icons/positive.png'))
+        self.table = QTableView()
+        # self.table.horizontalHeader().setStretchLastSection(True)
+        # self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # self.table.verticalHeader().hide()
+        self.indicatorsDf = None
+        self.session1 = None
+        self.session2 = None
+
+        winLayout = QVBoxLayout()
+        dbLayout1 = QHBoxLayout()
+        dbLayout2 = QHBoxLayout()
+        gridLayout = QGridLayout()
+
+        dbLayout1.addWidget(QLabel('Database file (Before):'))
+        self.dbFile1Ledit = QLineEdit()
+        dbLayout1.addWidget(self.dbFile1Ledit)
+
+        self.openDbFileBtn1 = QPushButton()
+        self.openDbFileBtn1.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn1.setToolTip('Open database file')
+        self.openDbFileBtn1.clicked.connect(self.opendbFile1)
+        dbLayout1.addWidget(self.openDbFileBtn1)
+
+
+        dbLayout2.addWidget(QLabel('Database file (After):'))
+        self.dbFile2Ledit = QLineEdit()
+        dbLayout2.addWidget(self.dbFile2Ledit)
+
+        self.openDbFileBtn2 = QPushButton()
+        self.openDbFileBtn2.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn2.setToolTip('Open database file')
+        self.openDbFileBtn2.clicked.connect(self.opendbFile2)
+        dbLayout2.addWidget(self.openDbFileBtn2)
+
+        gridLayout.addWidget(QLabel('Subject:'), 0, 0, Qt.AlignRight)
+        self.subjCombobx = QComboBox()
+        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity'])
+        self.subjCombobx.currentTextChanged.connect(self.compIndicators)
+        gridLayout.addWidget(self.subjCombobx, 0, 1, Qt.AlignLeft)
+
+        self.genRepBtn = QPushButton('Compare Indicators')
+        self.genRepBtn.clicked.connect(self.compIndicators)
+        gridLayout.addWidget(self.genRepBtn, 0, 2)
+
+        self.saveBtn = QPushButton()
+        self.saveBtn.setIcon(QIcon('icons/save.png'))
+        self.saveBtn.setToolTip('Save results to clipboard')
+        self.saveBtn.setFixedWidth(75)
+        self.saveBtn.clicked.connect(self.saveReport)
+        gridLayout.addWidget(self.saveBtn, 0, 3)
+
+        # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(dbLayout1)
+        winLayout.addLayout(dbLayout2)
+        winLayout.addLayout(gridLayout)
+        winLayout.addWidget(self.table)
+
+        self.setLayout(winLayout)
+
+    def compIndicators(self):
+
+        subject = self.subjCombobx.currentText()
+
+        self.indicatorsDf = compareIndicators(subject, self.session1, self.session2)
+
+        model = dfTableModel(self.indicatorsDf)
+        self.table.setModel(model)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+    def saveReport(self):
+        if not self.indicatorsDf is None:
+            self.indicatorsDf.to_clipboard()
+            msg = QMessageBox()
+            msg.setText('The table is copied to the clipboard.')
+            msg.exec_()
+
+    def opendbFile1(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile1Ledit.setText(dbFilename)
+
+            self.session1 = createDatabase(dbFilename)
+            if self.session1 is None:
+                self.session1 = connectDatabase(dbFilename)
+
+    def opendbFile2(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile2Ledit.setText(dbFilename)
+
+            self.session2 = createDatabase(dbFilename)
+            if self.session2 is None:
+                self.session2 = connectDatabase(dbFilename)
 
 
 class dfTableModel(QAbstractTableModel):
@@ -1247,6 +1364,15 @@ class dfTableModel(QAbstractTableModel):
                 return str(self._data.iloc[index.row(), index.column()])
             if role == Qt.TextAlignmentRole:
                 return Qt.AlignCenter
+            if role == Qt.BackgroundRole:
+                if str(self._data.iloc[index.row(), index.column()])[0] == '-':
+                    return QColor(255, 204, 204)
+                elif str(self._data.iloc[index.row(), index.column()])[0] == '+':
+                    return QColor(204, 255, 204)
+                elif str(self._data.iloc[index.row(), index.column()])[0:3] == '0 [':
+                    return QColor(255, 255, 204)
+                elif str(self._data.iloc[index.row(), index.column()])[0] == 'x':
+                    return QColor(244, 244, 244)
         return None
 
     def headerData(self, section, orientation, role):
