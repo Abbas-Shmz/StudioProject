@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
                              QAbstractItemView, QTableView)
-from PyQt5.QtGui import QColor, QIcon
+from PyQt5.QtGui import QColor, QIcon, QFont
 from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel
 
 from framework.dbSchema import createDatabase, connectDatabase, \
@@ -100,10 +100,10 @@ class ObsToolbox(QMainWindow):
         compHistAction = QAction(QIcon('icons/comparison.png'), '&Comparative Histogram', self)
         compHistAction.triggered.connect(self.compHist)
 
-        reportAction = QAction(QIcon('icons/report.png'), '&Generate Report', self)
+        reportAction = QAction(QIcon('icons/report.png'), '&Indicators Report', self)
         reportAction.triggered.connect(self.genReport)
 
-        compIndAction = QAction(QIcon('icons/positive.png'), '&Compare Indicators', self)
+        compIndAction = QAction(QIcon('icons/positive.png'), '&Before/After Comparison', self)
         compIndAction.triggered.connect(self.compIndicators)
 
         self.toolbar = QToolBar()
@@ -1275,6 +1275,7 @@ class compIndicatorsWindow(QDialog):
 
         dbLayout2.addWidget(QLabel('Database file (After):'))
         self.dbFile2Ledit = QLineEdit()
+        self.dbFile2Ledit.setText(self.parent().dbFilename)
         dbLayout2.addWidget(self.dbFile2Ledit)
 
         self.openDbFileBtn2 = QPushButton()
@@ -1309,6 +1310,23 @@ class compIndicatorsWindow(QDialog):
         self.setLayout(winLayout)
 
     def compIndicators(self):
+        dbFilename1 = self.dbFile1Ledit.text()
+        dbFilename2 = self.dbFile2Ledit.text()
+
+        if dbFilename1 == '' or dbFilename2 == '':
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined!')
+            msg.exec_()
+            return
+
+        self.session1 = createDatabase(dbFilename1)
+        if self.session1 is None:
+            self.session1 = connectDatabase(dbFilename1)
+
+        self.session2 = createDatabase(dbFilename2)
+        if self.session2 is None:
+            self.session2 = connectDatabase(dbFilename2)
 
         subject = self.subjCombobx.currentText()
 
@@ -1331,19 +1349,11 @@ class compIndicatorsWindow(QDialog):
         if dbFilename != '':
             self.dbFile1Ledit.setText(dbFilename)
 
-            self.session1 = createDatabase(dbFilename)
-            if self.session1 is None:
-                self.session1 = connectDatabase(dbFilename)
-
     def opendbFile2(self):
         dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
                                                     QDir.homePath(), "Sqlite files (*.sqlite)")
         if dbFilename != '':
             self.dbFile2Ledit.setText(dbFilename)
-
-            self.session2 = createDatabase(dbFilename)
-            if self.session2 is None:
-                self.session2 = connectDatabase(dbFilename)
 
 
 class dfTableModel(QAbstractTableModel):
@@ -1369,10 +1379,16 @@ class dfTableModel(QAbstractTableModel):
                     return QColor(255, 204, 204)
                 elif str(self._data.iloc[index.row(), index.column()])[0] == '+':
                     return QColor(204, 255, 204)
-                elif str(self._data.iloc[index.row(), index.column()])[0:3] == '0 [':
+                elif str(self._data.iloc[index.row(), index.column()])[0:3] == '0 [' or \
+                     str(self._data.iloc[index.row(), index.column()])[0:5] == '0.0 [':
                     return QColor(255, 255, 204)
                 elif str(self._data.iloc[index.row(), index.column()])[0] == 'x':
                     return QColor(244, 244, 244)
+            if role == Qt.FontRole:
+                if index.column() == 0:
+                    font = QFont()
+                    font.setBold(True)
+                    return font
         return None
 
     def headerData(self, section, orientation, role):

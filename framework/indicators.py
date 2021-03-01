@@ -55,8 +55,8 @@ def tempDistHist(user, od_name, direction, ax, session, bins=20, alpha=1, color=
         if time_list == []:
             return 'No {} is observed in {} for the selected direction(s)!'.format(user, od_name)
 
-        ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth, alpha=alpha, label=label,
-                histtype=histtype)
+        (n, edges, patches) = ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth,
+                                      alpha=alpha, label=label, histtype=histtype)
     else:
         time_list1 = []
         for ods in direction:
@@ -86,8 +86,18 @@ def tempDistHist(user, od_name, direction, ax, session, bins=20, alpha=1, color=
 
         # fig = plt.figure()#figsize=(5, 5), dpi=200, tight_layout=True)
         # ax = fig.add_subplot(111) #plt.subplots(1, 1)
-        ax.hist([time_list1, time_list2], bins=bins, color=color, ec=ec, rwidth=rwidth, alpha=alpha,
-                label=label, histtype=histtype)
+        (n, edges, patches) = ax.hist([time_list1, time_list2], bins=bins, color=color, ec=ec,
+                                      rwidth=rwidth, alpha=alpha, label=label, histtype=histtype)
+
+    if not isinstance(n[0], np.ndarray):
+        n = [n]
+
+    c = ['skyblue', 'red']
+    i = 0
+    for lst in n:
+        avg = np.mean(lst)
+        ax.axhline(y=avg, color=c[i], linestyle='-', lw=0.75)
+        i += 1
 
     locator = mdates.AutoDateLocator()
     ax.xaxis.set_major_locator(locator)
@@ -686,11 +696,11 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
             act_type = rec[0].name
             activity_dict[act_type] = {'count': 0, 'actTotalTime': 0}
 
-        indDf = pd.DataFrame(columns=['Entire period',
-                                      list(peakHours.keys())[0],
-                                      list(peakHours.keys())[1],
-                                      list(peakHours.keys())[2]],
-                             index=indicators)
+        # indDf = pd.DataFrame(columns=['Entire period',
+        #                               list(peakHours.keys())[0],
+        #                               list(peakHours.keys())[1],
+        #                               list(peakHours.keys())[2]],
+        #                      index=indicators)
 
         entP_peakHours = {indDf.columns[0]:[start_obs_time.time(), end_obs_time.time()]}
         entP_peakHours.update(peakHours)
@@ -766,53 +776,70 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
                     indDf.loc['Rate of {} (act/h)'.format(act), p] = \
                         '{}'.format(round(act_count / duration_hours, 1))
 
-                indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
+                if p == 'Entire period':
+                    indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
                                                             round((no_female_act / total_acts)*100, 1))
-                indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
+                    indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
                                                             round((no_male_act / total_acts)*100, 1))
-                indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
+                    indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
                                                             round((no_chld_act / total_acts) * 100, 1))
-                indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_chld_act,
-                                                            round((no_chld_act / total_acts) * 100, 1))
+                    indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
+                                                            round((no_eldry_act / total_acts) * 100, 1))
+                else:
+                    noAll = int(indDf.loc['No. of females doing activity'].iloc[0].split(' ')[0])
+                    indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
+                             round((no_female_act / noAll) * 100, 1) if noAll != 0 else 0)
 
-    elif subj == 'Access':
-        indicators = ['Start time',  # 0
-                      'End time',    # 1
-                      'Duration',    # 2
-                      'No. of arriving vehicles',  # 3
-                      'No. of departing vehicles'  # 4
-                      ]
+                    noAll = int(indDf.loc['No. of males doing activity'].iloc[0].split(' ')[0])
+                    indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
+                             round((no_male_act / noAll) * 100,1) if noAll != 0 else 0)
 
-        entP_peakHours = {'Entire period': [start_obs_time.time(), end_obs_time.time()]}
-        entP_peakHours.update(peakHours)
+                    noAll = int(indDf.loc['No. of children doing activity'].iloc[0].split(' ')[0])
+                    indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
+                             round((no_chld_act / noAll) * 100,1) if noAll != 0 else 0)
 
-        indDf = pd.DataFrame(columns= list(entP_peakHours.keys()), index=indicators)
+                    noAll = int(indDf.loc['No. of elderly people doing activity'].iloc[0].split(' ')[0])
+                    indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
+                             round((no_eldry_act / noAll) * 100,1) if noAll != 0 else 0)
 
-        for p in entP_peakHours.keys():
-
-            if not entP_peakHours[p] is None:
-
-                lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
-                upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
-
-                duration = upperBound - lowerBound
-                duration_in_s = duration.total_seconds()
-                duration_hours = duration_in_s / 3600
-
-                q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id). \
-                    filter(Site_ODs.odType == 'on_street_parking_lot')
-                no_arriv_vehs = q.count()
-                flow = round(no_arriv_vehs / duration_hours, 1)
-
-                q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
-                    filter(Site_ODs.odType == 'on_street_parking_lot')
-                no_depart_vehs = q.count()
-                flow = round(no_depart_vehs / duration_hours, 1)
-
-                indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-                indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-                indDf.iloc[2].loc[p] = \
-                    '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+    # elif subj == 'Access':
+    #     indicators = ['Start time',  # 0
+    #                   'End time',    # 1
+    #                   'Duration',    # 2
+    #                   'No. of arriving vehicles',  # 3
+    #                   'No. of departing vehicles'  # 4
+    #                   ]
+    #
+    #     entP_peakHours = {'Entire period': [start_obs_time.time(), end_obs_time.time()]}
+    #     entP_peakHours.update(peakHours)
+    #
+    #     indDf = pd.DataFrame(columns= list(entP_peakHours.keys()), index=indicators)
+    #
+    #     for p in entP_peakHours.keys():
+    #
+    #         if not entP_peakHours[p] is None:
+    #
+    #             lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
+    #             upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
+    #
+    #             duration = upperBound - lowerBound
+    #             duration_in_s = duration.total_seconds()
+    #             duration_hours = duration_in_s / 3600
+    #
+    #             q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id). \
+    #                 filter(Site_ODs.odType == 'on_street_parking_lot')
+    #             no_arriv_vehs = q.count()
+    #             flow = round(no_arriv_vehs / duration_hours, 1)
+    #
+    #             q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
+    #                 filter(Site_ODs.odType == 'on_street_parking_lot')
+    #             no_depart_vehs = q.count()
+    #             flow = round(no_depart_vehs / duration_hours, 1)
+    #
+    #             indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
+    #             indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
+    #             indDf.iloc[2].loc[p] = \
+    #                 '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
 
 
     indDf[indDf.isnull().values] = noDataSign
@@ -992,9 +1019,27 @@ def compareIndicators(subj, session1, session2):
 
     indDf = indDf1.iloc[0:3, :].copy()
 
+    idx1 = indDf1.index[3:]
+    idx2 = indDf2.index[3:]
+
+    idx2_idx1 = list(set(idx2) - set(idx1))
+    idx1_idx2 = list(set(idx1) - set(idx2))
+
+    if len(idx2_idx1) > 0:
+        for idx in idx2_idx1:
+            new_idx = indDf2.loc[idx].copy()
+            new_idx[(new_idx != noDataSign) & (new_idx != 'NA')] = 0
+            indDf1 = indDf1.append(new_idx)
+
+    if len(idx1_idx2) > 0:
+        for idx in idx1_idx2:
+            new_idx = indDf1.loc[idx]
+            new_idx[(new_idx != noDataSign) & (new_idx != 'NA')] = 0
+            indDf2 = indDf2.append(new_idx)
+
     for row in indDf1.index[3:]:
         for col in indDf1.columns:
-            if indDf1.loc[row, col] == noDataSign:
+            if indDf1.loc[row, col] == noDataSign or indDf1.loc[row, col] == 'NA':
                 continue
             strVal1 = str(indDf1.loc[row, col]).split(' ')[0]
             strVal2 = str(indDf2.loc[row, col]).split(' ')[0]
