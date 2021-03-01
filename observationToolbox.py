@@ -622,39 +622,6 @@ class ObsToolbox(QMainWindow):
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
         compIndWin.exec_()
 
-    # def okBtnClickTHist(self, userCombobx, odNamesCombobx, canv):
-    #     self.roadUser = userCombobx.currentText()
-    #     self.odName = odNamesCombobx.currentText()
-    #
-    #     canv.figure.axes.clear()
-    #
-    #     if self.roadUser != None and self.odName != None:
-    #         fig, err = tempDistHist(user=self.roadUser, od_name=self.odName, session=session)
-    #         if err != None:
-    #             msg = QMessageBox()
-    #             msg.setIcon(QMessageBox.Information)
-    #             msg.setText(err)
-    #             msg.exec_()
-    #         else:
-    #             canv.figure = fig
-    #             canv.draw()
-    #             print(canv.get_width_height())
-    #
-    # def okBtnClickSHist(self, userCombobx, attrCombobx):
-    #     self.roadUser = userCombobx.currentText()
-    #     self.userAttr = attrCombobx.currentText()
-    #     self.sender().parent().close()
-    #
-    # def okBtnClickODmatrix(self, userCombobx):
-    #     self.roadUser = userCombobx.currentText()
-    #     self.sender().parent().close()
-    #
-    # def cancelBtnClick(self):
-    #     self.roadUser = None
-    #     self.userAttr = None
-    #     self.odName = None
-    #     self.sender().parent().close()
-
 
 class TempHistWindow(QDialog):
     def __init__(self, parent=None):

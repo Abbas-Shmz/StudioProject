@@ -696,12 +696,6 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
             act_type = rec[0].name
             activity_dict[act_type] = {'count': 0, 'actTotalTime': 0}
 
-        # indDf = pd.DataFrame(columns=['Entire period',
-        #                               list(peakHours.keys())[0],
-        #                               list(peakHours.keys())[1],
-        #                               list(peakHours.keys())[2]],
-        #                      index=indicators)
-
         entP_peakHours = {indDf.columns[0]:[start_obs_time.time(), end_obs_time.time()]}
         entP_peakHours.update(peakHours)
 
@@ -802,45 +796,6 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
                     indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
                              round((no_eldry_act / noAll) * 100,1) if noAll != 0 else 0)
 
-    # elif subj == 'Access':
-    #     indicators = ['Start time',  # 0
-    #                   'End time',    # 1
-    #                   'Duration',    # 2
-    #                   'No. of arriving vehicles',  # 3
-    #                   'No. of departing vehicles'  # 4
-    #                   ]
-    #
-    #     entP_peakHours = {'Entire period': [start_obs_time.time(), end_obs_time.time()]}
-    #     entP_peakHours.update(peakHours)
-    #
-    #     indDf = pd.DataFrame(columns= list(entP_peakHours.keys()), index=indicators)
-    #
-    #     for p in entP_peakHours.keys():
-    #
-    #         if not entP_peakHours[p] is None:
-    #
-    #             lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
-    #             upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
-    #
-    #             duration = upperBound - lowerBound
-    #             duration_in_s = duration.total_seconds()
-    #             duration_hours = duration_in_s / 3600
-    #
-    #             q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id). \
-    #                 filter(Site_ODs.odType == 'on_street_parking_lot')
-    #             no_arriv_vehs = q.count()
-    #             flow = round(no_arriv_vehs / duration_hours, 1)
-    #
-    #             q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
-    #                 filter(Site_ODs.odType == 'on_street_parking_lot')
-    #             no_depart_vehs = q.count()
-    #             flow = round(no_depart_vehs / duration_hours, 1)
-    #
-    #             indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-    #             indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-    #             indDf.iloc[2].loc[p] = \
-    #                 '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
-
 
     indDf[indDf.isnull().values] = noDataSign
 
@@ -859,141 +814,6 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
 
 
     return indDf
-
-    if subj in ['BBBBikes']:
-        indDf = pd.DataFrame(columns=['Count (%)', 'Flow ({}/h)'.format(subj[:3].lower())])
-
-        cls_ = getattr(dbSchema, subj)
-        cls_obs = getattr(dbSchema, subj+'_obs')
-        cls_obs_fld = getattr(cls_obs, subj.lower()+'Id')
-        q = session.query(cls_obs_fld).distinct()
-        no_all_users = q.count()
-
-        if no_all_users == 0:
-            return None
-
-        flow = round(no_all_users/duration_hours, 1)
-
-        duration_text = '({}-{})'.format(start_obs_time.strftime('%I:%M %p'),
-                                         end_obs_time.strftime('%I:%M %p'))
-        indDf.loc['All {}s {}'.format(subj.lower(), duration_text)] = [
-            '{} ({}%)'.format(no_all_users, 100),
-            '{}'.format(flow)]
-
-
-        for p in peakHours.keys():
-            if peakHours[p] == None:
-                no_users = noDataSign
-                percent = ''
-                flow = noDataSign
-                duration_text = ''
-            else:
-
-                lowerBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][0])
-                upperBound = datetime.datetime.combine(start_obs_time.date(), peakHours[p][1])
-
-                q = session.query(cls_obs.id).filter(cls_obs.instant >= lowerBound)\
-                                             .filter(cls_obs.instant < upperBound)
-                no_users = q.count()
-                percent = round((no_users/no_all_users)*100, 1)
-                duration = (peakHours[p][1].hour + peakHours[p][1].minute / 60) - \
-                           (peakHours[p][0].hour + peakHours[p][0].minute / 60)
-                flow = round(no_users / duration, 1)
-                duration_text = '({}-{})'.format(peakHours[p][0].strftime('%I:%M %p'),
-                                                 peakHours[p][1].strftime('%I:%M %p'))
-
-            indDf.loc['{} {}'.format(p, duration_text)] = [
-                '{} ({}%)'.format(no_users, '{}'.format(percent)),
-                '{}'.format(flow)]
-
-
-    if subj == 'BBBikes':
-        q = session.query(Bike_obs.originId, Bike_obs.destinationId)
-        q_swk = session.query(Site_ODs.id).filter(Site_ODs.odType == 'sidewalk')
-        swk_ids = [int(i[0]) for i in q_swk.all()]
-
-        biks_on_swk = 0
-        for rec in q.all():
-            if int(rec[0]) in swk_ids or int(rec[1]) in swk_ids:
-                biks_on_swk += 1
-
-        flow = round(biks_on_swk / duration_hours, 1)
-
-        indDf.loc['No. of cyclists riding on sidewalk'] = [
-            '{} ({}%)'.format(biks_on_swk, '{}'.format(round(biks_on_swk / q.count() * 100, 1))),
-            '{}'.format(flow)]
-
-
-        q_against = session.query(Bike_obs.originId).join(Site_ODs, Bike_obs.originId == Site_ODs.id).\
-                    filter(Site_ODs.direction == 'end_point')
-
-        biks_against = q_against.count()
-
-        flow = round(biks_against / duration_hours, 1)
-
-        indDf.loc['No. of cyclists riding against traffic'] = [
-            '{} ({}%)'.format(biks_against, '{}'.format(round(biks_against / q.count() * 100, 1))),
-            '{}'.format(flow)]
-
-
-    if subj == 'AAActivity':
-        indDf = pd.DataFrame(columns=['Count (%)', 'Total time (min.)', 'Avg. time (min.)',
-                                             'Rate (act/h)'])
-        q = session.query(Activity.activityType, Activity.startTime, Activity.endTime)
-
-        activity_dict = {}
-        for act in q.all():
-            act_type = act[0].name
-            if act_type in activity_dict.keys():
-                activity_dict[act_type]['count'] += 1
-                activity_dict[act_type]['actTotalTime'] += (act[2] - act[1]).total_seconds()
-            else:
-                activity_dict[act_type] = {'count':1, 'actTotalTime':(act[2] - act[1]).total_seconds()}
-
-        total_acts = 0
-        total_time = 0
-        for val in activity_dict.values():
-            total_acts += val['count']
-            total_time += val['actTotalTime']
-
-        indDf.loc['No. of all activities'] = [
-            '{} ({}%)'.format(total_acts, 100),
-            '{}'.format(round(total_time/60, 1)) if total_time > 0 else 'NA',
-            '{}'.format(round(total_time/(60*total_acts), 1)) if total_time > 0 else 'NA',
-            '{}'.format(round(total_acts/duration_hours, 1))]
-
-
-        for act in activity_dict.keys():
-            act_count = activity_dict[act]['count']
-            act_totalTime_min = activity_dict[act]['actTotalTime']/60
-
-            indDf.loc['No. of people {}'.format(act)] = [
-                '{} ({}%)'.format(act_count, round((act_count/total_acts)*100, 1)),
-                '{}'.format(round(act_totalTime_min, 1)) if act_totalTime_min > 0 else 'NA',
-                '{}'.format(round(act_totalTime_min/act_count, 1)) if act_totalTime_min > 0 else 'NA',
-                '{}'.format(round(act_count/duration_hours,1))]
-
-
-    if subj == 'AAAAccess':
-        indDf = pd.DataFrame(columns=['Count (%)', 'Flow'])
-
-        q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id).\
-            filter(Site_ODs.odType == 'on_street_parking_lot')
-        no_arriv_vehs = q.count()
-        flow = round(no_arriv_vehs/duration_hours, 1)
-
-        indDf.loc['No. of arriving vehicles'] = [
-            '{} ({}%)'.format(no_arriv_vehs, 100),
-            '{} ({}/h)'.format(flow, 'veh')]
-
-        q = session.query(Vehicle_obs.id).join(Site_ODs, Vehicle_obs.originId == Site_ODs.id). \
-            filter(Site_ODs.odType == 'on_street_parking_lot')
-        no_depart_vehs = q.count()
-        flow = round(no_depart_vehs / duration_hours, 1)
-
-        indDf.loc['No. of departing vehicles'] = [
-            '{} ({}%)'.format(no_depart_vehs, 100),
-            '{} ({}/h)'.format(flow, 'veh')]
 
 
 def compareIndicators(subj, session1, session2):
