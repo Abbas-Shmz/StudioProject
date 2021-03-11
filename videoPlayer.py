@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QGraphicsLineItem, QGraphicsTextItem, QGraphicsEllipseItem, QGridLayout, QComboBox,
         QOpenGLWidget, QMessageBox)
 from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
-                             QLineEdit)
+                             QLineEdit, QGraphicsItem)
 from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor
 from PyQt5.QtOpenGL import QGLWidget
 
@@ -72,7 +72,7 @@ class GraphicView(QGraphicsView):
             labelWinGrid.addWidget(QLabel('OD Name:'), 0, 0)
             odName_cmbbx = QComboBox()
             labelWinGrid.addWidget(odName_cmbbx, 0, 1)
-            odName_cmbbx.addItems([name[0] for name in session.query(Site_ODs.odName).all()])
+            odName_cmbbx.addItems([name[0] for name in session.query(Site_ODs.odName).distinct()])
             odName_cmbbx.setCurrentIndex(-1)
 
             labelWinGrid.addWidget(QLabel('OD Id:'), 1,0)

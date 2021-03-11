@@ -503,7 +503,7 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
 
     elif subj == 'Vehicle':
         indicators = ['No. of all vehicles',       # 0
-                      'No. of passing vehicles',   # 1
+                      'No. of passing through vehicles',   # 1
                       'No. of arriving vehicles',  # 2
                       'No. of departing vehicles', # 3
                       'Flow of passing vehicles (veh/h)',   # 4

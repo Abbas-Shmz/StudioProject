@@ -436,6 +436,7 @@ class ObsToolbox(QMainWindow):
                     input_wdgt_val = input_wdgt.text()
             elif isinstance(input_wdgt, QComboBox):
                 if input_wdgt.currentText() == '':
+                    i = i + 1
                     continue
                 if input_wdgt.currentText() == 'True':
                     input_wdgt_val = True
