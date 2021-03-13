@@ -1,17 +1,17 @@
 
 # ===========================================================================================
 
-from PyQt5.QtCore import (QDir, Qt, QUrl, QLineF, QPoint, QSize, QFile, QIODevice, QXmlStreamReader,
+from PyQt5.QtCore import (QDir, Qt, QUrl, QPointF, QLineF, QSize, QFile, QIODevice, QXmlStreamReader,
                           QXmlStreamWriter)
 from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
         QGraphicsLineItem, QGraphicsTextItem, QGraphicsEllipseItem, QGridLayout, QComboBox,
-        QOpenGLWidget, QMessageBox)
+        QOpenGLWidget, QMessageBox, QActionGroup)
 from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
                              QLineEdit, QGraphicsItem)
-from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor
+from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor, QPolygonF
 from PyQt5.QtOpenGL import QGLWidget
 
 import xml.etree.ElementTree as ET
@@ -31,19 +31,37 @@ from observationToolbox import ObsToolbox
 class GraphicView(QGraphicsView):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.graphicItem = None
+        self.gLineItem = None #QGraphicsLineItem()
+        self.gPolyItem = None
         self.labelShape = None
+        self.currentPoly = None
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # self.setViewport(QOpenGLWidget())
         # self.setMouseTracking(True)
 
     def mousePressEvent(self, event):
-        if event.buttons() == Qt.LeftButton and self.parent().parent().drawLineAction.isChecked():
+        if event.buttons() == Qt.LeftButton and self.parent().parent().drawLineAction.isChecked() \
+                 and self.gLineItem == None:
+
+            self.setMouseTracking(True)
             p1 = self.mapToScene(event.x(), event.y())
-            self.graphicItem = self.scene().addLine(QLineF(p1, p1))
-            self.graphicItem.setPen(QPen(Qt.red))
-            # self.graphicItem.setOpacity(0.25)
+            self.gLineItem = self.scene().addLine(QLineF(p1, p1))
+            self.gLineItem.setPen(QPen(Qt.red))
+            # self.gLineItem.setOpacity(0.25)
+
+        elif event.buttons() == Qt.LeftButton and self.parent().parent().drawZoneAction.isChecked():
+            self.setMouseTracking(True)
+            p_clicked = self.mapToScene(event.x(), event.y())
+            if self.gPolyItem == None:
+                self.currentPoly = QPolygonF([p_clicked])
+                self.gPolyItem = self.scene().addPolygon(self.currentPoly)
+            else:
+                self.currentPoly.append(p_clicked)
+                self.gPolyItem.setPolygon(self.currentPoly)
+            # self.gPolyItem.setPen(QPen(Qt.red))
+            # self.gPolyItem.setBrush(QBrush(Qt.blue))
+
         elif event.buttons() == Qt.LeftButton and self.parent().parent().labelingAction.isChecked():
             dbfilename = self.scene().parent().obsTb.dbFilename
             if dbfilename != None:
@@ -102,7 +120,7 @@ class GraphicView(QGraphicsView):
             labelWin.setLayout(labelWinLayout)
             labelWin.exec_()
 
-        elif event.buttons() == Qt.LeftButton:
+        elif event.buttons() == Qt.RightButton:
             self.parent().parent().play()
 
     def labelAdd(self, p, id_cmbbx, labelShape, session):
@@ -163,17 +181,19 @@ class GraphicView(QGraphicsView):
             odDirect_lineedit.setText(str(dir.name))
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton and self.parent().parent().drawLineAction.isChecked():
-            cursor = QCursor(Qt.CrossCursor)
-            self.setCursor(cursor)
-
+        if self.gLineItem != None and self.parent().parent().drawLineAction.isChecked():
             p2 = self.mapToScene(event.x(), event.y())
-            self.graphicItem.setLine(QLineF(self.graphicItem.line().p1(), p2))
+            self.gLineItem.setLine(QLineF(self.gLineItem.line().p1(), p2))
 
-    def mouseReleaseEvent(self, event):
-        # if event.buttons() == Qt.LeftButton:# and self.parent().parent().drawLineAction.isChecked():
-        self.parent().parent().drawLineAction.setChecked(False)
-        self.unsetCursor()
+        elif self.gPolyItem != None and self.parent().parent().drawZoneAction.isChecked():
+            p_floating = self.mapToScene(event.x(), event.y())
+            self.gPolyItem.setPolygon(QPolygonF(list(self.currentPoly) + [p_floating]))
+
+    # def mouseReleaseEvent(self, event):
+    #     # if event.buttons() == Qt.LeftButton:# and self.parent().parent().drawLineAction.isChecked():
+    #     self.parent().parent().drawLineAction.setChecked(False)
+    #     self.unsetCursor()
+
 
     def resizeEvent(self, event):
         self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
@@ -182,8 +202,19 @@ class GraphicView(QGraphicsView):
         self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
 
     def mouseDoubleClickEvent(self, event):
-        self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
-    #     print(self.items()[-1].boundingRect())
+        if self.parent().parent().drawLineAction.isChecked() and self.gLineItem != None:
+            self.setMouseTracking(False)
+            self.parent().parent().drawLineAction.setChecked(False)
+            self.unsetCursor()
+            self.gLineItem = None
+            # print([i.line() for i in self.scene().items() if not isinstance(i, QGraphicsVideoItem)])
+        elif self.parent().parent().drawZoneAction.isChecked() and self.gPolyItem != None:
+            self.setMouseTracking(False)
+            self.parent().parent().drawZoneAction.setChecked(False)
+            self.unsetCursor()
+            self.gPolyItem = None
+        else:
+            self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
 
     def wheelEvent(self, event):
         factor = 1.1
@@ -226,6 +257,7 @@ class VideoWindow(QMainWindow):
         self.videoItem = QGraphicsVideoItem()
         self.videoItem.setAspectRatioMode(Qt.KeepAspectRatio)
         self.gScene.addItem(self.videoItem)
+        self.videoItem.mouseMoveEvent = self.gView.mouseMoveEvent
 
         self.mediaPlayer = QMediaPlayer(self, QMediaPlayer.VideoSurface)
         self.mediaPlayer.setVideoOutput(self.videoItem)
@@ -278,12 +310,22 @@ class VideoWindow(QMainWindow):
         self.drawLineAction = QAction(QIcon('icons/pencil.png'), 'Draw line', self)
         self.drawLineAction.setToolTip('Draw line over the video')
         self.drawLineAction.setCheckable(True)
-        self.drawLineAction.triggered.connect(self.drawLabelClick)
+        self.drawLineAction.triggered.connect(self.drawingClick)
 
         self.labelingAction = QAction(QIcon('icons/tags.png'), 'Labeling', self)
         self.labelingAction.setToolTip('Mark ODs over the video')
         self.labelingAction.setCheckable(True)
-        self.labelingAction.triggered.connect(self.drawLabelClick)
+        self.labelingAction.triggered.connect(self.drawingClick)
+
+        self.drawZoneAction = QAction(QIcon('icons/draw-zone.png'), 'Draw zone', self)
+        self.drawZoneAction.setToolTip('Draw and lable zones')
+        self.drawZoneAction.setCheckable(True)
+        self.drawZoneAction.triggered.connect(self.drawingClick)
+
+        actionGroup = QActionGroup(self)
+        actionGroup.addAction(self.drawLineAction)
+        actionGroup.addAction(self.labelingAction)
+        actionGroup.addAction(self.drawZoneAction)
 
         openProjectAction = QAction(QIcon('icons/open-project.png'), 'Open project', self)
         openProjectAction.setStatusTip('Open project')
@@ -326,6 +368,7 @@ class VideoWindow(QMainWindow):
         self.toolbar.addAction(self.loadGraphAction)
         self.toolbar.addAction(self.saveGraphAction)
         self.toolbar.addAction(self.drawLineAction)
+        self.toolbar.addAction(self.drawZoneAction)
         self.toolbar.addAction(self.labelingAction)
 
         self.toolbar.insertSeparator(obsTbAction)
@@ -441,11 +484,11 @@ class VideoWindow(QMainWindow):
         if not self.obsTb.isVisible():
             self.obsTb.show()
 
-    def drawLabelClick(self):
-        if self.sender() == self.drawLineAction:
-            self.labelingAction.setChecked(False)
-        else:
-            self.drawLineAction.setChecked(False)
+    def drawingClick(self):
+        # if self.sender() == self.drawLineAction:
+        #     self.labelingAction.setChecked(False)
+        # else:
+        #     self.drawLineAction.setChecked(False)
         cursor = QCursor(Qt.CrossCursor)
         self.gView.setCursor(cursor)
 
