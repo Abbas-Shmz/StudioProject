@@ -395,9 +395,8 @@ class ObsToolbox(QMainWindow):
         self.init_input_widgets(self.zonepass_grpBox)
 
     def zonepass_saveBtn_click(self):
-        zonepass_grid_wdgt = self.zonepass_grpBox.layout().itemAt(0).widget()
+        self.zonepass_grpBox.setEnabled(False)
 
-        zonepass_grid_wdgt.setEnabled(False)
         self.zonepass_saveButton.setEnabled(False)
         self.zonepass_newRecButton.setEnabled(True)
 
