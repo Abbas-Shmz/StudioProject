@@ -130,7 +130,7 @@ class ObsToolbox(QMainWindow):
         self.user_newGroupButton = QPushButton(QIcon('icons/group.png'), 'New group')
         self.user_newGroupButton.clicked.connect(self.user_newGroup_click)
         user_newBtnsLayout.addWidget(self.user_newGroupButton)
-        self.user_newRecButton = QPushButton(QIcon('icons/person.png'), 'New road user')
+        self.user_newRecButton = QPushButton(QIcon('icons/person.png'), 'New user')
         self.user_newRecButton.setEnabled(False)
         self.user_newRecButton.clicked.connect(self.user_newRecBtn_click)
         user_newBtnsLayout.addWidget(self.user_newRecButton)
@@ -140,6 +140,7 @@ class ObsToolbox(QMainWindow):
         self.person_grpBox = self.generateWidgets(Person, 'All', True)
         user_tab_layout.addWidget(self.person_grpBox)
 
+        # ----------------- VEHICLE -------------------------
         self.veh_grpBox = self.generateWidgets(Vehicle, 'NoPrFo', True)
         user_tab_layout.addWidget(self.veh_grpBox)
 
@@ -149,70 +150,39 @@ class ObsToolbox(QMainWindow):
 
         # ----------- GROUP groupPersons box -------------
         self.group_grpBox = QGroupBox('Group')
-        # self.group_grpBox.setCheckable(True)
-        # self.group_grpBox.setChecked(False)
-        group_grpBox_wdgt = QWidget()
-        group_grpBox_wdgt.setEnabled(False)
+        # group_grpBox_wdgt = QWidget()
+        # group_grpBox_wdgt.setEnabled(False)
         group_grpBox_layout = QVBoxLayout()
-        group_grid_layout = QVBoxLayout()
+        # group_grid_layout = QVBoxLayout()
         group_newBtnsLayout = QHBoxLayout()
         group_saveBtnsLayout = QHBoxLayout()
 
-        self.group_addToListButton = QPushButton(QIcon('icons/new.png'), 'Add to list')
+        self.group_addToListButton = QPushButton(QIcon('icons/new.png'), 'Add user to list')
         self.group_addToListButton.clicked.connect(self.group_AddToList_click)
-        group_newBtnsLayout.addWidget(self.group_addToListButton)
-        group_grid_layout.addLayout(group_newBtnsLayout)
+        # group_newBtnsLayout.addWidget(self.group_addToListButton)
+        # group_grid_layout.addLayout(group_newBtnsLayout)
+        group_grpBox_layout.addWidget(self.group_addToListButton)
 
         self.group_list_wdgt = QListWidget()
+        # group_grid_layout.addWidget(self.group_list_wdgt)
+        group_grpBox_layout.addWidget(self.group_list_wdgt)
 
-        group_grid_layout.addWidget(self.group_list_wdgt)
-
-        # group_makeGroupButton = QPushButton(QIcon('icons/save.png'), 'Make groupPersons')
-        # group_makeGroupButton.clicked.connect(self.group_makeGroup_click)
-        # group_saveBtnsLayout.addWidget(group_makeGroupButton)
-        # group_grid_layout.addLayout(group_saveBtnsLayout)
-
-        group_grpBox_wdgt.setLayout(group_grid_layout)
-        group_grpBox_layout.addWidget(group_grpBox_wdgt)
+        # group_grpBox_wdgt.setLayout(group_grid_layout)
+        # group_grpBox_layout.addWidget(group_grpBox_wdgt)
         self.group_grpBox.setLayout(group_grpBox_layout)
+        self.group_grpBox.setEnabled(False)
 
         user_tab_layout.addWidget(self.group_grpBox)
 
         # ------- ROAD USER save buttons --------------
-        self.user_saveButton = QPushButton(QIcon('icons/save.png'), 'Save road user(s)')
+        self.user_saveButton = QPushButton(QIcon('icons/save.png'), 'Make group and save user(s)')
         self.user_saveButton.clicked.connect(self.user_saveBtn_click)
         self.user_saveButton.setEnabled(False)
         user_saveBtnsLayout.addWidget(self.user_saveButton)
         user_tab_layout.addLayout(user_saveBtnsLayout)
 
         user_tab_wdgt.setLayout(user_tab_layout)
-        self.toolbox.addItem(user_tab_wdgt, QIcon('icons/person.png'), 'Road user')
-
-        # # ------------------ Group tab --------------------------
-        # group_tab_wdgt = QWidget()
-        # group_tab_layout = QVBoxLayout()
-        # group_newBtnsLayout = QHBoxLayout()
-        # group_saveBtnsLayout = QHBoxLayout()
-        #
-        # group_newListButton = QPushButton(QIcon('icons/new.png'), 'New list')
-        # group_newListButton.clicked.connect(self.group_newList_click)
-        # group_newBtnsLayout.addWidget(group_newListButton)
-        # group_addToListButton = QPushButton(QIcon('icons/new.png'), 'Add to list')
-        # group_addToListButton.clicked.connect(self.group_AddToList_click)
-        # group_newBtnsLayout.addWidget(group_addToListButton)
-        # group_tab_layout.addLayout(group_newBtnsLayout)
-        #
-        # self.group_list_wdgt = QListWidget()
-        #
-        # group_tab_layout.addWidget(self.group_list_wdgt)
-        #
-        # group_makeGroupButton = QPushButton(QIcon('icons/save.png'), 'Make groupPersons')
-        # group_makeGroupButton.clicked.connect(self.group_makeGroup_click)
-        # group_saveBtnsLayout.addWidget(group_makeGroupButton)
-        # group_tab_layout.addLayout(group_saveBtnsLayout)
-        #
-        # group_tab_wdgt.setLayout(group_tab_layout)
-        # self.toolbox.addItem(group_tab_wdgt, QIcon('icons/groupPersons.png'), 'Group')
+        self.toolbox.addItem(user_tab_wdgt, QIcon('icons/person.png'), 'Street user')
 
         # ------------------ LinePassing tab --------------------------
         linepass_tab_wdgt = QWidget()
@@ -301,49 +271,35 @@ class ObsToolbox(QMainWindow):
         self.group = None
 
     def user_newRecBtn_click(self):
-        person_grid_wdgt = self.person_grpBox.layout().itemAt(0).widget()
-        veh_grid_wdgt = self.veh_grpBox.layout().itemAt(0).widget()
-        mode_grid_wdgt = self.mode_grpBox.layout().itemAt(0).widget()
-        group_grid_wdgt = self.group_grpBox.layout().itemAt(0).widget()
 
-        if self.person_grpBox.isChecked():
-            person_grid_wdgt.setEnabled(True)
-        if self.veh_grpBox.isChecked():
-            veh_grid_wdgt.setEnabled(True)
-        group_grid_wdgt.setEnabled(True)
+        self.person_grpBox.setEnabled(True)
+        self.veh_grpBox.setEnabled(True)
+        self.mode_grpBox.setEnabled(True)
+        self.group_grpBox.setEnabled(True)
 
-        mode_grid_wdgt.setEnabled(True)
         self.user_saveButton.setEnabled(True)
         self.group_addToListButton.setEnabled(True)
         self.user_newRecButton.setEnabled(False)
 
-        startTime_wdgt = mode_grid_wdgt.layout().itemAtPosition(1, 1).widget()
-        if self.parent() == None or self.parent().videoCurrentDatetime == None:
-            startTime_wdgt.setDateTime(QDateTime.currentDateTime())
-        else:
-            startTime_wdgt.setDateTime(QDateTime(self.parent().videoCurrentDatetime))
+        self.init_input_widgets(self.mode_grpBox)
 
         self.person = Person()
         session.add(self.person)
         session.flush()
 
-        person_grid_wdgt.layout().itemAtPosition(0, 1).widget().setText(str(self.person.idx))
+        self.person_grpBox.layout().itemAtPosition(0, 1).widget().setText(str(self.person.idx))
 
 
     def user_saveBtn_click(self):
         if self.groupPersons == {}:
             QMessageBox.information(self, 'Error!', 'There is no person in the list!')
             return
-        person_grid_wdgt = self.person_grpBox.layout().itemAt(0).widget()
-        veh_grid_wdgt = self.veh_grpBox.layout().itemAt(0).widget()
-        mode_grid_wdgt = self.mode_grpBox.layout().itemAt(0).widget()
-        group_grid_wdgt = self.group_grpBox.layout().itemAt(0).widget()
 
-        person_grid_wdgt.setEnabled(False)
-        if self.veh_grpBox.isChecked():
-            veh_grid_wdgt.setEnabled(False)
-        mode_grid_wdgt.setEnabled(False)
-        group_grid_wdgt.setEnabled(False)
+        self.person_grpBox.setEnabled(False)
+        self.veh_grpBox.setEnabled(False)
+        self.mode_grpBox.setEnabled(False)
+        self.group_grpBox.setEnabled(False)
+
         self.user_saveButton.setEnabled(False)
         self.user_newGroupButton.setEnabled(True)
         self.user_newRecButton.setEnabled(False)
@@ -354,77 +310,72 @@ class ObsToolbox(QMainWindow):
 
     # ------------------- Group Buttons --------------
     def group_AddToList_click(self):
-        person_grid_wdgt = self.person_grpBox.layout().itemAt(0).widget()
-        veh_grid_wdgt = self.veh_grpBox.layout().itemAt(0).widget()
-        mode_grid_wdgt = self.mode_grpBox.layout().itemAt(0).widget()
+        self.person_grpBox.setEnabled(False)
+        self.veh_grpBox.setEnabled(False)
+        self.mode_grpBox.setEnabled(False)
 
-        person_grid_wdgt.setEnabled(False)
-        if self.veh_grpBox.isChecked():
-            veh_grid_wdgt.setEnabled(False)
-        mode_grid_wdgt.setEnabled(False)
         self.group_addToListButton.setEnabled(False)
         self.user_newRecButton.setEnabled(True)
 
         if self.person_grpBox.isChecked():
-            self.person.age = person_grid_wdgt.layout().itemAtPosition(1, 1).widget().text()
-            self.person.gender = person_grid_wdgt.layout().itemAtPosition(2, 1).widget().currentText()
-            self.person.disability = person_grid_wdgt.layout().itemAtPosition(3, 1).widget().text()
-            self.person.stroller = self.toBool(person_grid_wdgt.layout().itemAtPosition(4, 1).widget().currentText())
-            self.person.bag = self.toBool(person_grid_wdgt.layout().itemAtPosition(5, 1).widget().currentText())
-            self.person.animal = self.toBool(person_grid_wdgt.layout().itemAtPosition(6, 1).widget().currentText())
+            person_layout = self.person_grpBox.layout()
+            self.person.age = person_layout.itemAtPosition(1, 1).widget().text()
+            self.person.gender = person_layout.itemAtPosition(2, 1).widget().currentText()
+            self.person.disability = person_layout.itemAtPosition(3, 1).widget().text()
+            self.person.stroller = self.toBool(person_layout.itemAtPosition(4, 1).widget().currentText())
+            self.person.bag = self.toBool(person_layout.itemAtPosition(5, 1).widget().currentText())
+            self.person.animal = self.toBool(person_layout.itemAtPosition(6, 1).widget().currentText())
 
         if self.veh_grpBox.isChecked():
-            category = veh_grid_wdgt.layout().itemAtPosition(0, 1).widget().currentText()
-            trailer = self.toBool(veh_grid_wdgt.layout().itemAtPosition(1, 1).widget().currentText())
-
+            vehicle_layout = self.veh_grpBox.layout()
+            category = vehicle_layout.itemAtPosition(0, 1).widget().currentText()
+            trailer = self.toBool(vehicle_layout.itemAtPosition(1, 1).widget().currentText())
             vehicle = Vehicle(category=category, trailer=trailer)
         else:
             vehicle = None
 
-        transport = mode_grid_wdgt.layout().itemAtPosition(0, 1).widget().currentText()
-        startTime_wdgt = mode_grid_wdgt.layout().itemAtPosition(1, 1).widget()
+        mode_layout = self.mode_grpBox.layout()
+        transport = mode_layout.itemAtPosition(0, 1).widget().currentText()
+        startTime_wdgt = mode_layout.itemAtPosition(1, 1).widget()
         input_wdgt_val = startTime_wdgt.dateTime().toPyDateTime()
         startTime = input_wdgt_val.replace(microsecond=0)
-
         self.mode = Mode(transport=transport, person=self.person, vehicle=vehicle, startTime=None)
 
         if not self.person.idx in self.groupPersons.keys():
             self.groupPersons[self.person.idx] = self.person
             self.group_list_wdgt.addItem(str(self.person.idx))
 
-    # def group_makeGroup_click(self):
-    #     Group(self.groupPersons.values())
-    #     session.commit()
-
     # -------------- LinePassing buttons ------------------
     def linepass_newRecBtn_click(self):
-        linepass_grid_wdgt = self.linepass_grpBox.layout().itemAt(0).widget()
+        if self.group is None:
+            QMessageBox.information(self, 'Error!', 'No user group is defined or saved!')
+            return
+        self.linepass_grpBox.setEnabled(True)
 
-        linepass_grid_wdgt.setEnabled(True)
         self.linepass_saveButton.setEnabled(True)
         self.linepass_newRecButton.setEnabled(False)
 
-        self.init_input_widgets(LinePassing, linepass_grid_wdgt)
+        self.init_input_widgets(self.linepass_grpBox)
 
     def linepass_saveBtn_click(self):
-        linepass_grid_wdgt = self.linepass_grpBox.layout().itemAt(0).widget()
+        self.linepass_grpBox.setEnabled(False)
 
-        linepass_grid_wdgt.setEnabled(False)
         self.linepass_saveButton.setEnabled(False)
         self.linepass_newRecButton.setEnabled(True)
 
-        lineIdx = linepass_grid_wdgt.layout().itemAtPosition(0, 1).widget().currentText()
+        linepass_layout = self.linepass_grpBox.layout()
+        lineIdx = linepass_layout.itemAtPosition(0, 1).widget().currentText()
         line = session.query(Line).filter(Line.idx == lineIdx).first()
-        instant_wdgt = linepass_grid_wdgt.layout().itemAtPosition(2, 1).widget()
+        instant_wdgt = linepass_layout.itemAtPosition(2, 1).widget()
         input_wdgt_val = instant_wdgt.dateTime().toPyDateTime()
         instant = input_wdgt_val.replace(microsecond=0)
-        speed_text = linepass_grid_wdgt.layout().itemAtPosition(3, 1).widget().text()
+        speed_text = linepass_layout.itemAtPosition(3, 1).widget().text()
         if speed_text != '':
             speed = float(speed_text)
         else:
             speed = None
-        wrongDirection = self.toBool(linepass_grid_wdgt.layout().itemAtPosition(4, 1).widget().currentText())
-        print(wrongDirection)
+        wrongDirection = self.toBool(linepass_layout.itemAtPosition(4, 1).widget().currentText())
+
         linepass = LinePassing(line=line, instant=instant, speed=speed, wrongDirection=wrongDirection,
                                group=self.group)
         session.add(linepass)
@@ -433,13 +384,15 @@ class ObsToolbox(QMainWindow):
 
     # -------------- ZonePassing buttons ------------------
     def zonepass_newRecBtn_click(self):
-        zonepass_grid_wdgt = self.zonepass_grpBox.layout().itemAt(0).widget()
+        if self.group is None:
+            QMessageBox.information(self, 'Error!', 'No user group is defined or saved!')
+            return
+        self.zonepass_grpBox.setEnabled(True)
 
-        zonepass_grid_wdgt.setEnabled(True)
         self.zonepass_saveButton.setEnabled(True)
         self.zonepass_newRecButton.setEnabled(False)
 
-        self.init_input_widgets(ZonePassing, zonepass_grid_wdgt)
+        self.init_input_widgets(self.zonepass_grpBox)
 
     def zonepass_saveBtn_click(self):
         zonepass_grid_wdgt = self.zonepass_grpBox.layout().itemAt(0).widget()
@@ -448,12 +401,13 @@ class ObsToolbox(QMainWindow):
         self.zonepass_saveButton.setEnabled(False)
         self.zonepass_newRecButton.setEnabled(True)
 
-        zoneIdx = zonepass_grid_wdgt.layout().itemAtPosition(0, 1).widget().currentText()
+        zonepass_layout = self.zonepass_grpBox.layout()
+        zoneIdx = zonepass_layout.itemAtPosition(0, 1).widget().currentText()
         zone = session.query(Zone).filter(Zone.idx == zoneIdx).first()
-        instant_wdgt = zonepass_grid_wdgt.layout().itemAtPosition(2, 1).widget()
+        instant_wdgt = zonepass_layout.itemAtPosition(2, 1).widget()
         input_wdgt_val = instant_wdgt.dateTime().toPyDateTime()
         instant = input_wdgt_val.replace(microsecond=0)
-        entering = self.toBool(zonepass_grid_wdgt.layout().itemAtPosition(3, 1).widget().currentText())
+        entering = self.toBool(zonepass_layout.itemAtPosition(3, 1).widget().currentText())
 
         zonepass = ZonePassing(zone=zone, instant=instant, entering=entering, group=self.group)
         session.add(zonepass)
@@ -461,32 +415,31 @@ class ObsToolbox(QMainWindow):
 
     # -------------- Activity buttons ------------------
     def act_newRecBtn_click(self):
-        act_grid_wdgt = self.act_grpBox.layout().itemAt(0).widget()
+        self.act_grpBox.setEnabled(True)
 
-        act_grid_wdgt.setEnabled(True)
         self.act_saveButton.setEnabled(True)
         self.act_newRecButton.setEnabled(False)
 
-        self.init_input_widgets(Activity, act_grid_wdgt)
+        self.init_input_widgets(self.act_grpBox)
 
     def act_saveBtn_click(self):
-        act_grid_wdgt = self.act_grpBox.layout().itemAt(0).widget()
+        self.act_grpBox.setEnabled(False)
 
-        act_grid_wdgt.setEnabled(False)
         self.act_saveButton.setEnabled(False)
         self.act_newRecButton.setEnabled(True)
 
-        activity = act_grid_wdgt.layout().itemAtPosition(0, 1).widget().text()
+        act_layout = self.act_grpBox.layout()
+        activity = act_layout.itemAtPosition(0, 1).widget().text()
 
-        start_wdgt = act_grid_wdgt.layout().itemAtPosition(1, 1).widget()
+        start_wdgt = act_layout.itemAtPosition(1, 1).widget()
         start_wdgt_val = start_wdgt.dateTime().toPyDateTime()
         startTime = start_wdgt_val.replace(microsecond=0)
 
-        end_wdgt = act_grid_wdgt.layout().itemAtPosition(2, 1).widget()
+        end_wdgt = act_layout.itemAtPosition(2, 1).widget()
         end_wdgt_val = end_wdgt.dateTime().toPyDateTime()
         endTime = end_wdgt_val.replace(microsecond=0)
 
-        zoneIdx = act_grid_wdgt.layout().itemAtPosition(3, 1).widget().currentText()
+        zoneIdx = act_layout.itemAtPosition(3, 1).widget().currentText()
         zone = session.query(Zone).filter(Zone.idx == zoneIdx).first()
 
         activity = Activity(activity=activity, startTime=startTime, endTime=endTime,
@@ -495,8 +448,9 @@ class ObsToolbox(QMainWindow):
         session.commit()
 
     # =====================================================
-    def init_input_widgets(self, class_, grid_wdgt):
-        grid_lyt = grid_wdgt.layout()
+    def init_input_widgets(self, grpBox):
+        class_ = getattr(iframework, grpBox.title())
+        grid_lyt = grpBox.layout()
         grid_labels = [grid_lyt.itemAtPosition(i, 0).widget() for i in range(grid_lyt.rowCount())]
 
         i = 0
@@ -580,11 +534,12 @@ class ObsToolbox(QMainWindow):
 
 
     def generateWidgets(self, tableClass, fieldConst, checkable):
-        groupBox_layout = QVBoxLayout()
+        groupBox = QGroupBox(tableClass.__name__)
+        groupBox_layout = QGridLayout()
 
-        gridLayout = QGridLayout()
-        gridWidget = QWidget()
-        gridWidget.setEnabled(False)
+        # gridLayout = QGridLayout()
+        # gridWidget = QWidget()
+        # gridWidget.setEnabled(False)
 
         i = 0
         for column in self.getTableColumns(tableClass):
@@ -594,7 +549,7 @@ class ObsToolbox(QMainWindow):
                 not column['name'] in ['pointIdx', 'lineIdx', 'zoneIdx']:
                 continue
             label = QLabel(column['name'])
-            gridLayout.addWidget(label, i, 0)
+            groupBox_layout.addWidget(label, i, 0)
 
             if column['enum'] != None:
                 wdgt = QComboBox()
@@ -611,19 +566,18 @@ class ObsToolbox(QMainWindow):
                 if column['is_primary_key']:
                     wdgt.setReadOnly(True) #.setEnabled(False)
 
-            gridLayout.addWidget(wdgt, i, 1)
+            groupBox_layout.addWidget(wdgt, i, 1)
             i += 1
 
-        gridWidget.setLayout(gridLayout)
+        # gridWidget.setLayout(gridLayout)
 
-        groupBox_layout.addWidget(gridWidget)
+        # groupBox_layout.addWidget(gridWidget)
 
-        groupBox = QGroupBox(tableClass.__name__)
         # groupBox.setAlignment(Qt.AlignHCenter)
         groupBox.setLayout(groupBox_layout)
 
         groupBox.setCheckable(checkable)
-        # groupBox.setChecked(False)
+        groupBox.setEnabled(False)
         return  groupBox
 
     def newRecord(self, grpBx, fieldVals = {}):
