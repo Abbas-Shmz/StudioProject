@@ -1,6 +1,7 @@
 import sys
 import os
 import pandas as pd
+import numpy as np
 import datetime
 from configparser import ConfigParser
 from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
@@ -20,7 +21,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
-    getOdNamesDirections, calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators
+    calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges
 import iframework
 
 from sqlalchemy import Enum, Boolean, DateTime
@@ -43,7 +44,7 @@ class ObsToolbox(QMainWindow):
         self.group = None
 
         global session
-        self.dbFilename = '/Users/Abbas/AAAA/iFramework_test.sqlite'
+        self.dbFilename = '/Users/Abbas/AAAA/Stuart2019_iframework.sqlite'
 
         layout = QVBoxLayout() #QGridLayout()
 
@@ -942,30 +943,33 @@ class TempHistWindow(QDialog):
 
         self.canvas = FigureCanvas(self.figure)
 
-        self.ods_dict = getOdNamesDirections(session)
-        # self.toolbar = NavigationToolbar(self.canvas, self)
+        # self.ods_dict = getOdNamesDirections(session)
 
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        self.odDirCombobx = QComboBox()
+        # self.odDirCombobx = QComboBox()
 
-        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
-        self.userCombobx = QComboBox()
-        self.userCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike'])
-        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        self.transportCombobx = QComboBox()
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('OD name:'), 0, 2, Qt.AlignRight)
-        self.odNamesCombobx = QComboBox()
-        self.odNamesCombobx.currentTextChanged.connect(self.odNameChanged)
-        self.odNamesCombobx.addItems(self.ods_dict.keys())
-        gridLayout.addWidget(self.odNamesCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        self.actionTypeCombobx = QComboBox()
+        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
+                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.setCurrentIndex(-1)
+        self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Direction:'), 0, 4, Qt.AlignRight)
-        gridLayout.addWidget(self.odDirCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        self.unitIdxCombobx = QComboBox()
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotTHist)
+        self.plotBtn.setEnabled(False)
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
         self.saveBtn = QPushButton()
@@ -987,25 +991,17 @@ class TempHistWindow(QDialog):
         ax = self.figure.add_subplot(111)
 
         # plot data
-        roadUser = self.userCombobx.currentText()
-        odName = self.odNamesCombobx.currentText()
-        odDirComboText = self.odDirCombobx.currentText()
-        direction = []
-        dirSymb = odDirComboText.split(' ')[1]
-        od1 = int(odDirComboText.split(' ')[0])
-        od2 = int(odDirComboText.split(' ')[2])
-        if dirSymb == '<-->':
-            direction.append([od1, od2])
-            direction.append([od2, od1])
-        elif dirSymb == '-->':
-            direction.append([od1, od2])
-        # elif dirSymb == '<--':
-        #     direction.append([od2, od1])
+        transport = self.transportCombobx.currentText()
+        actionType = self.actionTypeCombobx.currentText()
+        unitIdx = self.unitIdxCombobx.currentText()
 
-        # start_obs_time, end_obs_time = getObsStartEnd(session)
-        bins = calculateNoBins(session)
-
-        err = tempDistHist(roadUser, odName, direction, ax, session, bins=bins)
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+        bins = calculateBinsEdges(start_obs_time, end_obs_time)
+        if len(bins) == 0:
+            QMessageBox.information(self, 'Error!',
+                                'The observation duration is less than {} minutes!'.format(interval))
+            return
+        err = tempDistHist(transport, actionType, unitIdx, ax, session, bins=bins)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -1021,24 +1017,16 @@ class TempHistWindow(QDialog):
         if fileName != '':
             self.canvas.print_png(fileName)
 
-    def odNameChanged(self):
-        odName = self.odNamesCombobx.currentText()
-        odDirItems = []
-        if self.ods_dict[odName][2] == 'directed':
-            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-        elif self.ods_dict[odName][2] == 'undirected':
-            odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
-        elif self.ods_dict[odName][2] == 'NA':
-            if self.ods_dict[odName][3] == 'on_street_parking_lot':
-                for dirList in self.ods_dict.values():
-                    if dirList[3] == 'road_lane':
-                        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], dirList[1]))
-                        odDirItems.append('{} --> {}'.format(dirList[0], self.ods_dict[odName][0]))
+    def actionTypeChanged(self):
+        actionType = self.actionTypeCombobx.currentText()
 
-        self.odDirCombobx.clear()
-        self.odDirCombobx.addItems(odDirItems)
+        self.unitIdxCombobx.clear()
+        if actionType == 'line passing':
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+        else:
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+
+        self.plotBtn.setEnabled(True)
 
 class StackHistWindow(QDialog):
     def __init__(self, parent=None):
@@ -1190,15 +1178,15 @@ class PieChartWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
-        self.userCombobx = QComboBox()
-        self.userCombobx.addItems(['All users', 'Pedestrian', 'Vehicle', 'Bike', 'Activity'])
-        self.userCombobx.currentTextChanged.connect(self.getAttrList)
-        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
+        self.transportCombobx = QComboBox()
+        self.transportCombobx.addItems(['all types', 'walking', 'cardriver'])
+        self.transportCombobx.currentTextChanged.connect(self.getAttrList)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('Attribute:'), 0, 2, Qt.AlignRight)
         self.attrCombobx = QComboBox()
-        self.attrCombobx.addItems(['count'])
+        self.attrCombobx.addItems(['transport'])
         gridLayout.addWidget(self.attrCombobx, 0, 3, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('Time span:'), 0, 4, Qt.AlignRight)
@@ -1239,7 +1227,7 @@ class PieChartWindow(QDialog):
         ax = self.figure.add_subplot(111)
 
         # plot data
-        roadUser = self.userCombobx.currentText()
+        transport = self.transportCombobx.currentText()
         attr = self.attrCombobx.currentText()
 
         sTimeText = self.timeSpanCombobx.currentText().split(' - ')[0]
@@ -1248,7 +1236,7 @@ class PieChartWindow(QDialog):
         eTimeText = self.timeSpanCombobx.currentText().split(' - ')[1]
         eTime = datetime.datetime.strptime(eTimeText, '%I:%M %p').time()
 
-        err = pieChart(roadUser, attr, sTime, eTime, ax, session)
+        err = pieChart(transport, attr, sTime, eTime, ax, session)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -1265,21 +1253,17 @@ class PieChartWindow(QDialog):
             self.canvas.print_png(fileName)
 
     def getAttrList(self):
-        if self.userCombobx.currentText() == 'All users':
-            self.attrCombobx.clear()
-            self.attrCombobx.addItems(['count'])
-        elif self.userCombobx.currentText() == 'Pedestrian':
-            self.attrCombobx.clear()
+        self.attrCombobx.clear()
+        if self.transportCombobx.currentText() == 'all types':
+            self.attrCombobx.addItems(['transport'])
+        elif self.transportCombobx.currentText() == 'walking':
             self.attrCombobx.addItems(['age', 'gender'])
-        elif self.userCombobx.currentText() == 'Vehicle':
-            self.attrCombobx.clear()
-            self.attrCombobx.addItems(['vehicleType'])
-        elif self.userCombobx.currentText() == 'Bike':
-            self.attrCombobx.clear()
-            self.attrCombobx.addItems(['bikeType', 'wearHelmet'])
-        elif self.userCombobx.currentText() == 'Activity':
-            self.attrCombobx.clear()
-            self.attrCombobx.addItems(['activityType'])
+        elif self.transportCombobx.currentText() == 'cardriver':
+            self.attrCombobx.addItems(['category'])
+        # elif self.transportCombobx.currentText() == 'Bike':
+        #     self.attrCombobx.addItems(['bikeType', 'wearHelmet'])
+        # elif self.transportCombobx.currentText() == 'Activity':
+        #     self.attrCombobx.addItems(['activityType'])
 
 
 class CompHistWindow(QDialog):
@@ -1287,47 +1271,59 @@ class CompHistWindow(QDialog):
         super(CompHistWindow, self).__init__(parent)
 
         self.setWindowTitle('Comparative Temporal Distribution Histogram')
-        self.session2 = None
 
         self.figure = plt.figure(tight_layout=False)
 
         self.canvas = FigureCanvas(self.figure)
 
-        self.ods_dict = getOdNamesDirections(session)
         # self.toolbar = NavigationToolbar(self.canvas, self)
 
         winLayout = QVBoxLayout()
-        dbLayout = QHBoxLayout()
+        dbLayout1 = QHBoxLayout()
+        dbLayout2 = QHBoxLayout()
         gridLayout = QGridLayout()
 
-        dbLayout.addWidget(QLabel('Database file:'))
+        dbLayout1.addWidget(QLabel('Database file (Before):'))
+        self.dbFile1Ledit = QLineEdit()
+        dbLayout1.addWidget(self.dbFile1Ledit)
+
+        self.openDbFileBtn1 = QPushButton()
+        self.openDbFileBtn1.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn1.setToolTip('Open (before) database file')
+        self.openDbFileBtn1.clicked.connect(self.opendbFile1)
+        dbLayout1.addWidget(self.openDbFileBtn1)
+
+        dbLayout2.addWidget(QLabel('Database file (After):'))
         self.dbFile2Ledit = QLineEdit()
-        dbLayout.addWidget(self.dbFile2Ledit)
+        self.dbFile2Ledit.setText(self.parent().dbFilename)
+        dbLayout2.addWidget(self.dbFile2Ledit)
 
-        self.openDbFileBtn = QPushButton()
-        self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
-        self.openDbFileBtn.setToolTip('Open database file')
-        self.openDbFileBtn.clicked.connect(self.opendbFile)
-        dbLayout.addWidget(self.openDbFileBtn)
+        self.openDbFileBtn2 = QPushButton()
+        self.openDbFileBtn2.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn2.setToolTip('Open (after) database file')
+        self.openDbFileBtn2.clicked.connect(self.opendbFile2)
+        dbLayout2.addWidget(self.openDbFileBtn2)
 
-        self.odDirCombobx = QComboBox()
+        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        self.transportCombobx = QComboBox()
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
-        self.userCombobx = QComboBox()
-        self.userCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike'])
-        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        self.actionTypeCombobx = QComboBox()
+        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
+                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.setCurrentIndex(-1)
+        self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('OD name:'), 0, 2, Qt.AlignRight)
-        self.odNamesCombobx = QComboBox()
-        self.odNamesCombobx.currentTextChanged.connect(self.odNameChanged)
-        self.odNamesCombobx.addItems(self.ods_dict.keys())
-        gridLayout.addWidget(self.odNamesCombobx, 0, 3, Qt.AlignLeft)
-
-        gridLayout.addWidget(QLabel('Direction:'), 0, 4, Qt.AlignRight)
-        gridLayout.addWidget(self.odDirCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        self.unitIdxCombobx = QComboBox()
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotCompHist)
+        self.plotBtn.setEnabled(False)
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
         self.saveBtn = QPushButton()
@@ -1337,7 +1333,8 @@ class CompHistWindow(QDialog):
         gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
-        winLayout.addLayout(dbLayout)
+        winLayout.addLayout(dbLayout1)
+        winLayout.addLayout(dbLayout2)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.canvas)
 
@@ -1349,32 +1346,35 @@ class CompHistWindow(QDialog):
 
         ax = self.figure.add_subplot(111)
 
-        # plot data
-        roadUser = self.userCombobx.currentText()
-        odName = self.odNamesCombobx.currentText()
-        odDirComboText = self.odDirCombobx.currentText()
-        direction = []
-        dirSymb = odDirComboText.split(' ')[1]
-        od1 = int(odDirComboText.split(' ')[0])
-        od2 = int(odDirComboText.split(' ')[2])
-        if dirSymb == '<-->':
-            direction.append([od1, od2])
-            direction.append([od2, od1])
-        elif dirSymb == '-->':
-            direction.append([od1, od2])
+        dbFilename1 = self.dbFile1Ledit.text()
+        dbFilename2 = self.dbFile2Ledit.text()
 
-        if roadUser in ['Pedestrian', 'Vehicle', 'Bike']:
-            cls_obs = getattr(iframework, roadUser + '_obs')
+        if dbFilename1 == '' or dbFilename2 == '':
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined!')
+            msg.exec_()
+            return
 
-        # if roadUser == 'pedestrian':
-        #     cls_ = Pedestrian_obs
-        # elif roadUser == 'vehicle':
-        #     cls_ = Vehicle_obs
-        # elif roadUser == 'cyclist':
-        #     cls_ = Bike_obs
+        self.session1 = createDatabase(dbFilename1)
+        if self.session1 is None:
+            self.session1 = connectDatabase(dbFilename1)
 
-        first_obs_time1 = session.query(func.min(cls_obs.instant)).all()[0][0]
-        last_obs_time1 = session.query(func.max(cls_obs.instant)).all()[0][0]
+        self.session2 = createDatabase(dbFilename2)
+        if self.session2 is None:
+            self.session2 = connectDatabase(dbFilename2)
+
+        transport = self.transportCombobx.currentText()
+        actionType = self.actionTypeCombobx.currentText()
+        unitIdx = self.unitIdxCombobx.currentText()
+
+        if actionType == 'line passing':
+            cls_obs = LinePassing
+        elif actionType.split(' ')[0] == 'zone':
+            cls_obs = ZonePassing
+
+        first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
 
         first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
         last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
@@ -1395,26 +1395,20 @@ class CompHistWindow(QDialog):
         duration = end - start
         duration_in_s = duration.total_seconds()
 
-        if cfg != []:
-            minutes = int(config_object['BINS']['binsminutes'])
-        else:
-            minutes = 10
-        periods = round(duration_in_s / (60 * minutes))
-        if periods == 0:
-            periods = 1
+        bins = calculateBinsEdges(start, end)
+        if len(bins) == 0:
+            QMessageBox.information(self, 'Error!',
+                    'The common observation duration is less than {} minutes!'.format(interval))
+            return
+        # label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
+        # label2 = os.path.basename(self.dbFile2Ledit.text()).split('.')[0]
+        label1 = self.session1.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
+        label2 = self.session2.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
 
-        # periods = calculateNoBins(session, start, end)
-
-        bins = pd.date_range(start, end, periods=periods).to_pydatetime()
-        label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
-        label2 = os.path.basename(self.dbFile2Ledit.text()).split('.')[0]
-
-        err = tempDistHist(roadUser, odName, direction, ax, [session, self.session2], bins=bins, alpha=0.7,
-                           color = ['skyblue', 'red'], ec='grey', label=[label1, label2], rwidth=0.9)
-        # err = tempDistHist(roadUser, odName, direction, ax, self.session2, bins=bins, alpha=0.5,
-        #                    color='red', ec='red', label=label2, rwidth=1, histtype='stepfilled',
-        #                    comparison=True)
-        plt.legend(loc='upper right')
+        err = tempDistHist(transport, actionType, unitIdx, ax, [self.session1, self.session2],
+                           bins=bins, alpha=0.7, color=['skyblue', 'red'], ec='grey',
+                           label=[label1, label2], rwidth=0.9)
+        plt.legend(loc='upper right', fontsize=6)
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -1430,34 +1424,28 @@ class CompHistWindow(QDialog):
         if fileName != '':
             self.canvas.print_png(fileName)
 
-    def opendbFile(self):
+    def opendbFile1(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile1Ledit.setText(dbFilename)
+
+    def opendbFile2(self):
         dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
                                                     QDir.homePath(), "Sqlite files (*.sqlite)")
         if dbFilename != '':
             self.dbFile2Ledit.setText(dbFilename)
 
-            self.session2 = createDatabase(dbFilename)
-            if self.session2 is None:
-                self.session2 = connectDatabase(dbFilename)
+    def actionTypeChanged(self):
+        actionType = self.actionTypeCombobx.currentText()
 
-    def odNameChanged(self):
-        odName = self.odNamesCombobx.currentText()
-        odDirItems = []
-        if self.ods_dict[odName][2] == 'directed':
-            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-        elif self.ods_dict[odName][2] == 'undirected':
-            odDirItems.append('{} <--> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], self.ods_dict[odName][1]))
-            odDirItems.append('{} --> {}'.format(self.ods_dict[odName][1], self.ods_dict[odName][0]))
-        elif self.ods_dict[odName][2] == 'NA':
-            if self.ods_dict[odName][3] == 'on_street_parking_lot':
-                for dirList in self.ods_dict.values():
-                    if dirList[3] == 'road_lane':
-                        odDirItems.append('{} --> {}'.format(self.ods_dict[odName][0], dirList[1]))
-                        odDirItems.append('{} --> {}'.format(dirList[0], self.ods_dict[odName][0]))
+        self.unitIdxCombobx.clear()
+        if actionType == 'line passing':
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+        else:
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
 
-        self.odDirCombobx.clear()
-        self.odDirCombobx.addItems(odDirItems)
+        self.plotBtn.setEnabled(True)
 
 
 class genReportWindow(QDialog):
@@ -1477,21 +1465,29 @@ class genReportWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(QLabel('Subject:'), 0, 0, Qt.AlignRight)
-        self.subjCombobx = QComboBox()
-        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity'])
-        self.subjCombobx.currentTextChanged.connect(self.genReport)
-        gridLayout.addWidget(self.subjCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        self.transportCombobx = QComboBox()
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        # self.transportCombobx.currentTextChanged.connect(self.genReport)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        self.actionTypeCombobx = QComboBox()
+        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
+                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.setCurrentIndex(-1)
+        # self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Generate report')
         self.genRepBtn.clicked.connect(self.genReport)
-        gridLayout.addWidget(self.genRepBtn, 0, 2)
+        gridLayout.addWidget(self.genRepBtn, 0, 4)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save report')
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 3)
+        gridLayout.addWidget(self.saveBtn, 0, 5)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -1501,10 +1497,19 @@ class genReportWindow(QDialog):
 
     def genReport(self):
 
-        subject = self.subjCombobx.currentText()
+        transport = self.transportCombobx.currentText()
+        actionType = self.actionTypeCombobx.currentText()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
-        self.indicatorsDf = generateReport(subject, start_obs_time, end_obs_time, session)
+        bins = calculateBinsEdges(start_obs_time, end_obs_time)
+        if len(bins) == 0:
+            QMessageBox.information(self, 'Error!',
+                            'The observation duration is less than {} minutes!'.format(interval))
+            return
+        else:
+            start_time = bins[0]
+            end_time = bins[-1]
+        self.indicatorsDf = generateReport(transport, actionType, start_time, end_time, session)
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
@@ -1560,22 +1565,30 @@ class compIndicatorsWindow(QDialog):
         self.openDbFileBtn2.clicked.connect(self.opendbFile2)
         dbLayout2.addWidget(self.openDbFileBtn2)
 
-        gridLayout.addWidget(QLabel('Subject:'), 0, 0, Qt.AlignRight)
-        self.subjCombobx = QComboBox()
-        self.subjCombobx.addItems(['Pedestrian', 'Vehicle', 'Bike', 'Activity'])
-        self.subjCombobx.currentTextChanged.connect(self.compIndicators)
-        gridLayout.addWidget(self.subjCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        self.transportCombobx = QComboBox()
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        # self.transportCombobx.currentTextChanged.connect(self.compIndicators)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        self.actionTypeCombobx = QComboBox()
+        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
+                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.setCurrentIndex(-1)
+        # self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Compare Indicators')
         self.genRepBtn.clicked.connect(self.compIndicators)
-        gridLayout.addWidget(self.genRepBtn, 0, 2)
+        gridLayout.addWidget(self.genRepBtn, 0, 4)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save results to clipboard')
         self.saveBtn.setFixedWidth(75)
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 3)
+        gridLayout.addWidget(self.saveBtn, 0, 5)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(dbLayout1)
@@ -1604,9 +1617,31 @@ class compIndicatorsWindow(QDialog):
         if self.session2 is None:
             self.session2 = connectDatabase(dbFilename2)
 
-        subject = self.subjCombobx.currentText()
+        transport = self.transportCombobx.currentText()
+        actionType = self.actionTypeCombobx.currentText()
 
-        self.indicatorsDf = compareIndicators(subject, self.session1, self.session2)
+        first_obs_time1, last_obs_time1 = getObsStartEnd(self.session1)
+        first_obs_time2, last_obs_time2 = getObsStartEnd(self.session2)
+
+        if first_obs_time1.time() >= first_obs_time2.time():
+            bins_start = first_obs_time1
+        else:
+            bins_start = first_obs_time2
+
+        if last_obs_time1.time() <= last_obs_time2.time():
+            bins_end = last_obs_time1
+        else:
+            bins_end = last_obs_time2
+
+        bins = calculateBinsEdges(bins_start, bins_end)
+        if len(bins) > 0:
+            start_time = bins[0].time()
+            end_time = bins[-1].time()
+        else:
+            QMessageBox.information(self, 'Error!', 'The common observaion duration is too short!')
+
+        self.indicatorsDf = compareIndicators(transport, actionType, start_time, end_time,
+                                              self.session1, self.session2)
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)

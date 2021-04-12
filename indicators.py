@@ -15,7 +15,8 @@ from configparser import ConfigParser
 
 import pandas as pd
 import iframework
-from iframework import connectDatabase
+from iframework import connectDatabase, LinePassing, ZonePassing, Person, Mode, GroupBelonging,\
+    Vehicle
 
 noDataSign = 'x'
 
@@ -36,53 +37,73 @@ else:
     binsMinutes = 10
 
 # ==============================================================
-def tempDistHist(user, od_name, direction, ax, session, bins=20, alpha=1, color='skyblue', ec='grey',
-                 label=None, rwidth=0.9, histtype='bar'):
-    cls_obs = getattr(dbSchema, user + '_obs')
+def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, color='skyblue',
+                 ec='grey', label=None, rwidth=0.9, histtype='bar'):
 
     if not isinstance(session, list):
         time_list = []
-        for ods in direction:
-            q = session.query(cls_obs.instant).\
-                filter(cls_obs.originId == ods[0]). \
-                filter(cls_obs.destinationId == ods[1])
-            time_list = time_list + [i[0] for i in q.all()]
+        if actionType == 'line passing':
+            q = session.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
+                join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
+        elif actionType.split(' ')[0] == 'zone':
+            q = session.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
+                join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+            if actionType.split(' ')[1] == 'entering':
+                q = q.filter(ZonePassing.entering == True)
+            elif actionType.split(' ')[1] == 'exiting':
+                q = q.filter(ZonePassing.entering == False)
+        q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
+            .filter(Mode.transport == transport)
+
+        time_list = [i[0] for i in q.all()]
 
         if time_list == []:
-            return 'No {} is observed in {} for the selected direction(s)!'.format(user, od_name)
+            return 'No {} is observed {} {} #{}!'.format(transport,
+                                                            actionType.split(' ')[1],
+                                                            actionType.split(' ')[0],
+                                                            unitIdx)
 
         (n, edges, patches) = ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth,
                                       alpha=alpha, label=label, histtype=histtype)
     else:
-        time_list1 = []
-        for ods in direction:
-            q = session[0].query(cls_obs.instant). \
-                filter(cls_obs.originId == ods[0]). \
-                filter(cls_obs.destinationId == ods[1])
-            time_list1 = time_list1 + [i[0] for i in q.all()]
+        time_lists = []
+        for s in session:
+            time_list = []
+            if actionType == 'line passing':
+                q = s.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
+                    join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
+            elif actionType.split(' ')[0] == 'zone':
+                q = s.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
+                    join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+                if actionType.split(' ')[1] == 'entering':
+                    q = q.filter(ZonePassing.entering == True)
+                elif actionType.split(' ')[1] == 'exiting':
+                    q = q.filter(ZonePassing.entering == False)
+            q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+                .filter(Mode.transport == transport)
 
-        time_list2 = []
-        for ods in direction:
-            q = session[1].query(cls_obs.instant). \
-                filter(cls_obs.originId == ods[0]). \
-                filter(cls_obs.destinationId == ods[1])
-            time_list2 = time_list2 + [i[0] for i in q.all()]
-        if time_list1 == [] and time_list2 == []:
-            return 'No {} is observed in {} for the selected direction(s)!'.format(user, od_name)
+            time_list = [i[0] for i in q.all()]
+            time_lists.append(time_list)
+
+        if time_lists[0] == [] and time_lists[1] == []:
+            return 'No {} is observed {} {} #{}!'.format(transport,
+                                                        actionType.split(' ')[1],
+                                                        actionType.split(' ')[0],
+                                                        unitIdx)
 
         i = 0
-        for t in time_list1:
-            time_list1[i] = datetime.datetime(2000,1,1,t.hour, t.minute, t.second)
+        for t in time_lists[0]:
+            time_lists[0][i] = datetime.datetime(2000,1,1,t.hour, t.minute, t.second)
             i += 1
 
         i = 0
-        for t in time_list2:
-            time_list2[i] = datetime.datetime(2000, 1, 1, t.hour, t.minute, t.second)
+        for t in time_lists[1]:
+            time_lists[1][i] = datetime.datetime(2000, 1, 1, t.hour, t.minute, t.second)
             i += 1
 
         # fig = plt.figure()#figsize=(5, 5), dpi=200, tight_layout=True)
         # ax = fig.add_subplot(111) #plt.subplots(1, 1)
-        (n, edges, patches) = ax.hist([time_list1, time_list2], bins=bins, color=color, ec=ec,
+        (n, edges, patches) = ax.hist(time_lists, bins=bins, color=color, ec=ec,
                                       rwidth=rwidth, alpha=alpha, label=label, histtype=histtype)
 
     if not isinstance(n[0], np.ndarray):
@@ -92,7 +113,7 @@ def tempDistHist(user, od_name, direction, ax, session, bins=20, alpha=1, color=
     i = 0
     for lst in n:
         avg = np.mean(lst)
-        ax.axhline(y=avg, color=c[i], linestyle='-', lw=0.75)
+        ax.axhline(y=avg, color=c[i], linestyle='-', lw=1.5)
         i += 1
 
     locator = mdates.AutoDateLocator()
@@ -111,9 +132,13 @@ def tempDistHist(user, od_name, direction, ax, session, bins=20, alpha=1, color=
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=7)
     ax.set_xlabel(xLabel, fontsize=8)
-    ax.set_ylabel('No. of ' + user, fontsize=8)
+    ax.set_ylabel('No. of ' + transport, fontsize=8)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.set_title('Temporal distribution of ' + user + ' passings from ' + od_name, fontsize=10)
+    ax.set_title('Temporal distribution of {}s {} {} #{}'.format(transport,
+                                                                 actionType.split(' ')[1],
+                                                                 actionType.split(' ')[0],
+                                                                 unitIdx),
+                 fontsize=10)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     # if not isinstance(session, list):
@@ -339,7 +364,7 @@ def odMatrix(user, ax, session):
     # plt.show()
 
 #=====================================================================
-def pieChart(user, attr, sTime, eTime, ax, session):
+def pieChart(transport, attr, sTime, eTime, ax, session):
 
     sDate = getObsStartEnd(session)[0].date()
     startTime = datetime.datetime.combine(sDate, sTime)
@@ -347,28 +372,8 @@ def pieChart(user, attr, sTime, eTime, ax, session):
     eDate = getObsStartEnd(session)[1].date()
     endTime = datetime.datetime.combine(eDate, eTime)
 
-    if user == 'All users':
-        ped_count = session.query(Pedestrian_obs.id).filter(Pedestrian_obs.instant >= startTime)\
-                                                 .filter(Pedestrian_obs.instant <= endTime)\
-                                                 .filter(Pedestrian_obs.destinationId != '').count()
-        veh_count = session.query(Vehicle_obs.id).filter(Vehicle_obs.instant >= startTime)\
-                                                 .filter(Vehicle_obs.instant <= endTime)\
-                                                 .filter(Vehicle_obs.destinationId != '').count()
-        bik_count = session.query(Bike_obs.id).filter(Bike_obs.instant >= startTime)\
-                                                 .filter(Bike_obs.instant <= endTime)\
-                                                 .filter(Bike_obs.destinationId != '').count()
-
-        all_count = ped_count + veh_count + bik_count
-        ped_pct = round((ped_count / all_count) * 100, 1)
-        veh_pct = round((veh_count / all_count) * 100, 1)
-        bik_pct = round((bik_count / all_count) * 100, 1)
-
-        labels = 'Pedestrian', 'Vehicle', 'Bike'
-        sizes = [ped_pct, veh_pct, bik_pct]
-        explode = [0.01, 0.01, 0.01]  # only "explode" the 2nd slice
-    else:
-        labels, sizes = getLabelSizePie(user, attr, startTime, endTime, session)
-        explode = [0.01]*len(labels)
+    labels, sizes = getLabelSizePie(transport, attr, startTime, endTime, session)
+    explode = [0.01]*len(labels)
 
     wedges, texts, autotexts = ax.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
                                       shadow=False, startangle=90, textprops={'size': 8})
@@ -381,7 +386,7 @@ def pieChart(user, attr, sTime, eTime, ax, session):
     plt.setp(autotexts, size=8, weight="bold")
 
 #=====================================================================
-def generateReport(subj, start_obs_time, end_obs_time, session):
+def generateReport(transport, actionType, start_obs_time, end_obs_time, session):
 
     peakHours = getPeakHours(session, start_obs_time, end_obs_time)
     entP_peakHours = {'Entire period': [start_obs_time.time(), end_obs_time.time()]}
@@ -393,29 +398,39 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
     duration_in_s = duration.total_seconds()
     duration_hours = duration_in_s / 3600
 
-    if subj == 'Pedestrian':
-        indicators = ['No. of all pedestrians',    # 0
-                      'No. of female pedestrians', # 1
-                      'No. of male pedestrians',   # 2
-                      'No. of child pedestrians',  # 3
-                      'No. of elderly pedestrians',     # 4
-                      'No. of pedestrians with rolling',# 5
-                      'No. of pedestrians with pet',    # 6
-                      'No. of disabled pedestrians',    # 7
-                      'No. of ped. crossing street',    # 8
-                      'Flow of all pedestrians (ped/h)',# 9
-                      'No. of groups with size = 1',    # 10
-                      'No. of groups with size = 2',    # 11
-                      'No. of groups with size = 3',    # 12
-                      'No. of groups with size > 3'     # 13
-                      ]
+    if actionType == 'line passing':
+        q = session.query(LinePassing.idx) \
+            .filter(LinePassing.instant >= start_obs_time) \
+            .filter(LinePassing.instant <= end_obs_time) \
+            .join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
+    elif actionType.split(' ')[0] == 'zone':
+        q = session.query(ZonePassing.idx) \
+            .filter(ZonePassing.instant >= start_obs_time) \
+            .filter(ZonePassing.instant <= end_obs_time) \
+            .join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+    q = q.join(Person, Person.idx == GroupBelonging.personIdx) \
+         .join(Mode, Mode.personIdx == Person.idx) \
+         .filter(Mode.transport == transport)
 
-        q = session.query(Pedestrian.id).join(Pedestrian_obs, Pedestrian.id == Pedestrian_obs.pedestrianId)\
-                               .filter(Pedestrian_obs.instant >= start_obs_time) \
-                               .filter(Pedestrian_obs.instant <= end_obs_time)
+    if transport == 'walking':
+
+        if actionType == 'line passing':
+            indicators = ['No. of all people passing through',  # 0
+                          'No. of females',  # 1
+                          'No. of males',  # 2
+                          'No. of children',  # 3
+                          'No. of elderly people',  # 4
+                          'No. of people with pet',  # 5
+                          'No. of disabled people',  # 6
+                          'Flow of all people (ped/h)',  # 7
+                          'No of all groups',  # 8
+                          'No. of groups with size = 1',  # 9
+                          'No. of groups with size = 2',  # 10
+                          'No. of groups with size = 3',  # 11
+                          'No. of groups with size > 3'  # 12
+                          ]
 
         no_all_peds = q.count()
-        q_join_person = q.join(Person, Person.id == Pedestrian.personId)
 
         for p in entP_peakHours.keys():
             if entP_peakHours[p] is None:
@@ -428,17 +443,18 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
             duration_in_s = duration.total_seconds()
             duration_hours = duration_in_s / 3600
 
-            q_all_peaks = q_join_person.filter(Pedestrian_obs.instant >= lowerBound)
+            q_all_peaks = q.filter(LinePassing.instant >= lowerBound)
             if entP_peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
-                q_all_peaks = q_all_peaks.filter(Pedestrian_obs.instant < upperBound)
+                q_all_peaks = q_all_peaks.filter(LinePassing.instant < upperBound)
             else:
-                q_all_peaks = q_all_peaks.filter(Pedestrian_obs.instant <= upperBound)
+                q_all_peaks = q_all_peaks.filter(LinePassing.instant <= upperBound)
 
             no_all_peak = q_all_peaks.count()
 
             indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
             indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-            indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+            indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
+                                                    int(duration_in_s / 60) % 60)
 
             for ind in indicators:
                 if p == indDf.columns[0]:
@@ -475,44 +491,32 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_eld_peak, pct)
 
                 elif i == 5:
-                    no_rol_peak = q_all_peaks.filter(Pedestrian.rolling != 'none').count()
-                    pct = round((no_rol_peak / noAll) * 100, 1) if noAll != 0 else 0
-                    indDf.loc[ind, p] = '{} ({}%)'.format(no_rol_peak, pct)
-
-                elif i == 6:
-                    no_pet_peak = q_all_peaks.filter(Person.withPet == 1).count()
+                    no_pet_peak = q_all_peaks.filter(Person.animal == 1).count()
                     pct = round((no_pet_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_pet_peak, pct)
 
-                elif i == 7:
-                    no_dis_peak = q_all_peaks.filter(Person.disability != 'none').count()
+                elif i == 6:
+                    no_dis_peak = q_all_peaks.filter(Person.disability != 'no')\
+                                             .filter(Person.disability != '')\
+                                             .filter(Person.disability != False).count()
                     pct = round((no_dis_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_dis_peak, pct)
 
-                elif i == 8:
-                    pass
-
-                elif i == 9:
+                elif i == 7:
                     flow_all_peak = round(no_all_peak / duration_hours, 1)
                     indDf.loc[ind, p] = '{}'.format(flow_all_peak)
 
 
-    elif subj == 'Vehicle':
-        indicators = ['No. of all vehicles',       # 0
-                      'No. of passing through vehicles',   # 1
-                      'No. of arriving vehicles',  # 2
-                      'No. of departing vehicles', # 3
-                      'Flow of passing vehicles (veh/h)',   # 4
-                      'Rate of arriving vehicles (veh/h)',  # 5
-                      'Rate of departing vehicles (veh/h)', # 6
-                      'No. of delayed vehicles',     # 7
-                      'No. of vehicles had stop'     # 8
-                      ]
+    elif transport in ['cardriver', 'bike', 'scooter', 'skating']:
+        if actionType == 'line passing':
+            indicators = ['No. of all vehicles passing through',   # 0
+                          'Flow of passing vehicles (veh/h)'   # 1
+                          ]
 
-        q = session.query(Vehicle.id).join(Vehicle_obs, Vehicle.id == Vehicle_obs.vehicleId) \
-                   .filter(Vehicle_obs.instant >= start_obs_time) \
-                   .filter(Vehicle_obs.instant <= end_obs_time)
         no_all_vehs = q.count()
+
+        if no_all_vehs == 0:
+            return indDf
 
         for p in entP_peakHours.keys():
             if entP_peakHours[p] is None:
@@ -525,16 +529,19 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
             duration_in_s = duration.total_seconds()
             duration_hours = duration_in_s / 3600
 
-            q = session.query(Vehicle.id).join(Vehicle_obs, Vehicle.id == Vehicle_obs.vehicleId) \
-                                         .filter(Vehicle_obs.instant >= lowerBound)
-            if entP_peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
-                q = q.filter(Vehicle_obs.instant < upperBound)
+            q_all_peaks = q.filter(LinePassing.instant >= lowerBound)
+            if entP_peakHours[p][1] in [morningPeakStart, morningPeakEnd,
+                                        eveningPeakStart, eveningPeakEnd]:
+                q = q_all_peaks.filter(LinePassing.instant < upperBound)
             else:
-                q = q.filter(Vehicle_obs.instant <= upperBound)
+                q = q_all_peaks.filter(LinePassing.instant <= upperBound)
+
+            no_all_peak = q_all_peaks.count()
 
             indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
             indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-            indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+            indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
+                                                    int(duration_in_s / 60) % 60)
 
             for ind in indicators:
 
@@ -545,64 +552,37 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
 
                 i = indicators.index(ind)
                 if i == 0:
-                    no_all_peak = q.count()
                     if p == indDf.columns[0]:
-                        cell = ['{}', no_all_vehs, None]
+                        indDf.loc[ind, p] = '{}'.format(no_all_vehs)
                     else:
                         pct = round((no_all_peak / noAll) * 100, 1) if noAll != 0 else 0
-                        cell = ['{} ({}%)', no_all_peak, pct]
-                    indDf.loc[ind, p] = cell[0].format(cell[1], cell[2])
+                        indDf.loc[ind, p] = '{} ({}%)'.format(no_all_peak, pct)
+
+                # elif i == 2:
+                #     no_arriv_vehs = q.join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id) \
+                #                      .filter(Site_ODs.odType == 'on_street_parking_lot').count()
+                #     pct = round((no_arriv_vehs / noAll) * 100, 1) if noAll != 0 else 0
+                #
+                #     indDf.loc[ind, p] = '{} ({}%)'.format(no_arriv_vehs, pct)
+                #
+                # elif i == 3:
+                #     no_depart_vehs = q.join(Site_ODs, Vehicle_obs.originId == Site_ODs.id) \
+                #                       .filter(Site_ODs.odType == 'on_street_parking_lot').count()
+                #     pct = round((no_depart_vehs / noAll) * 100, 1) if noAll != 0 else 0
+                #
+                #     indDf.loc[ind, p] = '{} ({}%)'.format(no_depart_vehs, pct)
 
                 elif i == 1:
-                    q_pass_orig = q.join(Site_ODs, Vehicle_obs.originId == Site_ODs.id) \
-                                   .filter(Site_ODs.odType == 'road_lane')
-                    q_pass_dest = q.join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id) \
-                                   .filter(Site_ODs.odType == 'road_lane')
+                    indDf.loc[ind, p] = '{}'.format(round(no_all_peak / duration_hours, 1))
+
+                # elif i == 5:
+                #     indDf.loc[ind, p] = '{}'.format(round(no_arriv_vehs / duration_hours, 1))
+                #
+                # elif i == 6:
+                #     indDf.loc[ind, p] = '{}'.format(round(no_depart_vehs / duration_hours, 1))
 
 
-                    no_pass_vehs = len(set([i[0] for i in q_pass_orig.all()]) &
-                                       set([i[0] for i in q_pass_dest.all()]))
-                    pct = round((no_pass_vehs / noAll) * 100, 1) if noAll != 0 else 0
-
-                    indDf.loc[ind, p] = '{} ({}%)'.format(no_pass_vehs, pct)
-
-                elif i == 2:
-                    no_arriv_vehs = q.join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id) \
-                                     .filter(Site_ODs.odType == 'on_street_parking_lot').count()
-                    pct = round((no_arriv_vehs / noAll) * 100, 1) if noAll != 0 else 0
-
-                    indDf.loc[ind, p] = '{} ({}%)'.format(no_arriv_vehs, pct)
-
-                elif i == 3:
-                    no_depart_vehs = q.join(Site_ODs, Vehicle_obs.originId == Site_ODs.id) \
-                                      .filter(Site_ODs.odType == 'on_street_parking_lot').count()
-                    pct = round((no_depart_vehs / noAll) * 100, 1) if noAll != 0 else 0
-
-                    indDf.loc[ind, p] = '{} ({}%)'.format(no_depart_vehs, pct)
-
-                elif i == 4:
-                    indDf.loc[ind, p] = '{}'.format(round(no_pass_vehs / duration_hours, 1))
-
-                elif i == 5:
-                    indDf.loc[ind, p] = '{}'.format(round(no_arriv_vehs / duration_hours, 1))
-
-                elif i == 6:
-                    indDf.loc[ind, p] = '{}'.format(round(no_depart_vehs / duration_hours, 1))
-
-                elif i == 7:
-                    no_dely_vehs = q.filter(Vehicle_obs.delayed == 1).count()
-                    pct = round((no_dely_vehs / noAll) * 100, 1) if noAll != 0 else 0
-
-                    indDf.loc[ind, p] = '{} ({}%)'.format(no_dely_vehs, pct)
-
-                elif i == 8:
-                    no_stop_vehs = q.filter(Vehicle_obs.hasStop != 'no').count()
-                    pct = round((no_stop_vehs / noAll) * 100, 1) if noAll != 0 else 0
-
-                    indDf.loc[ind, p] = '{} ({}%)'.format(no_stop_vehs, pct)
-
-
-    elif subj == 'Bike':
+    elif transport == 'Bike':
         indicators = ['No. of all cyclists',    # 0
                       'No. of cyclists riding on sidewalk',     # 1
                       'No. of cyclists riding against traffic', # 2
@@ -678,7 +658,7 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
                     indDf.loc[ind, p] = '{}'.format(flow_all_peak)
 
 
-    elif subj == 'Activity':
+    elif transport == 'Activity':
         indicators = ['Start time',  # 0
                       'End time',    # 1
                       'Duration'    # 2
@@ -812,26 +792,18 @@ def generateReport(subj, start_obs_time, end_obs_time, session):
     return indDf
 
 
-def compareIndicators(subj, session1, session2):
-    start_obs_time1, end_obs_time1 = getObsStartEnd(session1)
-    start_obs_time2, end_obs_time2 = getObsStartEnd(session2)
+def compareIndicators(transport, actionType, start_time, end_time, session1, session2):
+    obs_date1 = getObsStartEnd(session1)[0].date()
+    obs_date2 = getObsStartEnd(session2)[0].date()
 
-    if start_obs_time1.time() >= start_obs_time2.time():
-        start_time1 = start_obs_time1
-        start_time2 = datetime.datetime.combine(start_obs_time2.date(), start_obs_time1.time())
-    else:
-        start_time1 = datetime.datetime.combine(start_obs_time1.date(), start_obs_time2.time())
-        start_time2 = start_obs_time2
+    start_time1 = datetime.datetime.combine(obs_date1, start_time)
+    end_time1 = datetime.datetime.combine(obs_date1, end_time)
 
-    if end_obs_time1.time() <= end_obs_time2.time():
-        end_time1 = end_obs_time1
-        end_time2 = datetime.datetime.combine(end_obs_time2.date(), end_obs_time1.time())
-    else:
-        end_time1 = datetime.datetime.combine(end_obs_time1.date(), end_obs_time2.time())
-        end_time2 = end_obs_time2
+    start_time2 = datetime.datetime.combine(obs_date2, start_time)
+    end_time2 = datetime.datetime.combine(obs_date2, end_time)
 
-    indDf1 = generateReport(subj, start_time1, end_time1, session1)
-    indDf2 = generateReport(subj, start_time2, end_time2, session2)
+    indDf1 = generateReport(transport, actionType, start_time1, end_time1, session1)
+    indDf2 = generateReport(transport, actionType, start_time2, end_time2, session2)
 
     indDf = indDf1.iloc[0:3, :].copy()
 
@@ -893,46 +865,39 @@ def compareIndicators(subj, session1, session2):
 
 
 
-def getLabelSizePie(className, fieldName, startTime, endTime, session):
-    if className in ['Pedestrian', 'Vehicle', 'Bike']:
-        className = className+'_obs'
-    class_ = getattr(dbSchema, className)
-    if className == 'Pedestrian_obs':
-        field_ = getattr(Person, fieldName)
-        q = session.query(func.count(field_), field_)\
-                   .join(Pedestrian, Person.id == Pedestrian.personId)\
-                   .join(Pedestrian_obs, Pedestrian_obs.pedestrianId == Pedestrian.id) \
-                   .filter(Pedestrian_obs.instant >= startTime) \
-                   .filter(Pedestrian_obs.instant <= endTime) \
-                   .filter(Pedestrian_obs.destinationId != '') \
-                   .group_by(field_)
-    elif className == 'Vehicle_obs':
-        field_ = getattr(Vehicle, fieldName)
-        q = session.query(func.count(field_), field_)\
-                   .join(Vehicle_obs, Vehicle_obs.vehicleId == Vehicle.id) \
-                   .filter(Vehicle_obs.instant >= startTime) \
-                   .filter(Vehicle_obs.instant <= endTime) \
-                   .filter(Vehicle_obs.destinationId != '') \
-                   .group_by(field_)
-    elif className == 'Bike_obs':
-        field_ = getattr(Bike, fieldName)
-        q = session.query(func.count(field_), field_)\
-                   .join(Bike_obs, Bike_obs.bikeId == Bike.id) \
-                   .filter(Bike_obs.instant >= startTime) \
-                   .filter(Bike_obs.instant <= endTime) \
-                   .filter(Bike_obs.destinationId != '') \
-                   .group_by(field_)
-    elif className == 'Activity':
-        field_ = getattr(Activity, fieldName)
-        q = session.query(func.count(field_), field_) \
-                   .filter(Activity.startTime >= startTime) \
-                   .filter(Activity.startTime <= endTime) \
-                   .group_by(field_)
+def getLabelSizePie(transport, fieldName, startTime, endTime, session):
 
-    # q = session.query(cls_fld).join(Pedestrian, Person.id == Pedestrian.personId). \
-    #     distinct()
-    labels = [i[1].name for i in q.all()]
-    sizes = [int(i[0]) for i in q.all()]
+    if transport == 'all types':
+        field_ = getattr(Mode, fieldName)
+        q = session.query(field_, func.count(field_)) \
+            .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
+            .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
+            .filter(LinePassing.instant >= startTime) \
+            .filter(LinePassing.instant <= endTime) \
+            .group_by(field_)
+    elif transport == 'walking':
+        field_ = getattr(Person, fieldName)
+        q = session.query(field_, func.count(field_)) \
+            .join(Mode, Person.idx == Mode.personIdx) \
+            .filter(Mode.transport == transport) \
+            .join(GroupBelonging, GroupBelonging.personIdx == Person.idx) \
+            .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
+            .filter(LinePassing.instant >= startTime) \
+            .filter(LinePassing.instant <= endTime) \
+            .group_by(field_)
+    elif transport == 'cardriver':
+        field_ = getattr(Vehicle, fieldName)
+        q = session.query(field_, func.count(field_)) \
+            .join(Mode, Vehicle.idx == Mode.vehicleIdx) \
+            .filter(Mode.transport == transport) \
+            .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
+            .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
+            .filter(LinePassing.instant >= startTime) \
+            .filter(LinePassing.instant <= endTime) \
+            .group_by(field_)
+
+    labels = [i[0].name if not isinstance(i[0], str) else i[0] for i in q.all()]
+    sizes = [int(i[1]) for i in q.all()]
 
     return labels, sizes
 
@@ -979,32 +944,35 @@ def getPeakHours(session, start_obs_time, end_obs_time,
     return peakHours
 
 def getObsStartEnd(session):
-    site_instance = session.query(Study_site).first()
-    start_obs_time = site_instance.obsStart
-    end_obs_time = site_instance.obsEnd
+    first_linePass_time = session.query(func.min(LinePassing.instant)).first()[0]
+    last_linePass_time = session.query(func.max(LinePassing.instant)).first()[0]
+
+    first_zonePass_time = session.query(func.min(ZonePassing.instant)).first()[0]
+    last_zonePass_time = session.query(func.max(ZonePassing.instant)).first()[0]
+
+    start_obs_time = min([first_linePass_time, first_zonePass_time])
+    end_obs_time = max([last_linePass_time, last_zonePass_time])
+
+    # site_instance = session.query(Study_site).first()
+    # start_obs_time = site_instance.obsStart
+    # end_obs_time = site_instance.obsEnd
     return start_obs_time, end_obs_time
 
-def getOdNamesDirections(session):
-    q = session.query(Site_ODs.odType, Site_ODs.odName, Site_ODs.id, Site_ODs.direction)
+def calculateBinsEdges(start, end):
+    if cfg != []:
+        interval = int(config_object['BINS']['binsminutes'])
+    else:
+        interval = 10
+    m2 = np.ceil((start.minute + start.second / 60) / interval)
+    if m2 == 60 / interval:
+        start = datetime.datetime.combine(start.date(), datetime.time(start.hour + 1))
+    else:
+        start = datetime.datetime.combine(start.date(),
+                                          datetime.time(start.hour, int(m2 * interval)))
 
-    pointOds = ['adjoining_ZOI', 'on_street_parking_lot', 'bicycle_rack', 'informal_bicycle_parking',
-                'bus_stop', 'subway_station']
-    ods_dict = {}
-    for od in q.all():
-        if od[1] in ods_dict.keys():
-            ods_list = ods_dict[od[1]]
-            if None in ods_list:
-                ods_list[ods_list.index(None)] = od[2]
-        else:
-            if od[3].name == 'end_point':
-                ods_dict[od[1]] = [None, od[2], 'directed', od[0].name]
-            elif od[3].name == 'start_point':
-                ods_dict[od[1]] = [od[2], None, 'directed', od[0].name]
-            elif od[3].name == 'NA' and not(od[0].name in pointOds):
-                ods_dict[od[1]] = [od[2], None, 'undirected', od[0].name]
-            elif od[0].name in pointOds:
-                ods_dict[od[1]] = [od[2], -1, 'NA', od[0].name]
-    return ods_dict
+    bins = pd.date_range(start=start, end=end, freq=pd.offsets.Minute(interval))
+    return bins
+
 
 def calculateNoBins(session, minutes=binsMinutes):
     start_obs_time, end_obs_time = getObsStartEnd(session)
