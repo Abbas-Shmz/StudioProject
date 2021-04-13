@@ -42,15 +42,15 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, 
 
     if not isinstance(session, list):
         time_list = []
-        if actionType == 'line passing':
+        if 'line' in actionType.split(' '):
             q = session.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
                 join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
-        elif actionType.split(' ')[0] == 'zone':
+        elif 'zone' in actionType.split(' '):
             q = session.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
                 join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
-            if actionType.split(' ')[1] == 'entering':
+            if 'entering' in actionType.split(' '):
                 q = q.filter(ZonePassing.entering == True)
-            elif actionType.split(' ')[1] == 'exiting':
+            elif 'exiting' in actionType.split(' '):
                 q = q.filter(ZonePassing.entering == False)
         q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
             .filter(Mode.transport == transport)
@@ -58,10 +58,7 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, 
         time_list = [i[0] for i in q.all()]
 
         if time_list == []:
-            return 'No {} is observed {} {} #{}!'.format(transport,
-                                                            actionType.split(' ')[1],
-                                                            actionType.split(' ')[0],
-                                                            unitIdx)
+            return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
 
         (n, edges, patches) = ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth,
                                       alpha=alpha, label=label, histtype=histtype)
@@ -69,15 +66,15 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, 
         time_lists = []
         for s in session:
             time_list = []
-            if actionType == 'line passing':
+            if 'line' in actionType.split(' '):
                 q = s.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
                     join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
-            elif actionType.split(' ')[0] == 'zone':
+            elif 'zone' in actionType.split(' '):
                 q = s.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
                     join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
-                if actionType.split(' ')[1] == 'entering':
+                if 'entering' in actionType.split(' '):
                     q = q.filter(ZonePassing.entering == True)
-                elif actionType.split(' ')[1] == 'exiting':
+                elif 'exiting' in actionType.split(' '):
                     q = q.filter(ZonePassing.entering == False)
             q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
                 .filter(Mode.transport == transport)
@@ -86,10 +83,7 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, 
             time_lists.append(time_list)
 
         if time_lists[0] == [] and time_lists[1] == []:
-            return 'No {} is observed {} {} #{}!'.format(transport,
-                                                        actionType.split(' ')[1],
-                                                        actionType.split(' ')[0],
-                                                        unitIdx)
+            return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
 
         i = 0
         for t in time_lists[0]:
@@ -134,11 +128,8 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, 
     ax.set_xlabel(xLabel, fontsize=8)
     ax.set_ylabel('No. of ' + transport, fontsize=8)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.set_title('Temporal distribution of {}s {} {} #{}'.format(transport,
-                                                                 actionType.split(' ')[1],
-                                                                 actionType.split(' ')[0],
-                                                                 unitIdx),
-                 fontsize=10)
+    ax.set_title('Temporal distribution of {}s {} #{}'.format(transport, actionType, unitIdx),
+                 fontsize=8)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     # if not isinstance(session, list):
@@ -398,15 +389,15 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
     duration_in_s = duration.total_seconds()
     duration_hours = duration_in_s / 3600
 
-    if actionType == 'line passing':
+    if 'line' in actionType.split(' '):
         q = session.query(LinePassing.idx) \
             .filter(LinePassing.instant >= start_obs_time) \
-            .filter(LinePassing.instant <= end_obs_time) \
+            .filter(LinePassing.instant < end_obs_time) \
             .join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
-    elif actionType.split(' ')[0] == 'zone':
+    elif 'zone' in actionType.split(' '):
         q = session.query(ZonePassing.idx) \
             .filter(ZonePassing.instant >= start_obs_time) \
-            .filter(ZonePassing.instant <= end_obs_time) \
+            .filter(ZonePassing.instant < end_obs_time) \
             .join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
     q = q.join(Person, Person.idx == GroupBelonging.personIdx) \
          .join(Mode, Mode.personIdx == Person.idx) \
@@ -414,7 +405,7 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
 
     if transport == 'walking':
 
-        if actionType == 'line passing':
+        if 'line' in actionType.split(' '):
             indicators = ['No. of all people passing through',  # 0
                           'No. of females',  # 1
                           'No. of males',  # 2
@@ -443,11 +434,8 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
             duration_in_s = duration.total_seconds()
             duration_hours = duration_in_s / 3600
 
-            q_all_peaks = q.filter(LinePassing.instant >= lowerBound)
-            if entP_peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
-                q_all_peaks = q_all_peaks.filter(LinePassing.instant < upperBound)
-            else:
-                q_all_peaks = q_all_peaks.filter(LinePassing.instant <= upperBound)
+            q_all_peaks = q.filter(LinePassing.instant >= lowerBound)\
+                           .filter(LinePassing.instant < upperBound)
 
             no_all_peak = q_all_peaks.count()
 
@@ -508,7 +496,7 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
 
 
     elif transport in ['cardriver', 'bike', 'scooter', 'skating']:
-        if actionType == 'line passing':
+        if 'line' in actionType.split(' '):
             indicators = ['No. of all vehicles passing through',   # 0
                           'Flow of passing vehicles (veh/h)'   # 1
                           ]
@@ -529,12 +517,8 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
             duration_in_s = duration.total_seconds()
             duration_hours = duration_in_s / 3600
 
-            q_all_peaks = q.filter(LinePassing.instant >= lowerBound)
-            if entP_peakHours[p][1] in [morningPeakStart, morningPeakEnd,
-                                        eveningPeakStart, eveningPeakEnd]:
-                q = q_all_peaks.filter(LinePassing.instant < upperBound)
-            else:
-                q = q_all_peaks.filter(LinePassing.instant <= upperBound)
+            q_all_peaks = q.filter(LinePassing.instant >= lowerBound) \
+                           .filter(LinePassing.instant < upperBound)
 
             no_all_peak = q_all_peaks.count()
 
@@ -591,7 +575,7 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
 
         q = session.query(Bike.id).join(Bike_obs, Bike.id == Bike_obs.bikeId) \
                    .filter(Bike_obs.instant >= start_obs_time) \
-                   .filter(Bike_obs.instant <= end_obs_time)
+                   .filter(Bike_obs.instant < end_obs_time)
 
         no_all_biks = q.count()
 
@@ -610,11 +594,8 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
             duration_hours = duration_in_s / 3600
 
             q_all_peaks = session.query(Bike_obs.originId, Bike_obs.destinationId)\
-                                 .filter(Bike_obs.instant >= lowerBound)
-            if entP_peakHours[p][1] in [morningPeakStart, morningPeakEnd, eveningPeakStart, eveningPeakEnd]:
-                q_all_peaks = q_all_peaks.filter(Bike_obs.instant < upperBound)
-            else:
-                q_all_peaks = q_all_peaks.filter(Bike_obs.instant <= upperBound)
+                                 .filter(Bike_obs.instant >= lowerBound) \
+                                 .filter(Bike_obs.instant < upperBound)
 
             indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
             indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
@@ -665,7 +646,7 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
                       ]
         q = session.query(Activity.activityType) \
                    .filter(Activity.startTime >= start_obs_time)\
-                   .filter(Activity.startTime <= end_obs_time).distinct()
+                   .filter(Activity.startTime < end_obs_time).distinct()
 
         activity_dict = {}
         for rec in q.all():
@@ -692,11 +673,8 @@ def generateReport(transport, actionType, start_obs_time, end_obs_time, session)
                     '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
 
                 q = session.query(Activity.activityType, Activity.startTime, Activity.endTime) \
-                           .filter(Activity.startTime >= lowerBound)
-                if p == indDf.columns[0]:
-                    q = q.filter(Activity.startTime <= upperBound)
-                else:
-                    q = q.filter(Activity.startTime < upperBound)
+                           .filter(Activity.startTime >= lowerBound) \
+                           .filter(Activity.startTime < upperBound)
 
                 for key in activity_dict.keys():
                     activity_dict[key]['count'] = 0
@@ -873,7 +851,7 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
             .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
             .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
             .filter(LinePassing.instant >= startTime) \
-            .filter(LinePassing.instant <= endTime) \
+            .filter(LinePassing.instant < endTime) \
             .group_by(field_)
     elif transport == 'walking':
         field_ = getattr(Person, fieldName)
@@ -883,7 +861,7 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
             .join(GroupBelonging, GroupBelonging.personIdx == Person.idx) \
             .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
             .filter(LinePassing.instant >= startTime) \
-            .filter(LinePassing.instant <= endTime) \
+            .filter(LinePassing.instant < endTime) \
             .group_by(field_)
     elif transport == 'cardriver':
         field_ = getattr(Vehicle, fieldName)
@@ -893,7 +871,7 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
             .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
             .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
             .filter(LinePassing.instant >= startTime) \
-            .filter(LinePassing.instant <= endTime) \
+            .filter(LinePassing.instant < endTime) \
             .group_by(field_)
 
     labels = [i[0].name if not isinstance(i[0], str) else i[0] for i in q.all()]

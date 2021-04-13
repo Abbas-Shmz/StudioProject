@@ -32,6 +32,8 @@ session = None
 
 config_object = ConfigParser()
 cfg = config_object.read("config.ini")
+actionTypeList = ['passing line', 'entering zone', 'exiting zone', 'passing zone',
+                  'dwelling zone']
 
 class ObsToolbox(QMainWindow):
     def __init__(self, parent=None):
@@ -957,8 +959,7 @@ class TempHistWindow(QDialog):
 
         gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
-        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
-                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
@@ -998,8 +999,7 @@ class TempHistWindow(QDialog):
         start_obs_time, end_obs_time = getObsStartEnd(session)
         bins = calculateBinsEdges(start_obs_time, end_obs_time)
         if len(bins) == 0:
-            QMessageBox.information(self, 'Error!',
-                                'The observation duration is less than {} minutes!'.format(interval))
+            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
             return
         err = tempDistHist(transport, actionType, unitIdx, ax, session, bins=bins)
         if err != None:
@@ -1021,9 +1021,9 @@ class TempHistWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
-        if actionType == 'line passing':
+        if 'line' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
-        else:
+        elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
 
         self.plotBtn.setEnabled(True)
@@ -1193,13 +1193,21 @@ class PieChartWindow(QDialog):
         self.timeSpanCombobx = QComboBox()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
-        peakHours = getPeakHours(session, start_obs_time, end_obs_time)
-        timeSpans = ['{} - {}'.format(start_obs_time.strftime('%I:%M %p'),
-                                      end_obs_time.strftime('%I:%M %p'))]
+        bins = calculateBinsEdges(start_obs_time, end_obs_time)
+        if len(bins) == 0:
+            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
+            return
+        else:
+            start_time = bins[0].to_pydatetime()
+            end_time = bins[-1].to_pydatetime()
+        peakHours = getPeakHours(session, start_time, end_time)
+        timeSpans = ['{} - {}'.format(start_time.strftime('%I:%M %p'),
+                                      end_time.strftime('%I:%M %p'))]
         for pVal in peakHours.values():
             if pVal != None:
-                timeSpans.append('{} - {}'.format(pVal[0].strftime('%I:%M %p'),
-                                                  pVal[1].strftime('%I:%M %p')))
+                ts = '{} - {}'.format(pVal[0].strftime('%I:%M %p'), pVal[1].strftime('%I:%M %p'))
+                if ts != timeSpans[0]:
+                    timeSpans.append(ts)
         self.timeSpanCombobx.addItems(timeSpans)
         self.timeSpanCombobx.currentTextChanged.connect(self.plotPieChart)
         gridLayout.addWidget(self.timeSpanCombobx, 0, 5, Qt.AlignLeft)
@@ -1311,8 +1319,7 @@ class CompHistWindow(QDialog):
 
         gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
-        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
-                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
@@ -1368,9 +1375,9 @@ class CompHistWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
 
-        if actionType == 'line passing':
+        if 'line' in actionType.split(' '):
             cls_obs = LinePassing
-        elif actionType.split(' ')[0] == 'zone':
+        elif 'zone' in actionType.split(' '):
             cls_obs = ZonePassing
 
         first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
@@ -1398,7 +1405,7 @@ class CompHistWindow(QDialog):
         bins = calculateBinsEdges(start, end)
         if len(bins) == 0:
             QMessageBox.information(self, 'Error!',
-                    'The common observation duration is less than {} minutes!'.format(interval))
+                    'The common observation duration is too short!')
             return
         # label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
         # label2 = os.path.basename(self.dbFile2Ledit.text()).split('.')[0]
@@ -1440,9 +1447,9 @@ class CompHistWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
-        if actionType == 'line passing':
+        if 'line' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
-        else:
+        elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
 
         self.plotBtn.setEnabled(True)
@@ -1473,8 +1480,7 @@ class genReportWindow(QDialog):
 
         gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
-        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
-                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         # self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
@@ -1503,12 +1509,11 @@ class genReportWindow(QDialog):
         start_obs_time, end_obs_time = getObsStartEnd(session)
         bins = calculateBinsEdges(start_obs_time, end_obs_time)
         if len(bins) == 0:
-            QMessageBox.information(self, 'Error!',
-                            'The observation duration is less than {} minutes!'.format(interval))
+            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
             return
         else:
-            start_time = bins[0]
-            end_time = bins[-1]
+            start_time = bins[0].to_pydatetime()
+            end_time = bins[-1].to_pydatetime()
         self.indicatorsDf = generateReport(transport, actionType, start_time, end_time, session)
 
         model = dfTableModel(self.indicatorsDf)
@@ -1573,8 +1578,7 @@ class compIndicatorsWindow(QDialog):
 
         gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
-        self.actionTypeCombobx.addItems(['line passing', 'zone entering', 'zone exiting',
-                                         'zone passing', 'zone dwelling'])
+        self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         # self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
