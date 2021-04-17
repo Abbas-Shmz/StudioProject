@@ -8,7 +8,7 @@ from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
         QGraphicsLineItem, QGraphicsTextItem, QGraphicsEllipseItem, QGridLayout, QComboBox,
-        QOpenGLWidget, QMessageBox, QActionGroup)
+        QOpenGLWidget, QMessageBox, QActionGroup, QGraphicsRectItem)
 from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
                              QLineEdit, QGraphicsItem, QGraphicsItemGroup)
 from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor, QPolygonF
@@ -38,6 +38,7 @@ class GraphicView(QGraphicsView):
         self.unsavedLines = []
         self.unsavedZones = []
         self.unsavedPoints = []
+        self.labelSize = 10
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # self.setViewport(QOpenGLWidget())
@@ -51,30 +52,27 @@ class GraphicView(QGraphicsView):
             p1 = self.mapToScene(event.x(), event.y())
             self.gLineItem = self.scene().addLine(QLineF(p1, p1))
             r, g, b = np.random.choice(range(256), size=3)
-            self.gLineItem.setPen(QPen(QColor(r, g, b), 1))
+            self.gLineItem.setPen(QPen(QColor(r, g, b), self.labelSize/6))
             # self.gLineItem.setOpacity(0.25)
 
         elif event.buttons() == Qt.LeftButton and self.parent().parent().drawZoneAction.isChecked():
-            # print('click *')
             self.setMouseTracking(True)
             p_clicked = self.mapToScene(event.x(), event.y())
             if self.gPolyItem == None:
                 self.currentPoly = QPolygonF([p_clicked])
                 self.gPolyItem = self.scene().addPolygon(self.currentPoly)
                 r, g, b = np.random.choice(range(256), size=3)
-                self.gPolyItem.setPen(QPen(QColor(r, g, b), 0.5))
+                self.gPolyItem.setPen(QPen(QColor(r, g, b), self.labelSize/10))
                 self.gPolyItem.setBrush(QBrush(QColor(r, g, b, 40)))
             else:
                 self.currentPoly.append(p_clicked)
                 self.gPolyItem.setPolygon(self.currentPoly)
-            # print([(round(p.x()), round(p.y())) for p in self.currentPoly])
-
 
         elif event.buttons() == Qt.LeftButton and self.parent().parent().drawPointAction.isChecked():
 
             p = self.mapToScene(event.x(), event.y())
             pointBbx = QRectF()
-            pointBbx.setSize(QSizeF(7, 7))
+            pointBbx.setSize(QSizeF(self.labelSize, self.labelSize))
             pointBbx.moveCenter(p)
             gPointItem = self.scene().addEllipse(pointBbx, QPen(Qt.white, 0.5), QBrush(Qt.black))
             self.unsavedPoints.append(gPointItem)
@@ -108,13 +106,11 @@ class GraphicView(QGraphicsView):
             self.gLineItem = None
 
         elif self.parent().parent().drawZoneAction.isChecked() and self.gPolyItem != None:
-            # print('click **')
             self.setMouseTracking(False)
             self.parent().parent().drawZoneAction.setChecked(False)
             self.gPolyItem.setPolygon(self.currentPoly)
             self.unsavedZones.append(self.gPolyItem)
             self.unsetCursor()
-            # print([(round(p.x()), round(p.y())) for p in self.gPolyItem.polygon()])
             self.gPolyItem = None
         else:
             self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
@@ -134,127 +130,6 @@ class GraphicView(QGraphicsView):
         if event.key() == Qt.Key_Space:
             self.parent().parent().play()
 
-class labelWindow(QDialog):
-    def __init__(self, parent, odShape):
-        super(labelWindow, self).__init__(parent)
-
-        self.setWindowTitle('Origin/Destinations')
-        self.setModal(True)
-        self.odShape = odShape
-
-        dbfilename = self.parent().scene().parent().obsTb.dbFilename
-        if dbfilename != None:
-            self.session = connectDatabase(dbfilename)
-        else:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText('The database file is not defined.')
-            msg.setInformativeText('In order to set the database file, open the Observation Toolbox')
-            msg.setIcon(QMessageBox.Critical)
-            msg.exec_()
-            self.parent().scene().parent().labelingAction.setChecked(False)
-            self.parent().scene().parent().drawZoneAction.setChecked(False)
-            self.unsetCursor()
-            return
-
-        labelWinLayout = QVBoxLayout()
-        labelWinGrid = QGridLayout()
-
-        labelWinGrid.addWidget(QLabel('OD Name:'), 0, 0)
-        odName_cmbbx = QComboBox()
-        labelWinGrid.addWidget(odName_cmbbx, 0, 1)
-        odName_cmbbx.addItems([name[0] for name in self.session.query(Site_ODs.odName).distinct()])
-        odName_cmbbx.setCurrentIndex(-1)
-
-        labelWinGrid.addWidget(QLabel('OD Id:'), 1, 0)
-        self.id_cmbbx = QComboBox()
-        labelWinGrid.addWidget(self.id_cmbbx, 1, 1)
-
-        labelWinGrid.addWidget(QLabel('Direction:'), 2, 0)
-        self.odDirect_lineedit = QLineEdit()
-        self.odDirect_lineedit.setReadOnly(True)
-        labelWinGrid.addWidget(self.odDirect_lineedit, 2, 1)
-
-        labelWinLayout.addItem(labelWinGrid)
-        self.addBtn = QPushButton('Add')
-        self.addBtn.setEnabled(False)
-        self.addBtn.clicked.connect(self.addShapeText)
-
-        cancelBtn = QPushButton('Cancel')
-        cancelBtn.clicked.connect(self.labelCancel)
-
-        odName_cmbbx.currentIndexChanged.connect(self.nameCmbIndexChanged)
-        self.id_cmbbx.currentIndexChanged.connect(self.idCmbIndexChanged)
-
-        btnsLayout = QHBoxLayout()
-        btnsLayout.addWidget(cancelBtn)
-        btnsLayout.addWidget(self.addBtn)
-        labelWinLayout.addLayout(btnsLayout)
-        self.setLayout(labelWinLayout)
-
-    def addShapeText(self):
-        labelText = self.parent().scene().addText(self.id_cmbbx.currentText())
-        labelFont = QFont()
-        labelFont.setPointSize(4)
-        labelFont.setBold(True)
-        labelText.setFont(labelFont)
-        labelText.setDefaultTextColor(Qt.black)
-        labelText.setPos(self.odShape.boundingRect().center())
-        labelText.moveBy(-labelText.boundingRect().width() / 2,
-                         -labelText.boundingRect().height() / 2)
-
-        od_type = self.session.query(Site_ODs.odType). \
-            filter(Site_ODs.id == self.id_cmbbx.currentText()).all()[0][0].name
-
-        od_name = self.session.query(Site_ODs.odName). \
-            filter(Site_ODs.id == self.id_cmbbx.currentText()).all()[0][0]
-
-        # odShape.setToolTip("<h3>Name: {} <hr>Type: {}</h3>"
-        #                 "".format(od_name, od_type))
-        self.odShape.setToolTip('Name: {}\nType: {}'.format(od_name, od_type))
-
-        if od_type == 'sidewalk':
-            brushParams = [Qt.red, 0.05, Qt.SolidPattern] #[color, alpha, style]
-        elif od_type == 'road_lane':
-            brushParams = [Qt.cyan, 0.05, Qt.SolidPattern]
-        elif od_type == 'cycling_path':
-            brushParams = [Qt.green, 0.05, Qt.SolidPattern]
-        elif od_type == 'bus_lane':
-            brushParams = [Qt.yellow, 0.05, Qt.SolidPattern]
-        elif od_type == 'adjoining_ZOI':
-            brushParams = [Qt.blue, 0.1, Qt.SolidPattern]
-        elif od_type == 'on_street_parking_lot':
-            brushParams = [Qt.black, 0.4, Qt.Dense6Pattern]
-        else:
-            brushParams = [Qt.white, 0.05, Qt.SolidPattern]
-
-        self.odShape.setPen(QPen(brushParams[0], 0.5))
-        odBrushColor = QColor(brushParams[0])
-        odBrushColor.setAlphaF(brushParams[1])
-        self.odShape.setBrush(QBrush(odBrushColor, brushParams[2]))
-
-        self.close()
-
-
-    def labelCancel(self):
-        self.parent().scene().removeItem(self.odShape)
-        self.close()
-
-
-    def nameCmbIndexChanged(self):
-        self.addBtn.setEnabled(True)
-        self.id_cmbbx.clear()
-        self.id_cmbbx.addItems([str(id[0]) for id in self.session.query(Site_ODs.id)\
-                          .filter(Site_ODs.odName == self.sender().currentText())\
-                          .all()])
-
-    def idCmbIndexChanged(self):
-        if self.sender().currentIndex() != -1:
-            dir = self.session.query(Site_ODs.direction)\
-                  .filter(Site_ODs.id == self.sender().currentText()).all()[0][0]
-            self.odDirect_lineedit.setText(str(dir.name))
-
-
 
 class VideoWindow(QMainWindow):
 
@@ -265,7 +140,6 @@ class VideoWindow(QMainWindow):
         self.setStatusBar(self.statusBar)
         self.gScene = QGraphicsScene(self)
         self.gView = GraphicView(self.gScene, self)
-        self.gView.setSceneRect(0, 0, 320, 240)
         # self.gView.setBackgroundBrush(QBrush(Qt.black))
 
         self.videoStartDatetime = None
@@ -321,29 +195,32 @@ class VideoWindow(QMainWindow):
 
 
         # Create open action
-        self.openVideoAction = QAction(QIcon('icons/video-file.png'), '&Open video file', self)
+        self.openVideoAction = QAction(QIcon('icons/video-file.png'), 'Open video', self)
         self.openVideoAction.setShortcut('Ctrl+O')
         self.openVideoAction.setStatusTip('Open video file')
         self.openVideoAction.triggered.connect(self.openVideoFile)
 
         # Create observation action
-        obsTbAction = QAction(QIcon('icons/checklist.png'), '&Observation toolbox', self)
+        obsTbAction = QAction(QIcon('icons/checklist.png'), 'Observation toolbox', self)
         obsTbAction.setStatusTip('Open observation toolbox')
         obsTbAction.triggered.connect(self.openObsToolbox)
 
         self.drawPointAction = QAction(QIcon('icons/drawPoint.png'), 'Draw point', self)
-        self.drawPointAction.setToolTip('Draw point over the video')
+        self.drawPointAction.setStatusTip('Draw point over the video')
         self.drawPointAction.setCheckable(True)
+        self.drawPointAction.setEnabled(False)
         self.drawPointAction.triggered.connect(self.drawingClick)
 
         self.drawLineAction = QAction(QIcon('icons/drawLine.png'), 'Draw line', self)
-        self.drawLineAction.setToolTip('Draw line over the video')
+        self.drawLineAction.setStatusTip('Draw line over the video')
         self.drawLineAction.setCheckable(True)
+        self.drawLineAction.setEnabled(False)
         self.drawLineAction.triggered.connect(self.drawingClick)
 
         self.drawZoneAction = QAction(QIcon('icons/drawZone.png'), 'Draw zone', self)
-        self.drawZoneAction.setToolTip('Draw zone over the video')
+        self.drawZoneAction.setStatusTip('Draw zone over the video')
         self.drawZoneAction.setCheckable(True)
+        self.drawZoneAction.setEnabled(False)
         self.drawZoneAction.triggered.connect(self.drawingClick)
 
         actionGroup = QActionGroup(self)
@@ -355,21 +232,24 @@ class VideoWindow(QMainWindow):
         openProjectAction.setStatusTip('Open project')
         openProjectAction.triggered.connect(self.openProject)
 
-        saveProjectAction = QAction(QIcon('icons/save-project.png'), 'Save project', self)
-        saveProjectAction.setStatusTip('Save project')
-        saveProjectAction.triggered.connect(self.saveProject)
+        self.saveProjectAction = QAction(QIcon('icons/save-project.png'), 'Save project', self)
+        self.saveProjectAction.setStatusTip('Save project')
+        self.saveProjectAction.setEnabled(False)
+        self.saveProjectAction.triggered.connect(self.saveProject)
 
         self.saveGraphAction = QAction(QIcon('icons/save-graphics.png'), 'Save graphics', self)
-        self.saveGraphAction.setStatusTip('Save graphics')
+        self.saveGraphAction.setStatusTip('Save graphics to database')
+        self.saveGraphAction.setEnabled(False)
         self.saveGraphAction.triggered.connect(self.saveGraphics)
 
         self.loadGraphAction = QAction(QIcon('icons/folders.png'), 'Load graphics', self)
-        self.loadGraphAction.setStatusTip('Load graphics')
+        self.loadGraphAction.setStatusTip('Load graphics from database')
+        self.loadGraphAction.setEnabled(False)
         self.loadGraphAction.triggered.connect(self.loadGraphics)
 
 
         # Create exit action
-        exitAction = QAction(QIcon('icons/close.png'), '&Exit', self)
+        exitAction = QAction(QIcon('icons/close.png'), 'Exit', self)
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(qApp.quit)  # self.exitCall
@@ -385,7 +265,7 @@ class VideoWindow(QMainWindow):
         self.toolbar = self.addToolBar('Tools')
         self.toolbar.setIconSize(QSize(24, 24))
         self.toolbar.addAction(openProjectAction)
-        self.toolbar.addAction(saveProjectAction)
+        self.toolbar.addAction(self.saveProjectAction)
         self.toolbar.addAction(self.openVideoAction)
 
         self.toolbar.insertSeparator(self.loadGraphAction)
@@ -437,9 +317,20 @@ class VideoWindow(QMainWindow):
                                                      os.path.basename(self.projectFile)))
 
         if self.videoFile != '':
-            creation_datetime = self.getVideoMetadata(self.videoFile)
+            self.saveProjectAction.setEnabled(True)
+            self.loadGraphAction.setEnabled(True)
+            self.saveGraphAction.setEnabled(True)
+            self.drawPointAction.setEnabled(True)
+            self.drawLineAction.setEnabled(True)
+            self.drawZoneAction.setEnabled(True)
+
+            creation_datetime, width, height = self.getVideoMetadata(self.videoFile)
             self.videoStartDatetime = self.videoCurrentDatetime = creation_datetime
             self.dateLabel.setText(creation_datetime.strftime('%a, %b %d, %Y'))
+
+            self.gView.setSceneRect(0, 0, width, height)
+            self.videoItem.setSize(QSizeF(width, height))
+            self.gView.labelSize = width/50
 
             self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(self.videoFile)))
             self.playButton.setEnabled(True)
@@ -524,6 +415,13 @@ class VideoWindow(QMainWindow):
 
         if self.projectFile == '':
             return
+
+        self.saveProjectAction.setEnabled(True)
+        self.loadGraphAction.setEnabled(True)
+        self.saveGraphAction.setEnabled(True)
+        self.drawPointAction.setEnabled(True)
+        self.drawLineAction.setEnabled(True)
+        self.drawZoneAction.setEnabled(True)
 
         tree = ET.parse(self.projectFile)
         root = tree.getroot()
@@ -624,6 +522,8 @@ class VideoWindow(QMainWindow):
 
         self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
                                              os.path.basename(self.projectFile)))
+        self.obsTb.setWindowTitle('{} - {}'.format(os.path.basename(self.obsTb.dbFilename),
+                                             os.path.basename(self.projectFile)))
 
     def saveGraphics(self):
         dbfilename = self.obsTb.dbFilename
@@ -670,6 +570,7 @@ class VideoWindow(QMainWindow):
         for item in self.gView.unsavedPoints:
             x = round(item.rect().center().x(), 2)
             y = round(item.rect().center().y(), 2)
+
             point = Point(x, y)
             self.session.add(point)
             self.session.flush()
@@ -684,31 +585,35 @@ class VideoWindow(QMainWindow):
                                         len(self.gView.unsavedZones)))
         self.gView.unsavedLines = []
         self.gView.unsavedZones = []
+        self.gView.unsavedPoints = []
 
         self.session.commit()
 
     def generate_label(self, xs, ys, text):
         gItemGroup = QGraphicsItemGroup()
         pointBbx = QRectF()
-        pointBbx.setSize(QSizeF(7, 7))
+        pointBbx.setSize(QSizeF(self.gView.labelSize, self.gView.labelSize))
         pointBbx.moveCenter(QPointF(np.mean(xs), np.mean(ys)))
-        pointShape = QGraphicsEllipseItem(pointBbx)
-        pointShape.setPen(QPen(Qt.white, 0.5))
+
         if len(xs) == 1:
+            pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = Qt.white
             textColor = Qt.black
         elif len(xs) ==2:
+            pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = Qt.black
             textColor = Qt.white
         else:
-            shapeColor = Qt.black
+            pointShape = QGraphicsRectItem(pointBbx)
+            shapeColor = Qt.darkBlue
             textColor = Qt.white
+        pointShape.setPen(QPen(Qt.white, 0.5))
         pointShape.setBrush(QBrush(shapeColor))
         # self.gView.scene().addEllipse(pointBbx, QPen(Qt.white, 0.5), QBrush(Qt.black))
         gItemGroup.addToGroup(pointShape)
         textLabel = QGraphicsTextItem(str(text))
         labelFont = QFont()
-        labelFont.setPointSize(4)
+        labelFont.setPointSize(self.gView.labelSize/2)
         labelFont.setBold(True)
         textLabel.setFont(labelFont)
         textLabel.setDefaultTextColor(textColor)
@@ -737,7 +642,8 @@ class VideoWindow(QMainWindow):
             p1 = line.points[0]
             p2 = line.points[1]
             r, g, b = np.random.choice(range(256), size=3)
-            self.gScene.addLine(p1.x, p1.y, p2.x, p2.y, QPen(QColor(r, g, b), 1))
+            self.gScene.addLine(p1.x, p1.y, p2.x, p2.y, QPen(QColor(r, g, b),
+                                                             self.gView.labelSize/6))
 
             label = self.generate_label([p1.x, p2.x], [p1.y, p2.y], line.idx)
             self.gScene.addItem(label)
@@ -746,7 +652,8 @@ class VideoWindow(QMainWindow):
             points = [QPointF(point.x, point.y) for point in zone.points]
             polygon = QPolygonF(points)
             r, g, b = np.random.choice(range(256), size=3)
-            self.gScene.addPolygon(polygon, QPen(QColor(r, g, b), 0.5), QBrush(QColor(r, g, b, 40)))
+            self.gScene.addPolygon(polygon, QPen(QColor(r, g, b), self.gView.labelSize/10),
+                                   QBrush(QColor(r, g, b, 40)))
 
             label = self.generate_label([point.x for point in zone.points],
                                         [point.y for point in zone.points], zone.idx)
@@ -768,17 +675,26 @@ class VideoWindow(QMainWindow):
 
         with parser:
             try:
-                metadata = extractMetadata(parser)
+                metadata = extractMetadata(parser, 7)
             except Exception as err:
                 print("Metadata extraction error: %s" % err)
                 metadata = None
         if not metadata:
             print("Unable to extract metadata")
 
-        creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
-        creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
+        # creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
+        # creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
 
-        return creationDatetime
+        metadata_dict = metadata._Metadata__data
+        # for key in metadata_dict.keys():
+        #     if metadata_dict[key].values:
+        #         print(key, metadata_dict[key].values[0].value)
+        creationDatetime = metadata_dict['creation_date'].values[0].value
+        width = metadata_dict['width'].values[0].value
+        height = metadata_dict['height'].values[0].value
+
+
+        return creationDatetime, width, height
 
 
 if __name__ == '__main__':
