@@ -637,6 +637,9 @@ class VideoWindow(QMainWindow):
 
         q_line = self.session.query(Line)
         q_zone = self.session.query(Zone)
+        if q_line.all() == [] or q_zone.all() == []:
+            QMessageBox.information(self, 'Warning!', 'There is no graphics to load!')
+            return
 
         for line in q_line:
             p1 = line.points[0]
