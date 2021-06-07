@@ -997,8 +997,12 @@ class TempHistWindow(QDialog):
         unitIdx = self.unitIdxCombobx.currentText()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
+        if None in [start_obs_time, end_obs_time]:
+            QMessageBox.information(self, 'Error!', 'There is no observation!')
+            return
         bins = calculateBinsEdges(start_obs_time, end_obs_time)
-        if len(bins) == 0:
+
+        if len(bins) < 2:
             QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
             return
         err = tempDistHist(transport, actionType, unitIdx, ax, session, bins=bins)
@@ -1194,7 +1198,7 @@ class PieChartWindow(QDialog):
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
         bins = calculateBinsEdges(start_obs_time, end_obs_time)
-        if len(bins) == 0:
+        if len(bins) < 2:
             QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
             return
         else:
@@ -1403,7 +1407,7 @@ class CompHistWindow(QDialog):
         duration_in_s = duration.total_seconds()
 
         bins = calculateBinsEdges(start, end)
-        if len(bins) == 0:
+        if len(bins) < 2:
             QMessageBox.information(self, 'Error!',
                     'The common observation duration is too short!')
             return
@@ -1508,7 +1512,7 @@ class genReportWindow(QDialog):
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
         bins = calculateBinsEdges(start_obs_time, end_obs_time)
-        if len(bins) == 0:
+        if len(bins) < 2:
             QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
             return
         else:
@@ -1638,7 +1642,7 @@ class compIndicatorsWindow(QDialog):
             bins_end = last_obs_time2
 
         bins = calculateBinsEdges(bins_start, bins_end)
-        if len(bins) > 0:
+        if len(bins) > 1:
             start_time = bins[0].time()
             end_time = bins[-1].time()
         else:

@@ -928,8 +928,18 @@ def getObsStartEnd(session):
     first_zonePass_time = session.query(func.min(ZonePassing.instant)).first()[0]
     last_zonePass_time = session.query(func.max(ZonePassing.instant)).first()[0]
 
-    start_obs_time = min([first_linePass_time, first_zonePass_time])
-    end_obs_time = max([last_linePass_time, last_zonePass_time])
+    first_times = [first_linePass_time, first_zonePass_time]
+    last_times = [last_linePass_time, last_zonePass_time]
+    if None in first_times:
+        start_obs_time = next((t for t in first_times if t is not None), None)
+    else:
+        start_obs_time = min(first_times)
+
+    if None in last_times:
+        end_obs_time = next((t for t in last_times if t is not None), None)
+    else:
+        end_obs_time = max(last_times)
+
 
     # site_instance = session.query(Study_site).first()
     # start_obs_time = site_instance.obsStart

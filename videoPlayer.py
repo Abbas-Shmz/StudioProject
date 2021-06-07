@@ -613,7 +613,7 @@ class VideoWindow(QMainWindow):
         gItemGroup.addToGroup(pointShape)
         textLabel = QGraphicsTextItem(str(text))
         labelFont = QFont()
-        labelFont.setPointSize(self.gView.labelSize/2)
+        labelFont.setPointSize(round(self.gView.labelSize/2))
         labelFont.setBold(True)
         textLabel.setFont(labelFont)
         textLabel.setDefaultTextColor(textColor)
@@ -637,7 +637,7 @@ class VideoWindow(QMainWindow):
 
         q_line = self.session.query(Line)
         q_zone = self.session.query(Zone)
-        if q_line.all() == [] or q_zone.all() == []:
+        if q_line.all() == [] and q_zone.all() == []:
             QMessageBox.information(self, 'Warning!', 'There is no graphics to load!')
             return
 
