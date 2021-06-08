@@ -171,15 +171,10 @@ class VideoWindow(QMainWindow):
         self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.clicked.connect(self.play)
 
-        self.incrPlayRateBtn = QPushButton()
+        self.changePlayRateBtn = QPushButton('1x')
+        self.changePlayRateBtn.setFixedWidth(40)
         # self.incrPlayRateBtn.setEnabled(False)
-        self.incrPlayRateBtn.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekForward))
-        self.incrPlayRateBtn.clicked.connect(self.incrPlayRate)
-
-        self.decrPlayRateBtn = QPushButton()
-        # self.incrPlayRateBtn.setEnabled(False)
-        self.decrPlayRateBtn.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekBackward))
-        self.decrPlayRateBtn.clicked.connect(self.decrPlayRate)
+        self.changePlayRateBtn.clicked.connect(self.changePlayRate)
 
         self.positionSlider = QSlider(Qt.Horizontal)
         self.positionSlider.setRange(0, 0)
@@ -187,7 +182,7 @@ class VideoWindow(QMainWindow):
 
         self.timerLabel = QLabel()
         self.timerLabel.setText('--:--:--')
-        self.timerLabel.setFixedWidth(55)
+        self.timerLabel.setFixedWidth(58)
 
         self.dateLabel = QLabel()
         self.dateLabel.setText('Video date: --')
@@ -291,9 +286,9 @@ class VideoWindow(QMainWindow):
         # Create layouts to place inside widget
         controlLayout = QHBoxLayout()
         controlLayout.setContentsMargins(0, 0, 0, 0)
-        controlLayout.addWidget(self.decrPlayRateBtn)
+        # controlLayout.addWidget(self.decrPlayRateBtn)
         controlLayout.addWidget(self.playButton)
-        controlLayout.addWidget(self.incrPlayRateBtn)
+        controlLayout.addWidget(self.changePlayRateBtn)
         controlLayout.addWidget(self.timerLabel)
         controlLayout.addWidget(self.positionSlider)
         # controlLayout.addWidget(self.durationLabel)
@@ -351,19 +346,16 @@ class VideoWindow(QMainWindow):
         else:
             self.mediaPlayer.play()
 
-    def incrPlayRate(self):
-        self.mediaPlayer.setPlaybackRate(2)
-        # if self.mediaPlayer.playbackRate() < 2:
-        #     self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() + 0.2)
-        #     self.statusBar.showMessage('Play back rate = x{}'.\
-        #                                format(round(self.mediaPlayer.playbackRate(),1)), 2000)
-
-    def decrPlayRate(self):
-        self.mediaPlayer.setPlaybackRate(1)
-        # if self.mediaPlayer.playbackRate() > 0.2:
-        #     self.mediaPlayer.setPlaybackRate(self.mediaPlayer.playbackRate() - 0.2)
-        #     self.statusBar.showMessage('Play back rate = x{}'.\
-        #                                format(round(self.mediaPlayer.playbackRate(), 1)), 2000)
+    def changePlayRate(self):
+        if self.mediaPlayer.playbackRate() < 2:
+            r = self.mediaPlayer.playbackRate() + 0.5
+            self.mediaPlayer.setPlaybackRate(r)
+            self.changePlayRateBtn.setText('{:g}x'.format(r))
+            self.statusBar.showMessage('Play back rate = {:g}x'.format(r), 2000)
+        elif self.mediaPlayer.playbackRate() == 2:
+            self.mediaPlayer.setPlaybackRate(1)
+            self.changePlayRateBtn.setText('{}x'.format(1))
+            self.statusBar.showMessage('Play back rate = {}x'.format(1), 2000)
 
     def mediaStateChanged(self, state):
         if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
