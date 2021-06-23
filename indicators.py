@@ -14,9 +14,12 @@ from sqlalchemy import func
 from configparser import ConfigParser
 
 import pandas as pd
+from matplotlib.patches import Polygon
+from trafficintelligence import storage
+from trafficintelligence.cvutils import homographyProject
 import iframework
 from iframework import connectDatabase, LinePassing, ZonePassing, Person, Mode, GroupBelonging,\
-    Vehicle
+    Vehicle, Line, Zone
 
 noDataSign = 'x'
 
@@ -841,8 +844,42 @@ def compareIndicators(transport, actionType, start_time, end_time, session1, ses
     return indDf
 
 
+def plotTrajectory(trjDBFile, homographyFile, ax, session):
+    objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
+    homography = np.loadtxt(homographyFile, delimiter=' ')
 
+    for traj in objects:
+        xy_arr = traj.positions.asArray()
+        x = xy_arr[0]
+        y = xy_arr[1]
+        ax.plot(x, y, lw=0.5)
 
+    q_line = session.query(Line)
+    q_zone = session.query(Zone)
+
+    if q_line.all() != []:
+        for line in q_line:
+            x_list = [p.x for p in line.points]
+            y_list = [p.y for p in line.points]
+            points = np.array([x_list, y_list])
+            prj_points = homographyProject(points, homography)
+            ax.plot(prj_points[0], prj_points[1])
+
+    if q_zone.all() != []:
+        for zone in q_zone:
+            x_list = [p.x for p in zone.points]
+            y_list = [p.y for p in zone.points]
+            points = np.array([x_list, y_list])
+            prj_points = homographyProject(points, homography)
+            prj_xy = list(zip(prj_points[0], prj_points[1]))
+            rand_color = np.random.random(3)
+            fc = np.append(rand_color, 0.15)
+            ec = np.array([0, 0, 0, 0.5])
+            zone = Polygon(prj_xy, fc=fc, ec=ec, lw=0.5)
+            ax.add_patch(zone)
+    ax.axis('equal')
+
+# =========================================
 def getLabelSizePie(transport, fieldName, startTime, endTime, session):
 
     if transport == 'all types':

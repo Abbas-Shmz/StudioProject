@@ -19,6 +19,7 @@ import numpy as np
 from hachoir.parser import createParser
 from hachoir.metadata import extractMetadata
 from hachoir.core import config as HachoirConfig
+from PIL import Image, ImageDraw
 
 import sys
 import os
@@ -218,6 +219,10 @@ class VideoWindow(QMainWindow):
         self.drawZoneAction.setEnabled(False)
         self.drawZoneAction.triggered.connect(self.drawingClick)
 
+        self.maskGenAction = QAction(QIcon('icons/mask.png'), 'Generate mask file', self)
+        self.maskGenAction.setStatusTip('Generate mask file for TrafficIntelligence')
+        self.maskGenAction.triggered.connect(self.generateMask)
+
         actionGroup = QActionGroup(self)
         actionGroup.addAction(self.drawPointAction)
         actionGroup.addAction(self.drawLineAction)
@@ -269,6 +274,7 @@ class VideoWindow(QMainWindow):
         self.toolbar.addAction(self.drawPointAction)
         self.toolbar.addAction(self.drawLineAction)
         self.toolbar.addAction(self.drawZoneAction)
+        self.toolbar.addAction(self.maskGenAction)
         self.toolbar.insertSeparator(self.drawPointAction)
 
 
@@ -400,6 +406,44 @@ class VideoWindow(QMainWindow):
         #     self.drawLineAction.setChecked(False)
         cursor = QCursor(Qt.CrossCursor)
         self.gView.setCursor(cursor)
+
+    def generateMask(self):
+        dbfilename = self.obsTb.dbFilename
+        if dbfilename != None:
+            self.session = connectDatabase(dbfilename)
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText('The database file is not defined.')
+            msg.setInformativeText('In order to set the database file, open the Observation Toolbox')
+            msg.setIcon(QMessageBox.Critical)
+            msg.exec_()
+            return
+
+        if self.gView.unsavedLines == [] and self.gView.unsavedZones == [] and \
+                self.gView.unsavedPoints == []:
+            QMessageBox.information(self, 'Save', 'There is no polygon to generate mask!')
+            return
+
+        creation_datetime, width, height = self.getVideoMetadata(self.videoFile)
+        item = self.gView.unsavedZones[0]
+        mask_polygon = item.polygon()
+        xy = []
+        for p in mask_polygon:
+            xy.append((p.x(), p.y()))
+
+        img = Image.new('RGB', (width, height), color='black')
+        img1 = ImageDraw.Draw(img)
+        img1.polygon(xy, fill="white", outline="white")
+
+        fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
+                                                  QDir.homePath(), "PNG files (*.png)")
+        if fileName != '':
+            img.save(fileName)
+
+        self.gView.scene().removeItem(item)
+        self.gView.unsavedZones = []
+
 
     def openProject(self):
         self.projectFile, _ = QFileDialog.getOpenFileName(self, "Open project file",

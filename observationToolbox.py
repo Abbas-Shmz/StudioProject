@@ -21,7 +21,8 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
-    calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges
+    calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
+    plotTrajectory
 import iframework
 
 from sqlalchemy import Enum, Boolean, DateTime
@@ -110,6 +111,12 @@ class ObsToolbox(QMainWindow):
         compIndAction = QAction(QIcon('icons/positive.png'), '&Before/After Comparison', self)
         compIndAction.triggered.connect(self.compIndicators)
 
+        importTrajAction = QAction(QIcon('icons/import.png'), '&Import trajectories', self)
+        importTrajAction.triggered.connect(self.importTrajectories)
+
+        plotTrajAction = QAction(QIcon('icons/trajectory.png'), '&Plot trajectories', self)
+        plotTrajAction.triggered.connect(self.plotTrajectories)
+
         self.toolbar = QToolBar()
         self.toolbar.setIconSize(QSize(24, 24))
         self.toolbar.addAction(self.openAction)
@@ -121,6 +128,9 @@ class ObsToolbox(QMainWindow):
         self.toolbar.addAction(reportAction)
         self.toolbar.addAction(compIndAction)
         self.toolbar.insertSeparator(tempHistAction)
+        self.toolbar.addAction(importTrajAction)
+        self.toolbar.addAction(plotTrajAction)
+        self.toolbar.insertSeparator(importTrajAction)
         self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
 
         # ++++++++++++++++++ Toolbox tabs +++++++++++++++++++++++++
@@ -934,6 +944,28 @@ class ObsToolbox(QMainWindow):
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
         compIndWin.exec_()
 
+    def importTrajectories(self):
+        if session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+
+    def plotTrajectories(self):
+        if session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+
+        plotTrajWin = plotTrajWindow(self)
+
+        # tempHistWin.setModal(True)
+        # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
+
+        plotTrajWin.exec_()
 
 class TempHistWindow(QDialog):
     def __init__(self, parent=None):
@@ -950,7 +982,7 @@ class TempHistWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        # self.odDirCombobx = QComboBox()
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
@@ -973,11 +1005,11 @@ class TempHistWindow(QDialog):
         self.plotBtn.setEnabled(False)
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
-        self.saveBtn = QPushButton()
-        self.saveBtn.setIcon(QIcon('icons/save.png'))
-        self.saveBtn.setToolTip('Save plot')
-        self.saveBtn.clicked.connect(self.saveTHist)
-        gridLayout.addWidget(self.saveBtn, 0, 7)
+        # self.saveBtn = QPushButton()
+        # self.saveBtn.setIcon(QIcon('icons/save.png'))
+        # self.saveBtn.setToolTip('Save plot')
+        # self.saveBtn.clicked.connect(self.saveTHist)
+        # gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -1047,6 +1079,8 @@ class StackHistWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 5, Qt.AlignLeft)
+
         gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
         self.userCombobx = QComboBox()
         self.userCombobx.addItems(['pedestrian', 'vehicle', 'activities'])
@@ -1061,11 +1095,11 @@ class StackHistWindow(QDialog):
         self.plotBtn.clicked.connect(self.plotSHist)
         gridLayout.addWidget(self.plotBtn, 0, 4)
 
-        self.saveBtn = QPushButton()
-        self.saveBtn.setIcon(QIcon('icons/save.png'))
-        self.saveBtn.setToolTip('Save plot')
-        self.saveBtn.clicked.connect(self.saveSHist)
-        gridLayout.addWidget(self.saveBtn, 0, 5)
+        # self.saveBtn = QPushButton()
+        # self.saveBtn.setIcon(QIcon('icons/save.png'))
+        # self.saveBtn.setToolTip('Save plot')
+        # self.saveBtn.clicked.connect(self.saveSHist)
+        # gridLayout.addWidget(self.saveBtn, 0, 5)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -1096,11 +1130,11 @@ class StackHistWindow(QDialog):
             # refresh canvas
             self.canvas.draw()
 
-    def saveSHist(self):
-        fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
-                                                  QDir.homePath(), "PNG files (*.png)")
-        if fileName != '':
-            self.canvas.print_png(fileName)
+    # def saveSHist(self):
+    #     fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
+    #                                               QDir.homePath(), "PNG files (*.png)")
+    #     if fileName != '':
+    #         self.canvas.print_png(fileName)
 
 
 class OdMatrixWindow(QDialog):
@@ -1118,6 +1152,8 @@ class OdMatrixWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+
         gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
         self.userCombobx = QComboBox()
         self.userCombobx.addItems(['pedestrian', 'vehicle', 'cyclist'])
@@ -1127,11 +1163,11 @@ class OdMatrixWindow(QDialog):
         self.plotBtn.clicked.connect(self.plotOdMtrx)
         gridLayout.addWidget(self.plotBtn, 0, 2)
 
-        self.saveBtn = QPushButton()
-        self.saveBtn.setIcon(QIcon('icons/save.png'))
-        self.saveBtn.setToolTip('Save plot')
-        self.saveBtn.clicked.connect(self.saveOdMtrx)
-        gridLayout.addWidget(self.saveBtn, 0, 3)
+        # self.saveBtn = QPushButton()
+        # self.saveBtn.setIcon(QIcon('icons/save.png'))
+        # self.saveBtn.setToolTip('Save plot')
+        # self.saveBtn.clicked.connect(self.saveOdMtrx)
+        # gridLayout.addWidget(self.saveBtn, 0, 3)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -1160,11 +1196,11 @@ class OdMatrixWindow(QDialog):
             # refresh canvas
             self.canvas.draw()
 
-    def saveOdMtrx(self):
-        fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
-                                                  QDir.homePath(), "PNG files (*.png)")
-        if fileName != '':
-            self.canvas.print_png(fileName)
+    # def saveOdMtrx(self):
+    #     fileName, _ = QFileDialog.getSaveFileName(self, "Open database file",
+    #                                               QDir.homePath(), "PNG files (*.png)")
+    #     if fileName != '':
+    #         self.canvas.print_png(fileName)
 
 
 class PieChartWindow(QDialog):
@@ -1181,6 +1217,8 @@ class PieChartWindow(QDialog):
 
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
+
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
@@ -1220,11 +1258,11 @@ class PieChartWindow(QDialog):
         self.plotBtn.clicked.connect(self.plotPieChart)
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
-        self.saveBtn = QPushButton()
-        self.saveBtn.setIcon(QIcon('icons/save.png'))
-        self.saveBtn.setToolTip('Save plot')
-        self.saveBtn.clicked.connect(self.savePieChart)
-        gridLayout.addWidget(self.saveBtn, 0, 7)
+        # self.saveBtn = QPushButton()
+        # self.saveBtn.setIcon(QIcon('icons/save.png'))
+        # self.saveBtn.setToolTip('Save plot')
+        # self.saveBtn.clicked.connect(self.savePieChart)
+        # gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -1316,6 +1354,8 @@ class CompHistWindow(QDialog):
         self.openDbFileBtn2.clicked.connect(self.opendbFile2)
         dbLayout2.addWidget(self.openDbFileBtn2)
 
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+
         gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
@@ -1337,11 +1377,11 @@ class CompHistWindow(QDialog):
         self.plotBtn.setEnabled(False)
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
-        self.saveBtn = QPushButton()
-        self.saveBtn.setIcon(QIcon('icons/save.png'))
-        self.saveBtn.setToolTip('Save plot')
-        self.saveBtn.clicked.connect(self.saveCompHist)
-        gridLayout.addWidget(self.saveBtn, 0, 7)
+        # self.saveBtn = QPushButton()
+        # self.saveBtn.setIcon(QIcon('icons/save.png'))
+        # self.saveBtn.setToolTip('Save plot')
+        # self.saveBtn.clicked.connect(self.saveCompHist)
+        # gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(dbLayout1)
@@ -1429,11 +1469,11 @@ class CompHistWindow(QDialog):
             # refresh canvas
             self.canvas.draw()
 
-    def saveCompHist(self):
-        fileName, _ = QFileDialog.getSaveFileName(self, "Save image file",
-                                                  QDir.homePath(), "PNG files (*.png)")
-        if fileName != '':
-            self.canvas.print_png(fileName)
+    # def saveCompHist(self):
+    #     fileName, _ = QFileDialog.getSaveFileName(self, "Save image file",
+    #                                               QDir.homePath(), "PNG files (*.png)")
+    #     if fileName != '':
+    #         self.canvas.print_png(fileName)
 
     def opendbFile1(self):
         dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
@@ -1674,6 +1714,97 @@ class compIndicatorsWindow(QDialog):
         if dbFilename != '':
             self.dbFile2Ledit.setText(dbFilename)
 
+class plotTrajWindow(QDialog):
+    def __init__(self, parent=None):
+        super(plotTrajWindow, self).__init__(parent)
+
+        self.setWindowTitle('Trajectories, screenlines and zones')
+
+        self.figure = plt.figure(tight_layout=False)
+
+        self.canvas = FigureCanvas(self.figure)
+
+        winLayout = QVBoxLayout()
+        dbLayout = QHBoxLayout()
+        hmLayout = QHBoxLayout()
+        gridLayout = QGridLayout()
+
+        dbLayout.addWidget(QLabel('Trajectory database:'))
+        self.dbFileLedit = QLineEdit()
+        dbLayout.addWidget(self.dbFileLedit)
+
+        self.openDbFileBtn = QPushButton()
+        self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn.setToolTip('Open trajectory database file')
+        self.openDbFileBtn.clicked.connect(self.openDbFile)
+        dbLayout.addWidget(self.openDbFileBtn)
+
+        hmLayout.addWidget(QLabel('Homography file:'))
+        self.hmFileLedit = QLineEdit()
+        hmLayout.addWidget(self.hmFileLedit)
+
+        self.openHmFileBtn = QPushButton()
+        self.openHmFileBtn.setIcon(QIcon('icons/database.png'))
+        self.openHmFileBtn.setToolTip('Open homography file')
+        self.openHmFileBtn.clicked.connect(self.openHmFile)
+        hmLayout.addWidget(self.openHmFileBtn)
+
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+
+        self.plotBtn = QPushButton('Plot')
+        self.plotBtn.clicked.connect(self.plotItems)
+        # self.plotBtn.setEnabled(False)
+        gridLayout.addWidget(self.plotBtn, 0, 6)
+
+        # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(dbLayout)
+        winLayout.addLayout(hmLayout)
+        winLayout.addLayout(gridLayout)
+        winLayout.addWidget(self.canvas)
+
+        self.setLayout(winLayout)
+
+    def plotItems(self):
+        trjDBFile = self.dbFileLedit.text()
+        homoFile = self.hmFileLedit.text()
+        if trjDBFile == '' or homoFile == '':
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The trajectory database or homography file is not defined!')
+            msg.exec_()
+            return
+
+        self.figure.clear()
+        self.canvas.draw()
+
+        ax = self.figure.add_subplot(111)
+
+        plotTrajectory(trjDBFile, homoFile, ax, session)
+
+        # if err != None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Information)
+        #     msg.setText(err)
+        #     msg.exec_()
+        # else:
+            # refresh canvas
+        self.canvas.draw()
+
+
+    def openDbFile(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFileLedit.setText(dbFilename)
+
+    def openHmFile(self):
+        hmFilename, _ = QFileDialog.getOpenFileName(self, "Open homography file",
+                                                    QDir.homePath(), "Text files (*.txt)")
+        if hmFilename != '':
+            self.hmFileLedit.setText(hmFilename)
+
+
+
 
 class dfTableModel(QAbstractTableModel):
 
@@ -1716,6 +1847,7 @@ class dfTableModel(QAbstractTableModel):
         if orientation == Qt.Vertical and role == Qt.DisplayRole:
             return self._data.index[section]
         return None
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
