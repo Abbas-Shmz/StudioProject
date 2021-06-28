@@ -13,10 +13,15 @@ from matplotlib.ticker import MaxNLocator
 from sqlalchemy import func
 from configparser import ConfigParser
 
+from hachoir.parser import createParser
+from hachoir.metadata import extractMetadata
+from hachoir.core import config as HachoirConfig
+
 import pandas as pd
 from matplotlib.patches import Polygon
-from trafficintelligence import storage
+from trafficintelligence import storage, moving
 from trafficintelligence.cvutils import homographyProject
+from trafficintelligence.storage import ProcessParameters
 import iframework
 from iframework import connectDatabase, LinePassing, ZonePassing, Person, Mode, GroupBelonging,\
     Vehicle, Line, Zone
@@ -861,8 +866,9 @@ def plotTrajectory(trjDBFile, homographyFile, ax, session):
         for line in q_line:
             x_list = [p.x for p in line.points]
             y_list = [p.y for p in line.points]
-            points = np.array([x_list, y_list])
-            prj_points = homographyProject(points, homography)
+
+            img_points = np.array([x_list, y_list])
+            prj_points = homographyProject(img_points, homography)
             ax.plot(prj_points[0], prj_points[1])
 
     if q_zone.all() != []:
@@ -879,7 +885,71 @@ def plotTrajectory(trjDBFile, homographyFile, ax, session):
             ax.add_patch(zone)
     ax.axis('equal')
 
+
+def importTrajectory(cfgFileName, session):
+    cfg = ProcessParameters(cfgFileName)
+    trjDBFile = cfg.databaseFilename
+    videoFile = cfg.videoFilename
+    homoFile = cfg.homographyFilename
+    frameRate = cfg.videoFrameRate
+    log = {}
+
+    objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
+    homography = np.loadtxt(homoFile, delimiter=' ')
+    video_start = getVideoMetadata(videoFile)[0]
+
+    q_line = session.query(Line)
+    if q_line.all() == []:
+        log['Error'] = 'There is no screenline!'
+        for k, v in log.items():
+            print('{}: {}'.format(k, v))
+        return
+
+    linePass_list = []
+    modes_list = []
+    for line in q_line:
+        p1 = moving.Point(line.points[0].x, line.points[0].y).homographyProject(homography)
+        p2 = moving.Point(line.points[1].x, line.points[1].y).homographyProject(homography)
+
+        for trj in objects:
+            instants_list = trj.getInstantsCrossingLane(p1, p2)
+            if len(instants_list) > 0:
+                secs = np.floor(instants_list[0][0]/frameRate)
+                instant = video_start + datetime.timedelta(seconds=secs)
+                person = Person()
+                vehicle = Vehicle(category='car')
+                modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+                linePass_list.append(LinePassing(line=line, instant=instant, person=person))
+    session.add_all(linePass_list + modes_list)
+    session.commit()
+    session.close()
+
+    log['All processed trajectories'] = len(objects)
+    log['Total imported trajectories'] = len(linePass_list)
+    log['No. of vehicles'] = len(linePass_list)
+
+    for k, v in log.items():
+        print('{}: {}'.format(k, v))
+
+    return log
+
 # =========================================
+def image_to_ground(img_points, homography):
+    n_points = img_points.shape[1]
+    ground = np.tile(np.array([0]*n_points), (3, 1))
+    img_points_1 = np.append(img_points, [[1]*n_points], axis=0)
+
+    for i in range(3):
+        for j in range(n_points):
+            for k in range(3):
+                ground[i][j] += homography[i][k]*img_points_1[k][j]
+
+    for i in range(2):
+        for j in range(n_points):
+            ground[i][j] = ground[i][j]/ground[2][j]
+
+    return ground[:-1,:]
+
 def getLabelSizePie(transport, fieldName, startTime, endTime, session):
 
     if transport == 'all types':
@@ -1127,6 +1197,35 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
             texts.append(text)
 
     return texts
+
+
+def getVideoMetadata(filename):
+    HachoirConfig.quiet = True
+    parser = createParser(filename)
+
+    with parser:
+        try:
+            metadata = extractMetadata(parser, 7)
+        except Exception as err:
+            print("Metadata extraction error: %s" % err)
+            metadata = None
+    if not metadata:
+        print("Unable to extract metadata")
+
+    # creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
+    # creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
+
+    metadata_dict = metadata._Metadata__data
+    # for key in metadata_dict.keys():
+    #     if metadata_dict[key].values:
+    #         print(key, metadata_dict[key].values[0].value)
+    creationDatetime = metadata_dict['creation_date'].values[0].value
+    width = metadata_dict['width'].values[0].value
+    height = metadata_dict['height'].values[0].value
+
+
+    return creationDatetime, width, height
+
 
 
 # ======================= DEMO MODE ============================

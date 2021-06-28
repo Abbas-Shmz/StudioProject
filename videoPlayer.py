@@ -16,9 +16,7 @@ from PyQt5.QtOpenGL import QGLWidget
 
 import xml.etree.ElementTree as ET
 import numpy as np
-from hachoir.parser import createParser
-from hachoir.metadata import extractMetadata
-from hachoir.core import config as HachoirConfig
+
 from PIL import Image, ImageDraw
 
 import sys
@@ -26,6 +24,7 @@ import os
 from datetime import datetime, timedelta
 
 from iframework import connectDatabase, Point, Line, Zone
+from indicators import getVideoMetadata
 
 from observationToolbox import ObsToolbox
 
@@ -325,7 +324,7 @@ class VideoWindow(QMainWindow):
             self.drawLineAction.setEnabled(True)
             self.drawZoneAction.setEnabled(True)
 
-            creation_datetime, width, height = self.getVideoMetadata(self.videoFile)
+            creation_datetime, width, height = getVideoMetadata(self.videoFile)
             self.videoStartDatetime = self.videoCurrentDatetime = creation_datetime
             self.dateLabel.setText(creation_datetime.strftime('%a, %b %d, %Y'))
 
@@ -425,7 +424,7 @@ class VideoWindow(QMainWindow):
             QMessageBox.information(self, 'Save', 'There is no polygon to generate mask!')
             return
 
-        creation_datetime, width, height = self.getVideoMetadata(self.videoFile)
+        creation_datetime, width, height = getVideoMetadata(self.videoFile)
         item = self.gView.unsavedZones[0]
         mask_polygon = item.polygon()
         xy = []
@@ -706,34 +705,6 @@ class VideoWindow(QMainWindow):
         minutes = int(millis / (1000 * 60)) % 60
         hours = int(millis / (1000 * 60 * 60)) % 24
         return seconds, minutes, hours
-
-    @staticmethod
-    def getVideoMetadata(filename):
-        HachoirConfig.quiet = True
-        parser = createParser(filename)
-
-        with parser:
-            try:
-                metadata = extractMetadata(parser, 7)
-            except Exception as err:
-                print("Metadata extraction error: %s" % err)
-                metadata = None
-        if not metadata:
-            print("Unable to extract metadata")
-
-        # creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
-        # creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
-
-        metadata_dict = metadata._Metadata__data
-        # for key in metadata_dict.keys():
-        #     if metadata_dict[key].values:
-        #         print(key, metadata_dict[key].values[0].value)
-        creationDatetime = metadata_dict['creation_date'].values[0].value
-        width = metadata_dict['width'].values[0].value
-        height = metadata_dict['height'].values[0].value
-
-
-        return creationDatetime, width, height
 
 
 if __name__ == '__main__':

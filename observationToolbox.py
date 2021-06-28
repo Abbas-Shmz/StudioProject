@@ -22,8 +22,9 @@ import matplotlib.pyplot as plt
 
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
-    plotTrajectory
+    plotTrajectory, importTrajectory
 import iframework
+from trafficintelligence.storage import ProcessParameters
 
 from sqlalchemy import Enum, Boolean, DateTime
 from sqlalchemy.inspection import inspect
@@ -836,6 +837,11 @@ class ObsToolbox(QMainWindow):
         if self.sender() == self.openAction:
             self.dbFilename, _ = QFileDialog.getSaveFileName(self, "Open database file",
                                                   QDir.homePath(), "Sqlite files (*.sqlite)")
+            if self.dbFilename != '':
+                for item in self.parent().gScene.items()[:-1]:
+                    self.parent().gScene.removeItem(item)
+                # self.parent().loadGraphics()
+
         if self.dbFilename != '':
             if self.parent() != None:
                 self.setWindowTitle('{} - {}'.format(os.path.basename(self.dbFilename),
@@ -951,6 +957,13 @@ class ObsToolbox(QMainWindow):
             msg.setText('The database file is not defined.')
             msg.exec_()
             return
+
+        importTrajWin = importTrajWindow(self)
+
+        # tempHistWin.setModal(True)
+        # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
+
+        importTrajWin.exec_()
 
     def plotTrajectories(self):
         if session == None:
@@ -1235,21 +1248,26 @@ class PieChartWindow(QDialog):
         self.timeSpanCombobx = QComboBox()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
-        bins = calculateBinsEdges(start_obs_time, end_obs_time)
-        if len(bins) < 2:
-            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
-            return
+        if start_obs_time != None:
+            bins = calculateBinsEdges(start_obs_time, end_obs_time)
+            if len(bins) > 1:
+                start_time = bins[0].to_pydatetime()
+                end_time = bins[-1].to_pydatetime()
+
+                peakHours = getPeakHours(session, start_time, end_time)
+                timeSpans = ['{} - {}'.format(start_time.strftime('%I:%M %p'),
+                                              end_time.strftime('%I:%M %p'))]
+                for pVal in peakHours.values():
+                    if pVal != None:
+                        ts = '{} - {}'.format(pVal[0].strftime('%I:%M %p'), pVal[1].strftime('%I:%M %p'))
+                        if ts != timeSpans[0]:
+                            timeSpans.append(ts)
+            else:
+                timeSpans = ['Too short observation!']
         else:
-            start_time = bins[0].to_pydatetime()
-            end_time = bins[-1].to_pydatetime()
-        peakHours = getPeakHours(session, start_time, end_time)
-        timeSpans = ['{} - {}'.format(start_time.strftime('%I:%M %p'),
-                                      end_time.strftime('%I:%M %p'))]
-        for pVal in peakHours.values():
-            if pVal != None:
-                ts = '{} - {}'.format(pVal[0].strftime('%I:%M %p'), pVal[1].strftime('%I:%M %p'))
-                if ts != timeSpans[0]:
-                    timeSpans.append(ts)
+            timeSpans = ['No observation!']
+
+
         self.timeSpanCombobx.addItems(timeSpans)
         self.timeSpanCombobx.currentTextChanged.connect(self.plotPieChart)
         gridLayout.addWidget(self.timeSpanCombobx, 0, 5, Qt.AlignLeft)
@@ -1271,6 +1289,12 @@ class PieChartWindow(QDialog):
         self.setLayout(winLayout)
 
     def plotPieChart(self):
+        if self.timeSpanCombobx.currentText() == 'No observation!':
+            QMessageBox.information(self, 'Error!', 'There is no observation!')
+            return
+        elif self.timeSpanCombobx.currentText() == 'Too short observation!':
+            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
+            return
         self.figure.clear()
         self.canvas.draw()
 
@@ -1725,29 +1749,18 @@ class plotTrajWindow(QDialog):
         self.canvas = FigureCanvas(self.figure)
 
         winLayout = QVBoxLayout()
-        dbLayout = QHBoxLayout()
-        hmLayout = QHBoxLayout()
+        cfgLayout = QHBoxLayout()
         gridLayout = QGridLayout()
 
-        dbLayout.addWidget(QLabel('Trajectory database:'))
-        self.dbFileLedit = QLineEdit()
-        dbLayout.addWidget(self.dbFileLedit)
+        cfgLayout.addWidget(QLabel('Configuration file:'))
+        self.cfgFileLedit = QLineEdit()
+        cfgLayout.addWidget(self.cfgFileLedit)
 
-        self.openDbFileBtn = QPushButton()
-        self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
-        self.openDbFileBtn.setToolTip('Open trajectory database file')
-        self.openDbFileBtn.clicked.connect(self.openDbFile)
-        dbLayout.addWidget(self.openDbFileBtn)
-
-        hmLayout.addWidget(QLabel('Homography file:'))
-        self.hmFileLedit = QLineEdit()
-        hmLayout.addWidget(self.hmFileLedit)
-
-        self.openHmFileBtn = QPushButton()
-        self.openHmFileBtn.setIcon(QIcon('icons/database.png'))
-        self.openHmFileBtn.setToolTip('Open homography file')
-        self.openHmFileBtn.clicked.connect(self.openHmFile)
-        hmLayout.addWidget(self.openHmFileBtn)
+        self.openCfgFileBtn = QPushButton()
+        self.openCfgFileBtn.setIcon(QIcon('icons/open-file.png'))
+        self.openCfgFileBtn.setToolTip('Open configuration file')
+        self.openCfgFileBtn.clicked.connect(self.openCfgFile)
+        cfgLayout.addWidget(self.openCfgFileBtn)
 
         gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
@@ -1757,16 +1770,17 @@ class plotTrajWindow(QDialog):
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
         # winLayout.addWidget(self.toolbar)
-        winLayout.addLayout(dbLayout)
-        winLayout.addLayout(hmLayout)
+        winLayout.addLayout(cfgLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.canvas)
 
         self.setLayout(winLayout)
 
     def plotItems(self):
-        trjDBFile = self.dbFileLedit.text()
-        homoFile = self.hmFileLedit.text()
+        cfgFileName = self.cfgFileLedit.text()
+        cfg = ProcessParameters(cfgFileName)
+        trjDBFile = cfg.databaseFilename
+        homoFile = cfg.homographyFilename
         if trjDBFile == '' or homoFile == '':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -1791,18 +1805,81 @@ class plotTrajWindow(QDialog):
         self.canvas.draw()
 
 
-    def openDbFile(self):
-        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
-                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
-        if dbFilename != '':
-            self.dbFileLedit.setText(dbFilename)
+    def openCfgFile(self):
+        cfgFilename, _ = QFileDialog.getOpenFileName(self, "Open configuration file",
+                                                    QDir.homePath(), "Configuration files (*.cfg)")
+        if cfgFilename != '':
+            self.cfgFileLedit.setText(cfgFilename)
 
-    def openHmFile(self):
-        hmFilename, _ = QFileDialog.getOpenFileName(self, "Open homography file",
-                                                    QDir.homePath(), "Text files (*.txt)")
-        if hmFilename != '':
-            self.hmFileLedit.setText(hmFilename)
 
+
+class importTrajWindow(QDialog):
+    def __init__(self, parent=None):
+        super(importTrajWindow, self).__init__(parent)
+
+        self.setWindowTitle('Import trajectories')
+
+        winLayout = QVBoxLayout()
+        cfgLayout = QHBoxLayout()
+        gridLayout = QGridLayout()
+
+        cfgLayout.addWidget(QLabel('Configuration file:'))
+        self.cfgFileLedit = QLineEdit()
+        cfgLayout.addWidget(self.cfgFileLedit)
+
+        self.openCfgFileBtn = QPushButton()
+        self.openCfgFileBtn.setIcon(QIcon('icons/open-file.png'))
+        self.openCfgFileBtn.setToolTip('Open configuration file')
+        self.openCfgFileBtn.clicked.connect(self.openCfgFile)
+        cfgLayout.addWidget(self.openCfgFileBtn)
+
+        self.importBtn = QPushButton('Import')
+        self.importBtn.clicked.connect(self.importTrajs)
+        # self.plotBtn.setEnabled(False)
+        gridLayout.addWidget(self.importBtn, 0, 0)
+
+        self.summary_list_wdgt = QListWidget()
+        gridLayout.addWidget(self.summary_list_wdgt, 1, 0)
+
+        self.closeBtn = QPushButton('Close')
+        self.closeBtn.clicked.connect(self.closeImportWin)
+        gridLayout.addWidget(self.closeBtn, 2, 0)
+
+        winLayout.addLayout(cfgLayout)
+        winLayout.addLayout(gridLayout)
+
+        self.setLayout(winLayout)
+
+    def importTrajs(self):
+        cfgFileName = self.cfgFileLedit.text()
+        if cfgFileName == '':
+            return
+
+        self.importBtn.setText('Processing ...')
+        self.importBtn.setEnabled(False)
+        log = importTrajectory(cfgFileName, session)
+        self.importBtn.setText('Import')
+
+        for key, val in log.items():
+            self.summary_list_wdgt.addItem('{}:  {}'.format(key, val))
+
+
+        # if err != None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Information)
+        #     msg.setText(err)
+        #     msg.exec_()
+        # else:
+            # refresh canvas
+
+    def openCfgFile(self):
+        cfgFilename, _ = QFileDialog.getOpenFileName(self, "Open configuration file",
+                                                    QDir.homePath(), "Configuration files (*.cfg)")
+        if cfgFilename != '':
+            self.cfgFileLedit.setText(cfgFilename)
+
+    def closeImportWin(self):
+        self.close()
 
 
 
