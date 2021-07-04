@@ -5,6 +5,7 @@
 @author: Abbas
 """
 import numpy as np
+from pathlib import Path
 import datetime
 import matplotlib
 import matplotlib.pyplot as plt
@@ -20,7 +21,7 @@ from hachoir.core import config as HachoirConfig
 import pandas as pd
 from matplotlib.patches import Polygon
 from trafficintelligence import storage, moving
-from trafficintelligence.cvutils import homographyProject
+from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
 from trafficintelligence.storage import ProcessParameters
 import iframework
 from iframework import connectDatabase, LinePassing, ZonePassing, Person, Mode, GroupBelonging,\
@@ -849,7 +850,9 @@ def compareIndicators(transport, actionType, start_time, end_time, session1, ses
     return indDf
 
 
-def plotTrajectory(trjDBFile, homographyFile, ax, session):
+def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homographyFile, ax, session):
+    intrinsicCameraMatrix = np.array([[894.18, 0.0, 951.75], [0.0, 913.2, 573.04], [0.0, 0.0, 1.0]])
+    distortionCoefficients = np.array([-0.12, 0.0, 0.0, 0.0, 0.0])
     objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
     homography = np.loadtxt(homographyFile, delimiter=' ')
 
@@ -867,8 +870,8 @@ def plotTrajectory(trjDBFile, homographyFile, ax, session):
             x_list = [p.x for p in line.points]
             y_list = [p.y for p in line.points]
 
-            img_points = np.array([x_list, y_list])
-            prj_points = homographyProject(img_points, homography)
+            points = np.array([x_list, y_list], dtype = np.float64)
+            prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
             ax.plot(prj_points[0], prj_points[1])
 
     if q_zone.all() != []:
@@ -876,7 +879,7 @@ def plotTrajectory(trjDBFile, homographyFile, ax, session):
             x_list = [p.x for p in zone.points]
             y_list = [p.y for p in zone.points]
             points = np.array([x_list, y_list])
-            prj_points = homographyProject(points, homography)
+            prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
             prj_xy = list(zip(prj_points[0], prj_points[1]))
             rand_color = np.random.random(3)
             fc = np.append(rand_color, 0.15)
@@ -886,35 +889,38 @@ def plotTrajectory(trjDBFile, homographyFile, ax, session):
     ax.axis('equal')
 
 
-def importTrajectory(cfgFileName, session):
-    cfg = ProcessParameters(cfgFileName)
-    trjDBFile = cfg.databaseFilename
-    videoFile = cfg.videoFilename
-    homoFile = cfg.homographyFilename
-    frameRate = cfg.videoFrameRate
+def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
+                     video_start, frameRate, session):
     log = {}
-
+    if not Path(trjDBFile).exists():
+        log['Error'] = 'The database does not exist!'
+        print(Path(trjDBFile).name)
+        for k, v in log.items():
+            print('   {}: {}'.format(k, v))
+        return log
     objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
     homography = np.loadtxt(homoFile, delimiter=' ')
-    video_start = getVideoMetadata(videoFile)[0]
 
     q_line = session.query(Line)
     if q_line.all() == []:
         log['Error'] = 'There is no screenline!'
         for k, v in log.items():
             print('{}: {}'.format(k, v))
-        return
+        return log
 
     linePass_list = []
     modes_list = []
     for line in q_line:
-        p1 = moving.Point(line.points[0].x, line.points[0].y).homographyProject(homography)
-        p2 = moving.Point(line.points[1].x, line.points[1].y).homographyProject(homography)
+        points = np.array([[line.points[0].x, line.points[1].x],
+                           [line.points[0].y, line.points[1].y]])
+        prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
+        p1 = moving.Point(prj_points[0][0], prj_points[1][0])
+        p2 = moving.Point(prj_points[0][1], prj_points[1][1])
 
         for trj in objects:
             instants_list = trj.getInstantsCrossingLane(p1, p2)
             if len(instants_list) > 0:
-                secs = np.floor(instants_list[0][0]/frameRate)
+                secs = np.floor(instants_list[0]/frameRate)
                 instant = video_start + datetime.timedelta(seconds=secs)
                 person = Person()
                 vehicle = Vehicle(category='car')
@@ -928,8 +934,9 @@ def importTrajectory(cfgFileName, session):
     log['Total imported trajectories'] = len(linePass_list)
     log['No. of vehicles'] = len(linePass_list)
 
+    print(Path(trjDBFile).name)
     for k, v in log.items():
-        print('{}: {}'.format(k, v))
+        print('   {}: {}'.format(k, v))
 
     return log
 
@@ -1222,7 +1229,6 @@ def getVideoMetadata(filename):
     creationDatetime = metadata_dict['creation_date'].values[0].value
     width = metadata_dict['width'].values[0].value
     height = metadata_dict['height'].values[0].value
-
 
     return creationDatetime, width, height
 

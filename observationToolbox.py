@@ -3,6 +3,9 @@ import os
 import pandas as pd
 import numpy as np
 import datetime
+import sqlite3
+import ast
+from pathlib import Path
 from configparser import ConfigParser
 from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
@@ -11,7 +14,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
                              QAbstractItemView, QTableView, QListWidget)
 from PyQt5.QtGui import QColor, QIcon, QFont
-from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel
+from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObject, QThread, pyqtSignal
 
 from iframework import createDatabase, connectDatabase, Person, Mode, Group, GroupBelonging, Vehicle,\
     Activity, LinePassing, ZonePassing, Point, Line, Zone
@@ -1334,9 +1337,9 @@ class PieChartWindow(QDialog):
             self.attrCombobx.addItems(['age', 'gender'])
         elif self.transportCombobx.currentText() == 'cardriver':
             self.attrCombobx.addItems(['category'])
-        # elif self.transportCombobx.currentText() == 'Bike':
+        # elif self.siteNameCombobx.currentText() == 'Bike':
         #     self.attrCombobx.addItems(['bikeType', 'wearHelmet'])
-        # elif self.transportCombobx.currentText() == 'Activity':
+        # elif self.siteNameCombobx.currentText() == 'Activity':
         #     self.attrCombobx.addItems(['activityType'])
 
 
@@ -1543,14 +1546,14 @@ class genReportWindow(QDialog):
         gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        # self.transportCombobx.currentTextChanged.connect(self.genReport)
+        # self.siteNameCombobx.currentTextChanged.connect(self.genReport)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
-        # self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        # self.camViewCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Generate report')
@@ -1641,14 +1644,14 @@ class compIndicatorsWindow(QDialog):
         gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        # self.transportCombobx.currentTextChanged.connect(self.compIndicators)
+        # self.siteNameCombobx.currentTextChanged.connect(self.compIndicators)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
-        # self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        # self.camViewCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Compare Indicators')
@@ -1744,25 +1747,45 @@ class plotTrajWindow(QDialog):
 
         self.setWindowTitle('Trajectories, screenlines and zones')
 
+        self.cur = None
+        self.homographyFilename = None
+        self.cameraTypeIdx = None
+        self.dateStr = None
         self.figure = plt.figure(tight_layout=False)
-
         self.canvas = FigureCanvas(self.figure)
 
         winLayout = QVBoxLayout()
-        cfgLayout = QHBoxLayout()
+        mdbLayout = QHBoxLayout()
         gridLayout = QGridLayout()
 
-        cfgLayout.addWidget(QLabel('Configuration file:'))
-        self.cfgFileLedit = QLineEdit()
-        cfgLayout.addWidget(self.cfgFileLedit)
+        mdbLayout.addWidget(QLabel('Metadata file:'))
+        self.mdbFileLedit = QLineEdit()
+        mdbLayout.addWidget(self.mdbFileLedit)
 
-        self.openCfgFileBtn = QPushButton()
-        self.openCfgFileBtn.setIcon(QIcon('icons/open-file.png'))
-        self.openCfgFileBtn.setToolTip('Open configuration file')
-        self.openCfgFileBtn.clicked.connect(self.openCfgFile)
-        cfgLayout.addWidget(self.openCfgFileBtn)
+        self.openMdbFileBtn = QPushButton()
+        self.openMdbFileBtn.setIcon(QIcon('icons/open-file.png'))
+        self.openMdbFileBtn.setToolTip('Open configuration file')
+        self.openMdbFileBtn.clicked.connect(self.openMdbFile)
+        mdbLayout.addWidget(self.openMdbFileBtn)
 
         gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Site name:'), 0, 0, Qt.AlignRight)
+        self.siteNameCombobx = QComboBox()
+        self.siteNameCombobx.setMinimumWidth(120)
+        self.siteNameCombobx.currentTextChanged.connect(self.siteChanged)
+        gridLayout.addWidget(self.siteNameCombobx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Camera view:'), 0, 2, Qt.AlignRight)
+        self.camViewCombobx = QComboBox()
+        self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
+        gridLayout.addWidget(self.camViewCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Trajectory database:'), 0, 4, Qt.AlignRight)
+        self.trjDbCombobx = QComboBox()
+        self.trjDbCombobx.setMinimumWidth(130)
+        # self.trjDbCombobx.currentTextChanged.connect(self.plotItems)
+        gridLayout.addWidget(self.trjDbCombobx, 0, 5, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotItems)
@@ -1770,22 +1793,42 @@ class plotTrajWindow(QDialog):
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
         # winLayout.addWidget(self.toolbar)
-        winLayout.addLayout(cfgLayout)
+        winLayout.addLayout(mdbLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.canvas)
 
         self.setLayout(winLayout)
 
     def plotItems(self):
-        cfgFileName = self.cfgFileLedit.text()
-        cfg = ProcessParameters(cfgFileName)
-        trjDBFile = cfg.databaseFilename
-        homoFile = cfg.homographyFilename
-        if trjDBFile == '' or homoFile == '':
+        self.cur.execute('SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr FROM camera_types WHERE idx=?',
+                         (self.cameraTypeIdx,))
+        row = self.cur.fetchall()
+        intrinsicCameraMatrixStr = row[0][0]
+        distortionCoefficientsStr = row[0][1]
+        intrinsicCameraMatrix = np.array(ast.literal_eval(intrinsicCameraMatrixStr))
+        distortionCoefficients = np.array(ast.literal_eval(distortionCoefficientsStr))
+
+        mdbPath = Path(self.mdbFileLedit.text()).parent
+
+        trjDBFile = mdbPath/self.siteNameCombobx.currentText()/self.dateStr/self.trjDbCombobx.currentText()
+        homoFile = mdbPath/self.siteNameCombobx.currentText()/self.homographyFilename
+
+        if not trjDBFile.exists():
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
-            msg.setText('The trajectory database or homography file is not defined!')
+            msg.setText('The trajectory database does not exist!')
             msg.exec_()
+            self.figure.clear()
+            self.canvas.draw()
+            return
+
+        if not homoFile.exists():
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The homography file does not exist!')
+            msg.exec_()
+            self.figure.clear()
+            self.canvas.draw()
             return
 
         self.figure.clear()
@@ -1793,7 +1836,7 @@ class plotTrajWindow(QDialog):
 
         ax = self.figure.add_subplot(111)
 
-        plotTrajectory(trjDBFile, homoFile, ax, session)
+        plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile, ax, session)
 
         # if err != None:
         #     msg = QMessageBox()
@@ -1805,11 +1848,51 @@ class plotTrajWindow(QDialog):
         self.canvas.draw()
 
 
-    def openCfgFile(self):
-        cfgFilename, _ = QFileDialog.getOpenFileName(self, "Open configuration file",
-                                                    QDir.homePath(), "Configuration files (*.cfg)")
-        if cfgFilename != '':
-            self.cfgFileLedit.setText(cfgFilename)
+    def openMdbFile(self):
+        mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",
+                                                     QDir.homePath(), "Sqlite files (*.sqlite)")
+        if mdbFilename == '':
+            return
+
+        self.mdbFileLedit.setText(mdbFilename)
+
+        con = sqlite3.connect(self.mdbFileLedit.text())
+        self.cur = con.cursor()
+
+        self.cur.execute('SELECT name FROM sites')
+        sites = self.cur.fetchall()
+        self.siteNameCombobx.clear()
+        self.siteNameCombobx.addItems([s[0] for s in sites])
+        # self.siteNameCombobx.setCurrentIndex(-1)
+
+    def siteChanged(self):
+        if self.siteNameCombobx.currentText() == '':
+            return
+        self.cur.execute('SELECT idx FROM sites WHERE name=?', (self.siteNameCombobx.currentText(),))
+        siteIdx = self.cur.fetchall()[0][0]
+        self.cur.execute('SELECT description FROM camera_views WHERE siteIdx=?', (siteIdx,))
+        views = self.cur.fetchall()
+        self.camViewCombobx.clear()
+        self.camViewCombobx.addItems([v[0] for v in views])
+        # self.camViewCombobx.setCurrentIndex(-1)
+
+    def viewChanged(self):
+        if self.camViewCombobx.currentText() == '':
+            return
+        self.cur.execute('SELECT idx FROM sites WHERE name=?', (self.siteNameCombobx.currentText(),))
+        siteIdx = self.cur.fetchall()[0][0]
+        self.cur.execute('SELECT idx, homographyFilename, cameraTypeIdx FROM camera_views WHERE description =? AND siteIdx=?',
+                         (self.camViewCombobx.currentText(), siteIdx))
+        row = self.cur.fetchall()
+        viewIdx = row[0][0]
+        self.homographyFilename = row[0][1]
+        self.cameraTypeIdx = row[0][2]
+        self.cur.execute('SELECT databaseFilename FROM video_sequences WHERE cameraViewIdx=?', (viewIdx,))
+        trjDbs = self.cur.fetchall()
+        self.trjDbCombobx.clear()
+        self.trjDbCombobx.addItems([t[0].split('/')[-1] for t in trjDbs])
+        # self.trjDbCombobx.setCurrentIndex(-1)
+        self.dateStr = trjDbs[0][0].split('/')[0]
 
 
 
@@ -1817,69 +1900,237 @@ class importTrajWindow(QDialog):
     def __init__(self, parent=None):
         super(importTrajWindow, self).__init__(parent)
 
+        self.cur = None
+        self.homographyFilename = None
+        self.cameraTypeIdx = None
+        self.dateStr = None
+
         self.setWindowTitle('Import trajectories')
 
         winLayout = QVBoxLayout()
-        cfgLayout = QHBoxLayout()
+        mdbLayout = QHBoxLayout()
         gridLayout = QGridLayout()
 
-        cfgLayout.addWidget(QLabel('Configuration file:'))
-        self.cfgFileLedit = QLineEdit()
-        cfgLayout.addWidget(self.cfgFileLedit)
+        mdbLayout.addWidget(QLabel('Metadata file:'))
+        self.mdbFileLedit = QLineEdit()
+        mdbLayout.addWidget(self.mdbFileLedit)
 
-        self.openCfgFileBtn = QPushButton()
-        self.openCfgFileBtn.setIcon(QIcon('icons/open-file.png'))
-        self.openCfgFileBtn.setToolTip('Open configuration file')
-        self.openCfgFileBtn.clicked.connect(self.openCfgFile)
-        cfgLayout.addWidget(self.openCfgFileBtn)
+        self.openMdbFileBtn = QPushButton()
+        self.openMdbFileBtn.setIcon(QIcon('icons/open-file.png'))
+        self.openMdbFileBtn.setToolTip('Open configuration file')
+        self.openMdbFileBtn.clicked.connect(self.openMdbFile)
+        mdbLayout.addWidget(self.openMdbFileBtn)
+
+        gridLayout.addWidget(QLabel('Site name:'), 0, 0, Qt.AlignRight)
+        self.siteNameCombobx = QComboBox()
+        # self.siteNameCombobx.setMinimumWidth(120)
+        self.siteNameCombobx.currentTextChanged.connect(self.siteChanged)
+        gridLayout.addWidget(self.siteNameCombobx, 0, 1)#, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Camera view:'), 0, 2, Qt.AlignRight)
+        self.camViewCombobx = QComboBox()
+        self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
+        gridLayout.addWidget(self.camViewCombobx, 0, 3)#, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Trajectory database:'), 1, 0, Qt.AlignRight)
+        self.trjDbCombobx = QComboBox()
+        # self.trjDbCombobx.setMinimumWidth(130)
+        # self.trjDbCombobx.currentTextChanged.connect(self.plotItems)
+        gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)#, Qt.AlignLeft)
 
         self.importBtn = QPushButton('Import')
         self.importBtn.clicked.connect(self.importTrajs)
-        # self.plotBtn.setEnabled(False)
-        gridLayout.addWidget(self.importBtn, 0, 0)
+        # self.importBtn.setEnabled(False)
+        gridLayout.addWidget(self.importBtn, 1, 3)
 
         self.summary_list_wdgt = QListWidget()
-        gridLayout.addWidget(self.summary_list_wdgt, 1, 0)
+        gridLayout.addWidget(self.summary_list_wdgt, 2, 0, 1, 4)
 
         self.closeBtn = QPushButton('Close')
         self.closeBtn.clicked.connect(self.closeImportWin)
-        gridLayout.addWidget(self.closeBtn, 2, 0)
+        gridLayout.addWidget(self.closeBtn, 3, 0, 1, 4)
 
-        winLayout.addLayout(cfgLayout)
+
+        winLayout.addLayout(mdbLayout)
         winLayout.addLayout(gridLayout)
 
         self.setLayout(winLayout)
 
+
     def importTrajs(self):
-        cfgFileName = self.cfgFileLedit.text()
-        if cfgFileName == '':
+
+        self.thread = QThread()
+        self.worker = Worker(self.cameraTypeIdx, self.dateStr, self.homographyFilename, self.mdbFileLedit,
+                             self.siteNameCombobx, self.trjDbCombobx)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.worker.progress.connect(self.reportProgress)
+        self.thread.start()
+
+        self.closeBtn.setText('Processing ...')
+        self.importBtn.setEnabled(False)
+        self.closeBtn.setEnabled(False)
+
+        self.thread.finished.connect(lambda: self.closeBtn.setText('Close'))
+        self.thread.finished.connect(lambda: self.importBtn.setEnabled(True))
+        self.thread.finished.connect(lambda: self.closeBtn.setEnabled(True))
+
+
+        # self.importBtn.setText('Processing ...')
+        # self.importBtn.setEnabled(False)
+        #
+        # self.cur.execute(
+        #     'SELECT frameRate, intrinsicCameraMatrixStr, distortionCoefficientsStr FROM camera_types WHERE idx=?',
+        #                  (self.cameraTypeIdx,))
+        # row = self.cur.fetchall()
+        # frameRate = row[0][0]
+        # intrinsicCameraMatrixStr = row[0][1]
+        # distortionCoefficientsStr = row[0][2]
+        # intrinsicCameraMatrix = np.array(ast.literal_eval(intrinsicCameraMatrixStr))
+        # distortionCoefficients = np.array(ast.literal_eval(distortionCoefficientsStr))
+        #
+        # mdbPath = Path(self.mdbFileLedit.text()).parent
+        #
+        # homoFile = mdbPath / self.siteNameCombobx.currentText() / self.homographyFilename
+        #
+        # if self.trjDbCombobx.currentText() == '--All databases--':
+        #     for trjDbName in [self.trjDbCombobx.itemText(i) for i in range(1, self.trjDbCombobx.count())]:
+        #         trjDBFile = mdbPath / self.siteNameCombobx.currentText() / self.dateStr / trjDbName
+        #         self.cur.execute('SELECT startTime From video_sequences WHERE databaseFilename=?',
+        #                          (self.dateStr + '/' + trjDbName,))
+        #         row = self.cur.fetchall()
+        #         video_start = datetime.datetime.strptime(row[0][0], '%Y-%m-%d %H:%M:%S.%f')
+        #         video_start = video_start.replace(microsecond=0)
+        #         log = importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
+        #                                video_start, frameRate, session)
+        #         self.reportProgress(log, trjDbName)
+        # else:
+        #     trjDBFile = mdbPath / self.siteNameCombobx.currentText() / self.dateStr / self.trjDbCombobx.currentText()
+        #     self.cur.execute('SELECT startTime From video_sequences WHERE databaseFilename=?',
+        #                      (self.dateStr + '/' + self.trjDbCombobx.currentText(),))
+        #     row = self.cur.fetchall()
+        #     video_start = datetime.datetime.strptime(row[0][0], '%Y-%m-%d %H:%M:%S.%f')
+        #     video_start = video_start.replace(microsecond=0)
+        #     log = importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
+        #                                video_start, frameRate, session)
+        #     self.reportProgress(log, self.trjDbCombobx.currentText())
+        # self.importBtn.setText('Import')
+        # self.importBtn.setEnabled(True)
+
+
+    def openMdbFile(self):
+        mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",
+                                                     QDir.homePath(), "Sqlite files (*.sqlite)")
+        if mdbFilename == '':
             return
 
-        self.importBtn.setText('Processing ...')
-        self.importBtn.setEnabled(False)
-        log = importTrajectory(cfgFileName, session)
-        self.importBtn.setText('Import')
+        self.mdbFileLedit.setText(mdbFilename)
 
-        for key, val in log.items():
-            self.summary_list_wdgt.addItem('{}:  {}'.format(key, val))
+        con = sqlite3.connect(self.mdbFileLedit.text())
+        self.cur = con.cursor()
 
+        self.cur.execute('SELECT name FROM sites')
+        sites = self.cur.fetchall()
+        self.siteNameCombobx.clear()
+        self.siteNameCombobx.addItems([s[0] for s in sites])
+        # self.siteNameCombobx.setCurrentIndex(-1)
 
-        # if err != None:
-        #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Information)
-        #     msg.setText(err)
-        #     msg.exec_()
-        # else:
-            # refresh canvas
+    def siteChanged(self):
+        if self.siteNameCombobx.currentText() == '':
+            return
+        self.cur.execute('SELECT idx FROM sites WHERE name=?', (self.siteNameCombobx.currentText(),))
+        siteIdx = self.cur.fetchall()[0][0]
+        self.cur.execute('SELECT description FROM camera_views WHERE siteIdx=?', (siteIdx,))
+        views = self.cur.fetchall()
+        self.camViewCombobx.clear()
+        self.camViewCombobx.addItems([v[0] for v in views])
+        # self.camViewCombobx.setCurrentIndex(-1)
 
-    def openCfgFile(self):
-        cfgFilename, _ = QFileDialog.getOpenFileName(self, "Open configuration file",
-                                                    QDir.homePath(), "Configuration files (*.cfg)")
-        if cfgFilename != '':
-            self.cfgFileLedit.setText(cfgFilename)
+    def viewChanged(self):
+        if self.camViewCombobx.currentText() == '':
+            return
+        self.cur.execute('SELECT idx FROM sites WHERE name=?', (self.siteNameCombobx.currentText(),))
+        siteIdx = self.cur.fetchall()[0][0]
+        self.cur.execute('SELECT idx, homographyFilename, cameraTypeIdx FROM camera_views WHERE description =? AND siteIdx=?',
+                         (self.camViewCombobx.currentText(), siteIdx))
+        row = self.cur.fetchall()
+        viewIdx = row[0][0]
+        self.homographyFilename = row[0][1]
+        self.cameraTypeIdx = row[0][2]
+        self.cur.execute('SELECT databaseFilename FROM video_sequences WHERE cameraViewIdx=?', (viewIdx,))
+        trjDbs = self.cur.fetchall()
+        self.trjDbCombobx.clear()
+        trjList = [t[0].split('/')[-1] for t in trjDbs]
+        trjList.insert(0, '--All databases--')
+        self.trjDbCombobx.addItems(trjList)
+        # self.trjDbCombobx.setCurrentIndex(-1)
+        self.dateStr = trjDbs[0][0].split('/')[0]
 
     def closeImportWin(self):
         self.close()
+
+    def reportProgress(self, log, trjDbName):
+        self.summary_list_wdgt.addItem(trjDbName + ':')
+        for key, val in log.items():
+            self.summary_list_wdgt.addItem('    - {}:  {}'.format(key, val))
+        self.summary_list_wdgt.addItem('--------------------')
+
+class Worker(QObject):
+    finished = pyqtSignal()
+    progress = pyqtSignal(dict, str)
+
+    def __init__(self, cameraTypeIdx, dateStr, homographyFilename, mdbFileLedit, siteNameCombobx, trjDbCombobx):
+        super().__init__()
+        self.cameraTypeIdx = cameraTypeIdx
+        self.dateStr = dateStr
+        self.homographyFilename = homographyFilename
+        self.mdbFileLedit = mdbFileLedit
+        self.siteNameCombobx = siteNameCombobx
+        self.trjDbCombobx = trjDbCombobx
+        self.cur = None
+
+    def run(self):
+        con = sqlite3.connect(self.mdbFileLedit.text())
+        self.cur = con.cursor()
+        self.cur.execute(
+            'SELECT frameRate, intrinsicCameraMatrixStr, distortionCoefficientsStr FROM camera_types WHERE idx=?',
+            (self.cameraTypeIdx,))
+        row = self.cur.fetchall()
+        frameRate = row[0][0]
+        intrinsicCameraMatrixStr = row[0][1]
+        distortionCoefficientsStr = row[0][2]
+        intrinsicCameraMatrix = np.array(ast.literal_eval(intrinsicCameraMatrixStr))
+        distortionCoefficients = np.array(ast.literal_eval(distortionCoefficientsStr))
+
+        mdbPath = Path(self.mdbFileLedit.text()).parent
+
+        homoFile = mdbPath / self.siteNameCombobx.currentText() / self.homographyFilename
+
+        if self.trjDbCombobx.currentText() == '--All databases--':
+            for trjDbName in [self.trjDbCombobx.itemText(i) for i in range(1, self.trjDbCombobx.count())]:
+                trjDBFile = mdbPath / self.siteNameCombobx.currentText() / self.dateStr / trjDbName
+                self.cur.execute('SELECT startTime From video_sequences WHERE databaseFilename=?',
+                                 (self.dateStr + '/' + trjDbName,))
+                row = self.cur.fetchall()
+                video_start = datetime.datetime.strptime(row[0][0], '%Y-%m-%d %H:%M:%S.%f')
+                video_start = video_start.replace(microsecond=0)
+                log = importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
+                                       video_start, frameRate, session)
+                self.progress.emit(log, trjDbName)
+        else:
+            trjDBFile = mdbPath / self.siteNameCombobx.currentText() / self.dateStr / self.trjDbCombobx.currentText()
+            self.cur.execute('SELECT startTime From video_sequences WHERE databaseFilename=?',
+                             (self.dateStr + '/' + self.trjDbCombobx.currentText(),))
+            row = self.cur.fetchall()
+            video_start = datetime.datetime.strptime(row[0][0], '%Y-%m-%d %H:%M:%S.%f')
+            video_start = video_start.replace(microsecond=0)
+            log = importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
+                                   video_start, frameRate, session)
+            self.progress.emit(log, self.trjDbCombobx.currentText())
+        self.finished.emit()
 
 
 
