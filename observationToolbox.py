@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
-    plotTrajectory, importTrajectory
+    plotTrajectory, importTrajectory, speedBarPlot
 import iframework
 from trafficintelligence.storage import ProcessParameters
 
@@ -100,6 +100,9 @@ class ObsToolbox(QMainWindow):
         stackHistAction = QAction(QIcon('icons/stacked.png'), '&Stacked Histogram', self)
         stackHistAction.triggered.connect(self.stackedHist)
 
+        speedPlotAction = QAction(QIcon('icons/speed.png'), 'Speed Plot', self)
+        speedPlotAction.triggered.connect(self.speedPlot)
+
         odMatrixAction = QAction(QIcon('icons/grid.png'), '&OD Matrix', self)
         odMatrixAction.triggered.connect(self.odMatrix)
 
@@ -126,6 +129,7 @@ class ObsToolbox(QMainWindow):
         self.toolbar.addAction(self.openAction)
         self.toolbar.addAction(tempHistAction)
         self.toolbar.addAction(stackHistAction)
+        self.toolbar.addAction(speedPlotAction)
         self.toolbar.addAction(odMatrixAction)
         self.toolbar.addAction(pieChartAction)
         self.toolbar.addAction(compHistAction)
@@ -885,6 +889,19 @@ class ObsToolbox(QMainWindow):
 
         stackHistWin.exec_()
 
+    def speedPlot(self):
+        if session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+        speedPlotWin = SpeedPlotWindow(self)
+        # tempHistWin.setModal(True)
+        # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
+
+        speedPlotWin.exec_()
+
     def odMatrix(self):
         if session == None:
             msg = QMessageBox()
@@ -992,8 +1009,6 @@ class TempHistWindow(QDialog):
         self.figure = plt.figure(tight_layout=False)
 
         self.canvas = FigureCanvas(self.figure)
-
-        # self.ods_dict = getOdNamesDirections(session)
 
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
@@ -1151,6 +1166,89 @@ class StackHistWindow(QDialog):
     #                                               QDir.homePath(), "PNG files (*.png)")
     #     if fileName != '':
     #         self.canvas.print_png(fileName)
+
+
+class SpeedPlotWindow(QDialog):
+    def __init__(self, parent=None):
+        super(SpeedPlotWindow, self).__init__(parent)
+
+        self.setWindowTitle('Speed Diagram')
+
+        self.figure = plt.figure(tight_layout=False)
+
+        self.canvas = FigureCanvas(self.figure)
+
+        winLayout = QVBoxLayout()
+        gridLayout = QGridLayout()
+
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        self.transportCombobx = QComboBox()
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        self.actionTypeCombobx = QComboBox()
+        self.actionTypeCombobx.addItems(actionTypeList)
+        self.actionTypeCombobx.setCurrentIndex(-1)
+        self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        self.unitIdxCombobx = QComboBox()
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+
+        self.plotBtn = QPushButton('Plot')
+        self.plotBtn.clicked.connect(self.plotSpeed)
+        self.plotBtn.setEnabled(False)
+        gridLayout.addWidget(self.plotBtn, 0, 6)
+
+        winLayout.addLayout(gridLayout)
+        winLayout.addWidget(self.canvas)
+
+        self.setLayout(winLayout)
+
+    def plotSpeed(self):
+        self.figure.clear()
+        self.canvas.draw()
+
+        ax = self.figure.add_subplot(111)
+
+        # plot data
+        transport = self.transportCombobx.currentText()
+        actionType = self.actionTypeCombobx.currentText()
+        unitIdx = self.unitIdxCombobx.currentText()
+
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+        if None in [start_obs_time, end_obs_time]:
+            QMessageBox.information(self, 'Error!', 'There is no observation!')
+            return
+        bins = calculateBinsEdges(start_obs_time, end_obs_time)
+
+        if len(bins) < 2:
+            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
+            return
+        err = speedBarPlot(transport, actionType, unitIdx, ax, session, bins=bins)
+        if err != None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(err)
+            msg.exec_()
+        else:
+            # refresh canvas
+            self.canvas.draw()
+
+    def actionTypeChanged(self):
+        actionType = self.actionTypeCombobx.currentText()
+
+        self.unitIdxCombobx.clear()
+        if 'line' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+        elif 'zone' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+
+        self.plotBtn.setEnabled(True)
 
 
 class OdMatrixWindow(QDialog):
@@ -1800,6 +1898,9 @@ class plotTrajWindow(QDialog):
         self.setLayout(winLayout)
 
     def plotItems(self):
+        if self.mdbFileLedit.text() == '':
+            return
+
         self.cur.execute('SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr FROM camera_types WHERE idx=?',
                          (self.cameraTypeIdx,))
         row = self.cur.fetchall()
@@ -1858,6 +1959,14 @@ class plotTrajWindow(QDialog):
 
         con = sqlite3.connect(self.mdbFileLedit.text())
         self.cur = con.cursor()
+
+        # Check if database is a metadata file
+        self.cur.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='video_sequences' ''')
+        if self.cur.fetchone()[0] == 0:
+            QMessageBox.information(self, 'Error!',
+                                    'The selected database is NOT a metadata file! Select a proper file.')
+            self.mdbFileLedit.clear()
+            return
 
         self.cur.execute('SELECT name FROM sites')
         sites = self.cur.fetchall()
@@ -1958,6 +2067,8 @@ class importTrajWindow(QDialog):
 
 
     def importTrajs(self):
+        if self.mdbFileLedit.text() == '':
+            return
 
         self.thread = QThread()
         self.worker = Worker(self.cameraTypeIdx, self.dateStr, self.homographyFilename, self.mdbFileLedit,
@@ -2031,6 +2142,13 @@ class importTrajWindow(QDialog):
 
         con = sqlite3.connect(self.mdbFileLedit.text())
         self.cur = con.cursor()
+
+        # Check if database is a metadata file
+        self.cur.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='video_sequences' ''')
+        if self.cur.fetchone()[0] == 0:
+            QMessageBox.information(self, 'Error!', 'The selected database is NOT a metadata file! Select a proper file.')
+            self.mdbFileLedit.clear()
+            return
 
         self.cur.execute('SELECT name FROM sites')
         sites = self.cur.fetchall()

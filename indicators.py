@@ -247,6 +247,132 @@ def stackedHist(user, attr, ax, session, bins=20):
 
     # plt.show()
 
+
+# ==============================================================
+def speedBarPlot(transport, actionType, unitIdx, ax, session, bins, alpha=0.8, color='skyblue',
+                 ec='grey', label=None, rwidth=0.9):
+
+    if not isinstance(session, list):
+        time_list = []
+        if 'line' in actionType.split(' '):
+            q = session.query(LinePassing.instant, LinePassing.speed).filter(LinePassing.lineIdx == unitIdx). \
+                join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
+        elif 'zone' in actionType.split(' '):
+            return 'Under developement!'
+        q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
+            .filter(Mode.transport == transport)
+
+        time_list = [i[0] for i in q.all()]
+        speed_list = [i[1] for i in q.all()]
+
+        if time_list == []:
+            return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
+
+        time_list_i8 = np.array([np.datetime64(t) for t in time_list]).view('i8')
+        bins_i8 = np.array([np.datetime64(b) for b in bins]).view('i8')
+        inds = np.digitize(time_list_i8, bins_i8)
+        grouped_speed = []
+        for i in range(len(bins) - 1):
+            grouped_speed.append([])
+        i = 0
+        for ind in inds:
+            if 0 < ind < len(bins):
+                grouped_speed[ind - 1].append(speed_list[i])
+            i += 1
+        speed_avg = []
+        speed_std = []
+        for bin in grouped_speed:
+            if bin != []:
+                speed_avg.append(np.mean(bin))
+                speed_std.append(np.std(bin))
+            else:
+                speed_avg.append(0)
+                speed_std.append(0)
+        x = []
+        for i in range(len(bins) - 1):
+            x.append(bins[i] + (bins[i+1] - bins[i])/2)
+        ax.bar(x, speed_avg,
+               yerr=speed_std,
+               align='center',
+               width=(1/(24*60))*binsMinutes*0.9,
+               alpha=alpha,
+               # ecolor='black',
+               color='skyblue',
+               capsize=5)
+
+        grouped_speed_list = []
+        for bin in grouped_speed:
+            for i in bin:
+                grouped_speed_list.append(i)
+        ax.axhline(y=np.mean(grouped_speed_list), color='skyblue', linestyle='-', lw=1.5)
+
+        # (n, edges, patches) = ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth,
+        #                               alpha=alpha, label=label, histtype=histtype)
+    else:
+        time_lists = []
+        for s in session:
+            time_list = []
+            if 'line' in actionType.split(' '):
+                q = s.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
+                    join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
+            elif 'zone' in actionType.split(' '):
+                q = s.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
+                    join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+                if 'entering' in actionType.split(' '):
+                    q = q.filter(ZonePassing.entering == True)
+                elif 'exiting' in actionType.split(' '):
+                    q = q.filter(ZonePassing.entering == False)
+            q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+                .filter(Mode.transport == transport)
+
+            time_list = [i[0] for i in q.all()]
+            time_lists.append(time_list)
+
+        if time_lists[0] == [] and time_lists[1] == []:
+            return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
+
+        i = 0
+        for t in time_lists[0]:
+            time_lists[0][i] = datetime.datetime(2000,1,1,t.hour, t.minute, t.second)
+            i += 1
+
+        i = 0
+        for t in time_lists[1]:
+            time_lists[1][i] = datetime.datetime(2000, 1, 1, t.hour, t.minute, t.second)
+            i += 1
+
+        (n, edges, patches) = ax.hist(time_lists, bins=bins, color=color, ec=ec,
+                                      rwidth=rwidth, alpha=alpha, label=label, histtype=histtype)
+
+    ax.set_xlim([bins[0], bins[-1]])
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
+
+    ax.xaxis.set_minor_locator(mdates.HourLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    #
+    # if not isinstance(session, list):
+    #     xLabel = 'Time ({})'.format(time_list[0].strftime('%A, %b %d, %Y'))
+    # else:
+    #     xLabel = 'Time'
+    #
+    # # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
+    ax.tick_params(axis='x', labelsize=8, rotation=0)
+    ax.tick_params(axis='y', labelsize=7)
+    ax.set_xlabel('Time', fontsize=8)
+    ax.set_ylabel('Speed average', fontsize=8)
+    # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    # ax.set_title('Temporal distribution of {}s {} #{}'.format(transport, actionType, unitIdx),
+    #              fontsize=8)
+    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+
+    ax.text(0.03, 0.93, str('StUDiO Project'),
+            fontsize=9, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
+
+
 # ==============================================================
 def odMatrix(user, ax, session):
     start_obs_time, end_obs_time = getObsStartEnd(session)
@@ -860,7 +986,19 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
         xy_arr = traj.positions.asArray()
         x = xy_arr[0]
         y = xy_arr[1]
-        ax.plot(x, y, lw=0.5)
+        c = 'grey'
+        l = 'Unkown'
+        userType = traj.getUserType()
+        if userType == 1:
+            c = 'blue'
+            l = 'Car'
+        elif userType == 2:
+            c = 'orange'
+            l = 'Pedestrian'
+        elif userType == 4:
+            c = 'green'
+            l = 'Bike'
+        ax.plot(x, y, color=c, lw=0.25, label=l)
 
     q_line = session.query(Line)
     q_zone = session.query(Zone)
@@ -887,6 +1025,14 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
             zone = Polygon(prj_xy, fc=fc, ec=ec, lw=0.5)
             ax.add_patch(zone)
     ax.axis('equal')
+    handles, labels = ax.get_legend_handles_labels()
+    handle_list = []
+    label_list = []
+    for i, label in enumerate(labels):
+        if not label in label_list:
+            handle_list.append(handles[i])
+            label_list.append(label)
+    ax.legend(handle_list, label_list, loc='upper left', prop={'size': 5})
 
 
 def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
@@ -910,22 +1056,41 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
 
     linePass_list = []
     modes_list = []
-    for line in q_line:
-        points = np.array([[line.points[0].x, line.points[1].x],
-                           [line.points[0].y, line.points[1].y]])
-        prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
-        p1 = moving.Point(prj_points[0][0], prj_points[1][0])
-        p2 = moving.Point(prj_points[0][1], prj_points[1][1])
 
-        for trj in objects:
+    for trj in objects:
+        userType = trj.getUserType()
+        if userType == 0:
+            continue
+
+        for line in q_line:
+            points = np.array([[line.points[0].x, line.points[1].x],
+                               [line.points[0].y, line.points[1].y]])
+            prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
+            p1 = moving.Point(prj_points[0][0], prj_points[1][0])
+            p2 = moving.Point(prj_points[0][1], prj_points[1][1])
+
             instants_list = trj.getInstantsCrossingLane(p1, p2)
             if len(instants_list) > 0:
-                secs = np.floor(instants_list[0]/frameRate)
+                secs = int(instants_list[0]/frameRate)
                 instant = video_start + datetime.timedelta(seconds=secs)
+                speed = round(trj.getVelocityAtInstant(int(instants_list[0])).norm2()*frameRate*3.6, 1)  #km/h
                 person = Person()
-                vehicle = Vehicle(category='car')
-                modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
-                linePass_list.append(LinePassing(line=line, instant=instant, person=person))
+                if userType == 1 or userType == 7:
+                    vehicle = Vehicle(category='car')
+                    modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+                elif userType == 2:
+                    modes_list.append(Mode(transport='walking', person=person))
+                elif userType == 4 or userType == 3:
+                    vehicle = Vehicle(category='bike')
+                    modes_list.append(Mode(transport='bike', person=person, vehicle=vehicle))
+                elif userType == 5:
+                    vehicle = Vehicle(category='bus')
+                    modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+                elif userType == 6:
+                    vehicle = Vehicle(category='truck')
+                    modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+                linePass_list.append(LinePassing(line=line, instant=instant, person=person, speed=speed))
+
     session.add_all(linePass_list + modes_list)
     session.commit()
     session.close()
