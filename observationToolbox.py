@@ -25,9 +25,10 @@ import matplotlib.pyplot as plt
 
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
-    plotTrajectory, importTrajectory, speedBarPlot
+    plotTrajectory, importTrajectory, speedBarPlot, userTypeNames, userTypeColors, creatStreetusers
 import iframework
-from trafficintelligence.storage import ProcessParameters
+from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
+from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
 
 from sqlalchemy import Enum, Boolean, DateTime
 from sqlalchemy.inspection import inspect
@@ -1847,14 +1848,18 @@ class plotTrajWindow(QDialog):
 
         self.cur = None
         self.homographyFilename = None
+        # self.trjDBFile = None
         self.cameraTypeIdx = None
         self.dateStr = None
+        self.traj_line = None
+        self.ax = None
         self.figure = plt.figure(tight_layout=False)
         self.canvas = FigureCanvas(self.figure)
 
         winLayout = QVBoxLayout()
         mdbLayout = QHBoxLayout()
         gridLayout = QGridLayout()
+        editLayout = QGridLayout()
 
         mdbLayout.addWidget(QLabel('Metadata file:'))
         self.mdbFileLedit = QLineEdit()
@@ -1890,10 +1895,51 @@ class plotTrajWindow(QDialog):
         # self.plotBtn.setEnabled(False)
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
+        self.prevTrjBtn = QPushButton('Prev.')
+        self.prevTrjBtn.clicked.connect(self.prevTrajectory)
+        # self.prevTrjBtn.setEnabled(False)
+        editLayout.addWidget(self.prevTrjBtn, 0, 0)
+
+        self.trjIdxLe = QLineEdit('-1')
+        self.trjIdxLe.setFixedWidth(50)
+        # self.trjIdxLe.setReadOnly(True)
+        editLayout.addWidget(self.trjIdxLe, 0, 1)
+
+        self.noTrjLabel = QLabel('/--')
+        editLayout.addWidget(self.noTrjLabel, 0, 2)
+
+        self.nextTrjBtn = QPushButton('Next')
+        self.nextTrjBtn.clicked.connect(self.nextTrajectory)
+        # self.nextTrjBtn.setEnabled(False)
+        editLayout.addWidget(self.nextTrjBtn, 0, 3)
+
+        editLayout.addWidget(QLabel('Reference line index:'), 0, 4)
+        self.refLineLe = QLineEdit('--')
+        self.refLineLe.setFixedWidth(50)
+        self.refLineLe.setReadOnly(True)
+        editLayout.addWidget(self.refLineLe, 0, 5)
+
+        self.delTrjBtn = QPushButton('Delete current trjectory')
+        self.delTrjBtn.clicked.connect(self.delTrajectory)
+        # self.delTrjBtn.setEnabled(False)
+        editLayout.addWidget(self.delTrjBtn, 0, 6)
+
+        editLayout.addWidget(QLabel('User type:'), 1, 0)
+        self.userTypeCb = QComboBox()
+        self.userTypeCb.addItems(userTypeNames)
+        self.userTypeCb.currentIndexChanged.connect(self.userTypeChanged)
+        editLayout.addWidget(self.userTypeCb, 1, 1, 1, 2)
+
+        self.saveTrjBtn = QPushButton('Save all trajectories')
+        self.saveTrjBtn.clicked.connect(self.saveTrajectories)
+        # self.saveTrjBtn.setEnabled(False)
+        editLayout.addWidget(self.saveTrjBtn, 1, 6)
+
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(mdbLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.canvas)
+        winLayout.addLayout(editLayout)
 
         self.setLayout(winLayout)
 
@@ -1901,20 +1947,23 @@ class plotTrajWindow(QDialog):
         if self.mdbFileLedit.text() == '':
             return
 
-        self.cur.execute('SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr FROM camera_types WHERE idx=?',
+        self.cur.execute(
+            'SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr, frameRate FROM camera_types WHERE idx=?',
                          (self.cameraTypeIdx,))
         row = self.cur.fetchall()
         intrinsicCameraMatrixStr = row[0][0]
         distortionCoefficientsStr = row[0][1]
-        intrinsicCameraMatrix = np.array(ast.literal_eval(intrinsicCameraMatrixStr))
-        distortionCoefficients = np.array(ast.literal_eval(distortionCoefficientsStr))
+        self.intrinsicCameraMatrix = np.array(ast.literal_eval(intrinsicCameraMatrixStr))
+        self.distortionCoefficients = np.array(ast.literal_eval(distortionCoefficientsStr))
+        self.frameRate = row[0][2]
 
         mdbPath = Path(self.mdbFileLedit.text()).parent
+        site_folder = mdbPath/self.siteNameCombobx.currentText()
+        date_folder = site_folder/self.dateStr
+        self.trjDBFile = date_folder/self.trjDbCombobx.currentText()
+        self.homoFile = site_folder/self.homographyFilename
 
-        trjDBFile = mdbPath/self.siteNameCombobx.currentText()/self.dateStr/self.trjDbCombobx.currentText()
-        homoFile = mdbPath/self.siteNameCombobx.currentText()/self.homographyFilename
-
-        if not trjDBFile.exists():
+        if not self.trjDBFile.exists():
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The trajectory database does not exist!')
@@ -1923,7 +1972,23 @@ class plotTrajWindow(QDialog):
             self.canvas.draw()
             return
 
-        if not homoFile.exists():
+        trjDbName = self.trjDbCombobx.currentText()
+        self.cur.execute('SELECT name, startTime From video_sequences WHERE databaseFilename=?',
+                         (self.dateStr + '/' + trjDbName,))
+        row = self.cur.fetchall()
+        video_name = Path(row[0][0])
+        video_start_0 = datetime.datetime.strptime(row[0][1], '%Y-%m-%d %H:%M:%S.%f')
+        self.video_start = video_start_0.replace(microsecond=0)
+
+        video_file = site_folder/video_name
+        if video_file.exists():
+            self.parent().parent().videoFile = str(video_file)
+            self.parent().parent().openVideoFile()
+        else:
+            QMessageBox.information(self, 'Error!', 'The corresponding video file does not exist!')
+            return
+
+        if not self.homoFile.exists():
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The homography file does not exist!')
@@ -1935,19 +2000,175 @@ class plotTrajWindow(QDialog):
         self.figure.clear()
         self.canvas.draw()
 
-        ax = self.figure.add_subplot(111)
+        self.ax = self.figure.add_subplot(111)
 
-        plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile, ax, session)
-
-        # if err != None:
-        #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Information)
-        #     msg.setText(err)
-        #     msg.exec_()
-        # else:
-            # refresh canvas
+        self.traj_line = plotTrajectory(self.trjDBFile, self.intrinsicCameraMatrix, self.distortionCoefficients,
+                                       self.homoFile, self.ax, session)
+        for tl in self.traj_line:
+            tl.append([-1, [], [], [], []])  #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs]
+        self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
+        self.trjIdxLe.setText('-1')
+        self.userTypeCb.setCurrentIndex(-1)
+        self.refLineLe.setText('--')
         self.canvas.draw()
 
+    def nextTrajectory(self):
+        q_line = session.query(Line)
+        if q_line.all() == []:
+            QMessageBox.information(self, 'Warning!', 'At least one screenline is required!')
+            return
+
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == len(self.traj_line) -1:
+            return
+        if current_idx == -1:
+            for line in [tl[1] for tl in self.traj_line]:
+                line.set_visible(False)
+
+        current_line = self.traj_line[current_idx][1]
+        current_line.set_visible(False)
+
+        next_idx = current_idx + 1
+        self.trjIdxLe.setText(str(next_idx))
+        next_traj = self.traj_line[next_idx][0]
+        next_line = self.traj_line[next_idx][1]
+        next_line.set_visible(True)
+        self.userTypeCb.setCurrentIndex(next_traj.userType)
+        self.canvas.draw()
+
+        if self.traj_line[next_idx][2][0] == -1:
+            self.traj_line[next_idx][2][0] = next_traj.userType
+            homography = np.loadtxt(self.homoFile, delimiter=' ')
+            for line in q_line.all():
+                points = np.array([[line.points[0].x, line.points[1].x],
+                                   [line.points[0].y, line.points[1].y]])
+                prj_points = imageToWorldProject(points, self.intrinsicCameraMatrix, self.distortionCoefficients,
+                                                 homography)
+                p1 = moving.Point(prj_points[0][0], prj_points[1][0])
+                p2 = moving.Point(prj_points[0][1], prj_points[1][1])
+
+                instants_list = next_traj.getInstantsCrossingLane(p1, p2)
+                if len(instants_list) > 0:
+                    secs = instants_list[0] / self.frameRate
+                    instant = self.video_start + datetime.timedelta(seconds=round(secs))
+                    speed = round(next_traj.getVelocityAtInstant(int(instants_list[0]))
+                                  .norm2() * self.frameRate * 3.6, 1)  # km/h
+
+                    self.traj_line[next_idx][2][1].append(line)
+                    self.traj_line[next_idx][2][2].append(instant)
+                    self.traj_line[next_idx][2][3].append(speed)
+                    self.traj_line[next_idx][2][4].append(secs)
+                    # screenLine_Id = str(line.idx)
+            if self.traj_line[next_idx][2][1] == []:
+                secs = (next_traj.getLastInstant() / self.frameRate)
+                # self.traj_line[next_idx][2][1].append('None')
+                self.traj_line[next_idx][2][4].append(secs)
+
+        self.parent().parent().mediaPlayer.setPosition(round(self.traj_line[next_idx][2][4][0]*1000))
+        if self.traj_line[next_idx][2][1] == []:
+            self.refLineLe.setText('None')
+        else:
+            self.refLineLe.setText(str(self.traj_line[next_idx][2][1][0].idx))
+
+    def prevTrajectory(self):
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == -1:
+            return
+        prev_idx = current_idx - 1
+        if current_idx == 0:
+            for line in [tl[1] for tl in self.traj_line]:
+                line.set_visible(True)
+            self.trjIdxLe.setText(str(prev_idx))
+            self.canvas.draw()
+            return
+
+        current_line = self.traj_line[current_idx][1]
+        current_line.set_visible(False)
+
+        self.trjIdxLe.setText(str(prev_idx))
+        prev_traj = self.traj_line[prev_idx][0]
+        prev_line = self.traj_line[prev_idx][1]
+        prev_line.set_visible(True)
+        self.userTypeCb.setCurrentIndex(prev_traj.userType)
+        self.canvas.draw()
+
+        homography = np.loadtxt(self.homoFile, delimiter=' ')
+        q_line = session.query(Line)
+        if q_line.all() != []:
+            for line in q_line.all():
+                points = np.array([[line.points[0].x, line.points[1].x],
+                                   [line.points[0].y, line.points[1].y]])
+                prj_points = imageToWorldProject(points, self.intrinsicCameraMatrix, self.distortionCoefficients,
+                                                 homography)
+                p1 = moving.Point(prj_points[0][0], prj_points[1][0])
+                p2 = moving.Point(prj_points[0][1], prj_points[1][1])
+
+                instants_list = prev_traj.getInstantsCrossingLane(p1, p2)
+                if len(instants_list) > 0:
+                    mil_secs = int((instants_list[0] / self.frameRate) * 1000)
+                    self.refLineLe.setText(str(line.idx))
+                    break
+            if len(instants_list) == 0:
+                mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
+                self.refLineLe.setText('None')
+        else:
+            mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
+            self.refLineLe.setText('None')
+
+        self.parent().parent().mediaPlayer.setPosition(mil_secs)
+
+    def delTrajectory(self):
+        delete_idx = int(self.trjIdxLe.text())
+        delete_line = self.traj_line[delete_idx][1]
+        if delete_idx == -1:
+            return
+        msg = QMessageBox()
+        rep = msg.question(self, 'Delete trajectory',
+                           'Are you sure to delete the current trajectory?', msg.Yes | msg.No)
+        if rep == msg.No:
+            return
+
+        self.prevTrajectory()
+        self.traj_line.pop(delete_idx)
+        self.ax.lines.remove(delete_line)
+        self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
+
+    def saveTrajectories(self):
+        if self.mdbFileLedit.text() == '':
+            return
+
+        streetUserObjects = []
+        no_users = 0
+        for trj_idx in range(len(self.traj_line)):
+            userType = self.traj_line[trj_idx][2][0]
+            lines = self.traj_line[trj_idx][2][1]
+            if userType != -1 and userType != 0 and lines != []:
+                instants = self.traj_line[trj_idx][2][2]
+                speeds = self.traj_line[trj_idx][2][3]
+                streetUserObjects = streetUserObjects + creatStreetusers(userType, lines, instants, speeds)
+                no_users += 1
+
+        session.add_all(streetUserObjects)
+        session.commit()
+        session.close()
+
+        QMessageBox.information(self, 'Import!', 'No. of imported street users: {}'.format(no_users))
+
+
+    def userTypeChanged(self):
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == -1:
+            return
+        user_indx = self.userTypeCb.currentIndex()
+        current_traj = self.traj_line[current_idx][0]
+
+        if user_indx != current_traj.userType:
+            current_line = self.traj_line[current_idx][1]
+            current_traj.setUserType(user_indx)
+            self.traj_line[current_idx][2][0] = user_indx
+            current_line.set_label(userTypeNames[user_indx])
+            current_line.set_color(userTypeColors[user_indx])
+            self.canvas.draw()
 
     def openMdbFile(self):
         mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",

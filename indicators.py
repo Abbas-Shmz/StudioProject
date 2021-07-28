@@ -25,9 +25,11 @@ from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
 from trafficintelligence.storage import ProcessParameters
 import iframework
 from iframework import connectDatabase, LinePassing, ZonePassing, Person, Mode, GroupBelonging,\
-    Vehicle, Line, Zone
+    Vehicle, Line, Zone, Group
 
 noDataSign = 'x'
+userTypeNames = ['unknown', 'car', 'pedestrian', 'motorcycle', 'bicycle', 'bus', 'truck', 'automated', 'scooter']
+userTypeColors = ['gray',   'blue', 'orange',    'violet',       'green',  'yellow', 'black', 'cyan',   'red']
 
 config_object = ConfigParser()
 cfg = config_object.read("config.ini")
@@ -977,28 +979,16 @@ def compareIndicators(transport, actionType, start_time, end_time, session1, ses
 
 
 def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homographyFile, ax, session):
-    intrinsicCameraMatrix = np.array([[894.18, 0.0, 951.75], [0.0, 913.2, 573.04], [0.0, 0.0, 1.0]])
-    distortionCoefficients = np.array([-0.12, 0.0, 0.0, 0.0, 0.0])
     objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
     homography = np.loadtxt(homographyFile, delimiter=' ')
-
+    traj_line = []
     for traj in objects:
         xy_arr = traj.positions.asArray()
         x = xy_arr[0]
         y = xy_arr[1]
-        c = 'grey'
-        l = 'Unkown'
         userType = traj.getUserType()
-        if userType == 1:
-            c = 'blue'
-            l = 'Car'
-        elif userType == 2:
-            c = 'orange'
-            l = 'Pedestrian'
-        elif userType == 4:
-            c = 'green'
-            l = 'Bike'
-        ax.plot(x, y, color=c, lw=0.25, label=l)
+        line, = ax.plot(x, y, color=userTypeColors[userType], lw=0.5, label=userTypeNames[userType])
+        traj_line.append([traj, line])
 
     q_line = session.query(Line)
     q_zone = session.query(Zone)
@@ -1034,6 +1024,8 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
             label_list.append(label)
     ax.legend(handle_list, label_list, loc='upper left', prop={'size': 5})
 
+    return traj_line
+
 
 def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
                      video_start, frameRate, session):
@@ -1062,7 +1054,7 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
         if userType == 0:
             continue
 
-        for line in q_line:
+        for line in q_line.all():
             points = np.array([[line.points[0].x, line.points[1].x],
                                [line.points[0].y, line.points[1].y]])
             prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
@@ -1089,6 +1081,9 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
                 elif userType == 6:
                     vehicle = Vehicle(category='truck')
                     modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+                elif userType == 8:
+                    vehicle = Vehicle(category='scooter')
+                    modes_list.append(Mode(transport='scooter', person=person, vehicle=vehicle))
                 linePass_list.append(LinePassing(line=line, instant=instant, person=person, speed=speed))
 
     session.add_all(linePass_list + modes_list)
@@ -1104,6 +1099,37 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
         print('   {}: {}'.format(k, v))
 
     return log
+
+def creatStreetusers(userType, lines, instants, speeds):
+    linePass_list = []
+    modes_list = []
+
+    person = Person()
+    group = Group([person])
+    for i in range(len(lines)):
+        line = lines[i]
+        instant = instants[i]
+        speed = speeds[i]
+
+        if userType == 1 or userType == 7:
+            vehicle = Vehicle(category='car')
+            modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+        elif userType == 2:
+            modes_list.append(Mode(transport='walking', person=person))
+        elif userType == 4 or userType == 3:
+            vehicle = Vehicle(category='bike')
+            modes_list.append(Mode(transport='bike', person=person, vehicle=vehicle))
+        elif userType == 5:
+            vehicle = Vehicle(category='bus')
+            modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+        elif userType == 6:
+            vehicle = Vehicle(category='truck')
+            modes_list.append(Mode(transport='cardriver', person=person, vehicle=vehicle))
+        elif userType == 8:
+            vehicle = Vehicle(category='scooter')
+            modes_list.append(Mode(transport='scooter', person=person, vehicle=vehicle))
+        linePass_list.append(LinePassing(line=line, instant=instant, group=group, speed=speed))
+    return linePass_list + modes_list
 
 # =========================================
 def image_to_ground(img_points, homography):
