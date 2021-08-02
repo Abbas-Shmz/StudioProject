@@ -312,11 +312,13 @@ class VideoWindow(QMainWindow):
         # self.mediaPlayer.setMedia(QMediaContent())
         if self.sender() == self.openVideoAction:
             self.videoFile, _ = QFileDialog.getOpenFileName(self, "Open video", QDir.homePath())
-            if self.videoFile != '':
-                self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
-                                                     os.path.basename(self.projectFile)))
+            # if self.videoFile != '':
+            #     self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
+            #                                          os.path.basename(self.projectFile)))
 
         if self.videoFile != '':
+            self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
+                                                 os.path.basename(self.projectFile)))
             self.saveProjectAction.setEnabled(True)
             self.loadGraphAction.setEnabled(True)
             self.saveGraphAction.setEnabled(True)

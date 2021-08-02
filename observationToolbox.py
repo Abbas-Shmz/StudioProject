@@ -25,7 +25,8 @@ import matplotlib.pyplot as plt
 
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
-    plotTrajectory, importTrajectory, speedBarPlot, userTypeNames, userTypeColors, creatStreetusers
+    plotTrajectory, importTrajectory, speedBarPlot, userTypeNames, userTypeColors, creatStreetusers, \
+    modeShareCompChart
 import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -38,7 +39,7 @@ session = None
 
 config_object = ConfigParser()
 cfg = config_object.read("config.ini")
-actionTypeList = ['passing line', 'entering zone', 'exiting zone', 'passing zone',
+actionTypeList = ['crossing line', 'entering zone', 'exiting zone', 'crossing zone',
                   'dwelling zone']
 
 class ObsToolbox(QMainWindow):
@@ -110,6 +111,9 @@ class ObsToolbox(QMainWindow):
         pieChartAction = QAction(QIcon('icons/pie-chart.png'), '&Pie Chart', self)
         pieChartAction.triggered.connect(self.pieChart)
 
+        modeChartAction = QAction(QIcon('icons/modes.png'), '&Mode Chart', self)
+        modeChartAction.triggered.connect(self.modeChart)
+
         compHistAction = QAction(QIcon('icons/comparison.png'), '&Comparative Histogram', self)
         compHistAction.triggered.connect(self.compHist)
 
@@ -133,6 +137,7 @@ class ObsToolbox(QMainWindow):
         self.toolbar.addAction(speedPlotAction)
         self.toolbar.addAction(odMatrixAction)
         self.toolbar.addAction(pieChartAction)
+        self.toolbar.addAction(modeChartAction)
         self.toolbar.addAction(compHistAction)
         self.toolbar.addAction(reportAction)
         self.toolbar.addAction(compIndAction)
@@ -926,8 +931,19 @@ class ObsToolbox(QMainWindow):
         pieChartWin = PieChartWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
-
         pieChartWin.exec_()
+
+    def modeChart(self):
+        if session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined.')
+            msg.exec_()
+            return
+        modeChartWin = ModeChartWindow(self)
+        # modeChartWin.setModal(True)
+        # modeChartWin.setAttribute(Qt.WA_DeleteOnClose)
+        modeChartWin.exec_()
 
     def compHist(self):
         if session == None:
@@ -1007,7 +1023,7 @@ class TempHistWindow(QDialog):
 
         self.setWindowTitle('Temporal Distribution Histogram')
 
-        self.figure = plt.figure(tight_layout=False)
+        self.figure = plt.figure(tight_layout=True)
 
         self.canvas = FigureCanvas(self.figure)
 
@@ -1102,7 +1118,7 @@ class StackHistWindow(QDialog):
 
         self.setWindowTitle('Stacked Histogram')
 
-        self.figure = plt.figure(tight_layout=False)
+        self.figure = plt.figure(tight_layout=True)
 
         self.canvas = FigureCanvas(self.figure)
 
@@ -1175,12 +1191,35 @@ class SpeedPlotWindow(QDialog):
 
         self.setWindowTitle('Speed Diagram')
 
-        self.figure = plt.figure(tight_layout=False)
+        self.figure = plt.figure(tight_layout=True)
 
         self.canvas = FigureCanvas(self.figure)
 
         winLayout = QVBoxLayout()
+        dbLayout1 = QHBoxLayout()
+        dbLayout2 = QHBoxLayout()
         gridLayout = QGridLayout()
+
+        dbLayout1.addWidget(QLabel('Database file (Before):'))
+        self.dbFile1Ledit = QLineEdit()
+        dbLayout1.addWidget(self.dbFile1Ledit)
+
+        self.openDbFileBtn1 = QPushButton()
+        self.openDbFileBtn1.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn1.setToolTip('Open (before) database file')
+        self.openDbFileBtn1.clicked.connect(self.opendbFile1)
+        dbLayout1.addWidget(self.openDbFileBtn1)
+
+        dbLayout2.addWidget(QLabel('Database file (After):'))
+        self.dbFile2Ledit = QLineEdit()
+        self.dbFile2Ledit.setText(self.parent().dbFilename)
+        dbLayout2.addWidget(self.dbFile2Ledit)
+
+        self.openDbFileBtn2 = QPushButton()
+        self.openDbFileBtn2.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn2.setToolTip('Open (after) database file')
+        self.openDbFileBtn2.clicked.connect(self.opendbFile2)
+        dbLayout2.addWidget(self.openDbFileBtn2)
 
         gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
@@ -1205,6 +1244,8 @@ class SpeedPlotWindow(QDialog):
         self.plotBtn.setEnabled(False)
         gridLayout.addWidget(self.plotBtn, 0, 6)
 
+        winLayout.addLayout(dbLayout1)
+        winLayout.addLayout(dbLayout2)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.canvas)
 
@@ -1221,16 +1262,54 @@ class SpeedPlotWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
 
-        start_obs_time, end_obs_time = getObsStartEnd(session)
-        if None in [start_obs_time, end_obs_time]:
-            QMessageBox.information(self, 'Error!', 'There is no observation!')
-            return
-        bins = calculateBinsEdges(start_obs_time, end_obs_time)
+        dbFilename1 = self.dbFile1Ledit.text()
+        dbFilename2 = self.dbFile2Ledit.text()
 
-        if len(bins) < 2:
-            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
+        if dbFilename1 == '' or dbFilename2 == '':
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined!')
+            msg.exec_()
             return
-        err = speedBarPlot(transport, actionType, unitIdx, ax, session, bins=bins)
+
+        self.session1 = createDatabase(dbFilename1)
+        if self.session1 is None:
+            self.session1 = connectDatabase(dbFilename1)
+
+        self.session2 = createDatabase(dbFilename2)
+        if self.session2 is None:
+            self.session2 = connectDatabase(dbFilename2)
+
+        cls_obs = LinePassing
+        first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
+
+        first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
+
+        if first_obs_time1.time() >= first_obs_time2.time():
+            bins_start = first_obs_time1
+        else:
+            bins_start = first_obs_time2
+
+        if last_obs_time1.time() <= last_obs_time2.time():
+            bins_end = last_obs_time1
+        else:
+            bins_end = last_obs_time2
+
+        start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
+        end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
+
+        duration = end - start
+        duration_in_s = duration.total_seconds()
+
+        bins = calculateBinsEdges(start, end, 30)
+        if len(bins) < 2:
+            QMessageBox.information(self, 'Error!',
+                                    'The common observation duration is too short!')
+            return
+        times = [b.time() for b in bins]
+        err = speedBarPlot(transport, actionType, unitIdx, times, ax, [self.session1, self.session2])
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -1239,6 +1318,18 @@ class SpeedPlotWindow(QDialog):
         else:
             # refresh canvas
             self.canvas.draw()
+
+    def opendbFile1(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile1Ledit.setText(dbFilename)
+
+    def opendbFile2(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile2Ledit.setText(dbFilename)
 
     def actionTypeChanged(self):
         actionType = self.actionTypeCombobx.currentText()
@@ -1324,7 +1415,7 @@ class PieChartWindow(QDialog):
 
         self.setWindowTitle('Pie Chart')
 
-        self.figure = plt.figure(tight_layout=False)
+        self.figure = plt.figure(tight_layout=True)
 
         self.canvas = FigureCanvas(self.figure)
 
@@ -1353,8 +1444,8 @@ class PieChartWindow(QDialog):
         if start_obs_time != None:
             bins = calculateBinsEdges(start_obs_time, end_obs_time)
             if len(bins) > 1:
-                start_time = bins[0].to_pydatetime()
-                end_time = bins[-1].to_pydatetime()
+                start_time = bins[0]
+                end_time = bins[-1]
 
                 peakHours = getPeakHours(session, start_time, end_time)
                 timeSpans = ['{} - {}'.format(start_time.strftime('%I:%M %p'),
@@ -1442,13 +1533,188 @@ class PieChartWindow(QDialog):
         #     self.attrCombobx.addItems(['activityType'])
 
 
+class ModeChartWindow(QDialog):
+    def __init__(self, parent=None):
+        super(ModeChartWindow, self).__init__(parent)
+
+        self.setWindowTitle('Comparative Mode Share Chart')
+        self.setMinimumHeight(550)
+
+        self.figure = plt.figure(tight_layout=True)
+
+        self.canvas = FigureCanvas(self.figure)
+
+        # self.toolbar = NavigationToolbar(self.canvas, self)
+
+        winLayout = QVBoxLayout()
+        dbLayout1 = QHBoxLayout()
+        dbLayout2 = QHBoxLayout()
+        gridLayout = QGridLayout()
+
+        dbLayout1.addWidget(QLabel('Database file (Before):'))
+        self.dbFile1Ledit = QLineEdit()
+        dbLayout1.addWidget(self.dbFile1Ledit)
+
+        self.openDbFileBtn1 = QPushButton()
+        self.openDbFileBtn1.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn1.setToolTip('Open (before) database file')
+        self.openDbFileBtn1.clicked.connect(self.opendbFile1)
+        dbLayout1.addWidget(self.openDbFileBtn1)
+
+        dbLayout2.addWidget(QLabel('Database file (After):'))
+        self.dbFile2Ledit = QLineEdit()
+        self.dbFile2Ledit.setText(self.parent().dbFilename)
+        dbLayout2.addWidget(self.dbFile2Ledit)
+
+        self.openDbFileBtn2 = QPushButton()
+        self.openDbFileBtn2.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn2.setToolTip('Open (after) database file')
+        self.openDbFileBtn2.clicked.connect(self.opendbFile2)
+        dbLayout2.addWidget(self.openDbFileBtn2)
+
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        self.transportCombobx = QComboBox()
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        self.actionTypeCombobx = QComboBox()
+        self.actionTypeCombobx.addItems(actionTypeList)
+        self.actionTypeCombobx.setCurrentIndex(-1)
+        self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        self.unitIdxCombobx = QComboBox()
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+
+        self.plotBtn = QPushButton('Plot')
+        self.plotBtn.clicked.connect(self.plotModeChart)
+        gridLayout.addWidget(self.plotBtn, 0, 6)
+
+        # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(dbLayout1)
+        winLayout.addLayout(dbLayout2)
+        winLayout.addLayout(gridLayout)
+        winLayout.addWidget(self.canvas)
+
+        self.setLayout(winLayout)
+
+    def plotModeChart(self):
+        self.figure.clear()
+        self.canvas.draw()
+
+        ax = self.figure.subplots(2, 2, sharex=True, sharey='row')
+
+        dbFilename1 = self.dbFile1Ledit.text()
+        dbFilename2 = self.dbFile2Ledit.text()
+
+        if dbFilename1 == '' or dbFilename2 == '':
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined!')
+            msg.exec_()
+            return
+
+        self.session1 = createDatabase(dbFilename1)
+        if self.session1 is None:
+            self.session1 = connectDatabase(dbFilename1)
+
+        self.session2 = createDatabase(dbFilename2)
+        if self.session2 is None:
+            self.session2 = connectDatabase(dbFilename2)
+
+        transport = self.transportCombobx.currentText()
+        actionType = self.actionTypeCombobx.currentText()
+        unitIdx = self.unitIdxCombobx.currentText()
+
+        # if 'line' in actionType.split(' '):
+        #     cls_obs = LinePassing
+        # elif 'zone' in actionType.split(' '):
+        #     cls_obs = ZonePassing
+        cls_obs = LinePassing
+        first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
+
+        first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
+        last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
+
+        if first_obs_time1.time() >= first_obs_time2.time():
+            bins_start = first_obs_time1
+        else:
+            bins_start = first_obs_time2
+
+        if last_obs_time1.time() <= last_obs_time2.time():
+            bins_end = last_obs_time1
+        else:
+            bins_end = last_obs_time2
+
+        start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
+        end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
+
+        duration = end - start
+        duration_in_s = duration.total_seconds()
+
+        bins = calculateBinsEdges(start, end, 60)
+        if len(bins) < 2:
+            QMessageBox.information(self, 'Error!',
+                    'The common observation duration is too short!')
+            return
+
+        label1 = self.session1.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
+        label2 = self.session2.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
+
+        times = [b.time() for b in bins]
+
+        modeShareCompChart(transport, times, ax, [label1, label2], [self.session1, self.session2])
+        self.canvas.draw()
+        # err = tempDistHist(transport, actionType, unitIdx, ax, [self.session1, self.session2],
+        #                    bins=bins, alpha=0.7, color=['skyblue', 'red'], ec='grey',
+        #                    label=[label1, label2], rwidth=0.9)
+        # plt.legend(loc='upper right', fontsize=6)
+        # if err != None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Information)
+        #     msg.setText(err)
+        #     msg.exec_()
+        # else:
+        #     # refresh canvas
+        #     self.canvas.draw()
+
+    def opendbFile1(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile1Ledit.setText(dbFilename)
+
+    def opendbFile2(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFile2Ledit.setText(dbFilename)
+
+    def actionTypeChanged(self):
+        actionType = self.actionTypeCombobx.currentText()
+
+        self.unitIdxCombobx.clear()
+        if 'line' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+        elif 'zone' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+
+        self.plotBtn.setEnabled(True)
+
+
+
 class CompHistWindow(QDialog):
     def __init__(self, parent=None):
         super(CompHistWindow, self).__init__(parent)
 
         self.setWindowTitle('Comparative Temporal Distribution Histogram')
 
-        self.figure = plt.figure(tight_layout=False)
+        self.figure = plt.figure(tight_layout=True)
 
         self.canvas = FigureCanvas(self.figure)
 
@@ -1652,18 +1918,22 @@ class genReportWindow(QDialog):
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
-        # self.camViewCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        self.unitIdxCombobx = QComboBox()
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Generate report')
         self.genRepBtn.clicked.connect(self.genReport)
-        gridLayout.addWidget(self.genRepBtn, 0, 4)
+        gridLayout.addWidget(self.genRepBtn, 0, 6)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save report')
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 5)
+        gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -1675,6 +1945,7 @@ class genReportWindow(QDialog):
 
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
+        unitIdx = self.unitIdxCombobx.currentText()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
         bins = calculateBinsEdges(start_obs_time, end_obs_time)
@@ -1682,9 +1953,9 @@ class genReportWindow(QDialog):
             QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
             return
         else:
-            start_time = bins[0].to_pydatetime()
-            end_time = bins[-1].to_pydatetime()
-        self.indicatorsDf = generateReport(transport, actionType, start_time, end_time, session)
+            start_time = bins[0]
+            end_time = bins[-1]
+        self.indicatorsDf = generateReport(transport, actionType, unitIdx, start_time, end_time, session)
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
@@ -1696,6 +1967,17 @@ class genReportWindow(QDialog):
             msg = QMessageBox()
             msg.setText('The table is copied to the clipboard.')
             msg.exec_()
+
+    def actionTypeChanged(self):
+        actionType = self.actionTypeCombobx.currentText()
+
+        self.unitIdxCombobx.clear()
+        if 'line' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+        elif 'zone' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+
+        # self.genRepBtn.setEnabled(True)
 
 
 class compIndicatorsWindow(QDialog):
@@ -1750,19 +2032,23 @@ class compIndicatorsWindow(QDialog):
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
-        # self.camViewCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        self.unitIdxCombobx = QComboBox()
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Compare Indicators')
         self.genRepBtn.clicked.connect(self.compIndicators)
-        gridLayout.addWidget(self.genRepBtn, 0, 4)
+        gridLayout.addWidget(self.genRepBtn, 0, 6)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save results to clipboard')
         self.saveBtn.setFixedWidth(75)
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 5)
+        gridLayout.addWidget(self.saveBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(dbLayout1)
@@ -1793,6 +2079,7 @@ class compIndicatorsWindow(QDialog):
 
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
+        unitIdx = self.unitIdxCombobx.currentText()
 
         first_obs_time1, last_obs_time1 = getObsStartEnd(self.session1)
         first_obs_time2, last_obs_time2 = getObsStartEnd(self.session2)
@@ -1808,13 +2095,15 @@ class compIndicatorsWindow(QDialog):
             bins_end = last_obs_time2
 
         bins = calculateBinsEdges(bins_start, bins_end)
+
         if len(bins) > 1:
             start_time = bins[0].time()
             end_time = bins[-1].time()
         else:
             QMessageBox.information(self, 'Error!', 'The common observaion duration is too short!')
+            return
 
-        self.indicatorsDf = compareIndicators(transport, actionType, start_time, end_time,
+        self.indicatorsDf = compareIndicators(transport, actionType, unitIdx, start_time, end_time,
                                               self.session1, self.session2)
 
         model = dfTableModel(self.indicatorsDf)
@@ -1840,11 +2129,21 @@ class compIndicatorsWindow(QDialog):
         if dbFilename != '':
             self.dbFile2Ledit.setText(dbFilename)
 
+    def actionTypeChanged(self):
+        actionType = self.actionTypeCombobx.currentText()
+
+        self.unitIdxCombobx.clear()
+        if 'line' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+        elif 'zone' in actionType.split(' '):
+            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+
 class plotTrajWindow(QDialog):
     def __init__(self, parent=None):
         super(plotTrajWindow, self).__init__(parent)
 
         self.setWindowTitle('Trajectories, screenlines and zones')
+        self.setGeometry(100, 100, 275, 550)
 
         self.cur = None
         self.homographyFilename = None
@@ -1853,7 +2152,7 @@ class plotTrajWindow(QDialog):
         self.dateStr = None
         self.traj_line = None
         self.ax = None
-        self.figure = plt.figure(tight_layout=False)
+        self.figure = plt.figure(tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
 
         winLayout = QVBoxLayout()
@@ -1871,69 +2170,74 @@ class plotTrajWindow(QDialog):
         self.openMdbFileBtn.clicked.connect(self.openMdbFile)
         mdbLayout.addWidget(self.openMdbFileBtn)
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self, False), 2, 0, 1, 4)#, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Site name:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Site name:'), 0, 0)#, Qt.AlignRight)
         self.siteNameCombobx = QComboBox()
-        self.siteNameCombobx.setMinimumWidth(120)
+        # self.siteNameCombobx.setMinimumWidth(120)
         self.siteNameCombobx.currentTextChanged.connect(self.siteChanged)
-        gridLayout.addWidget(self.siteNameCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.siteNameCombobx, 0, 1)#, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Camera view:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Camera view:'), 0, 2)#, Qt.AlignRight)
         self.camViewCombobx = QComboBox()
         self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
-        gridLayout.addWidget(self.camViewCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.camViewCombobx, 0, 3)#, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Trajectory database:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Traj database:'), 1, 0)#, Qt.AlignRight)
         self.trjDbCombobx = QComboBox()
-        self.trjDbCombobx.setMinimumWidth(130)
+        # self.trjDbCombobx.setMinimumWidth(130)
         # self.trjDbCombobx.currentTextChanged.connect(self.plotItems)
-        gridLayout.addWidget(self.trjDbCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)#, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotItems)
         # self.plotBtn.setEnabled(False)
-        gridLayout.addWidget(self.plotBtn, 0, 6)
+        gridLayout.addWidget(self.plotBtn, 1, 3)
 
-        self.prevTrjBtn = QPushButton('Prev.')
+        self.prevTrjBtn = QPushButton('<<')
         self.prevTrjBtn.clicked.connect(self.prevTrajectory)
         # self.prevTrjBtn.setEnabled(False)
-        editLayout.addWidget(self.prevTrjBtn, 0, 0)
+        editLayout.addWidget(self.prevTrjBtn, 0, 1)
 
         self.trjIdxLe = QLineEdit('-1')
-        self.trjIdxLe.setFixedWidth(50)
-        # self.trjIdxLe.setReadOnly(True)
-        editLayout.addWidget(self.trjIdxLe, 0, 1)
+        self.trjIdxLe.setMinimumWidth(35)
+        self.trjIdxLe.setReadOnly(True)
+        editLayout.addWidget(self.trjIdxLe, 0, 2)
 
         self.noTrjLabel = QLabel('/--')
-        editLayout.addWidget(self.noTrjLabel, 0, 2)
+        editLayout.addWidget(self.noTrjLabel, 0, 3)
 
-        self.nextTrjBtn = QPushButton('Next')
+        self.nextTrjBtn = QPushButton('>>')
         self.nextTrjBtn.clicked.connect(self.nextTrajectory)
         # self.nextTrjBtn.setEnabled(False)
-        editLayout.addWidget(self.nextTrjBtn, 0, 3)
+        editLayout.addWidget(self.nextTrjBtn, 0, 4)
 
-        editLayout.addWidget(QLabel('Reference line index:'), 0, 4)
+        editLayout.addWidget(QLabel('Line index:'), 1, 0)
         self.refLineLe = QLineEdit('--')
-        self.refLineLe.setFixedWidth(50)
+        # self.refLineLe.setFixedWidth(50)
         self.refLineLe.setReadOnly(True)
-        editLayout.addWidget(self.refLineLe, 0, 5)
+        editLayout.addWidget(self.refLineLe, 1, 1, 1, 4)
 
-        self.delTrjBtn = QPushButton('Delete current trjectory')
+        self.delTrjBtn = QPushButton('Delete')
         self.delTrjBtn.clicked.connect(self.delTrajectory)
         # self.delTrjBtn.setEnabled(False)
-        editLayout.addWidget(self.delTrjBtn, 0, 6)
+        editLayout.addWidget(self.delTrjBtn, 1, 5)
 
-        editLayout.addWidget(QLabel('User type:'), 1, 0)
+        editLayout.addWidget(QLabel('User type:'), 2, 0)
         self.userTypeCb = QComboBox()
         self.userTypeCb.addItems(userTypeNames)
         self.userTypeCb.currentIndexChanged.connect(self.userTypeChanged)
-        editLayout.addWidget(self.userTypeCb, 1, 1, 1, 2)
+        editLayout.addWidget(self.userTypeCb, 2, 1, 1, 4)
 
-        self.saveTrjBtn = QPushButton('Save all trajectories')
+        self.groupSizeCb = QComboBox()
+        self.groupSizeCb.addItems(['1', '2', '3', '4', '5', '6'])
+        self.groupSizeCb.currentIndexChanged.connect(self.groupSizeChanged)
+        editLayout.addWidget(self.groupSizeCb, 2, 5)
+
+        self.saveTrjBtn = QPushButton('Load trajs')
         self.saveTrjBtn.clicked.connect(self.saveTrajectories)
         # self.saveTrjBtn.setEnabled(False)
-        editLayout.addWidget(self.saveTrjBtn, 1, 6)
+        editLayout.addWidget(self.saveTrjBtn, 3, 0)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(mdbLayout)
@@ -2005,7 +2309,8 @@ class plotTrajWindow(QDialog):
         self.traj_line = plotTrajectory(self.trjDBFile, self.intrinsicCameraMatrix, self.distortionCoefficients,
                                        self.homoFile, self.ax, session)
         for tl in self.traj_line:
-            tl.append([-1, [], [], [], []])  #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs]
+            tl.append([-1, [], [], [], [], 1])
+            #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs], groupSize]
         self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
         self.trjIdxLe.setText('-1')
         self.userTypeCb.setCurrentIndex(-1)
@@ -2013,6 +2318,8 @@ class plotTrajWindow(QDialog):
         self.canvas.draw()
 
     def nextTrajectory(self):
+        if self.traj_line == None:
+            return
         q_line = session.query(Line)
         if q_line.all() == []:
             QMessageBox.information(self, 'Warning!', 'At least one screenline is required!')
@@ -2034,6 +2341,7 @@ class plotTrajWindow(QDialog):
         next_line = self.traj_line[next_idx][1]
         next_line.set_visible(True)
         self.userTypeCb.setCurrentIndex(next_traj.userType)
+        self.groupSizeCb.setCurrentIndex(self.traj_line[next_idx][2][5] - 1)
         self.canvas.draw()
 
         if self.traj_line[next_idx][2][0] == -1:
@@ -2071,6 +2379,8 @@ class plotTrajWindow(QDialog):
             self.refLineLe.setText(str(self.traj_line[next_idx][2][1][0].idx))
 
     def prevTrajectory(self):
+        if self.traj_line == None:
+            return
         current_idx = int(self.trjIdxLe.text())
         if current_idx == -1:
             return
@@ -2090,6 +2400,7 @@ class plotTrajWindow(QDialog):
         prev_line = self.traj_line[prev_idx][1]
         prev_line.set_visible(True)
         self.userTypeCb.setCurrentIndex(prev_traj.userType)
+        self.groupSizeCb.setCurrentIndex(self.traj_line[prev_idx][2][5] - 1)
         self.canvas.draw()
 
         homography = np.loadtxt(self.homoFile, delimiter=' ')
@@ -2124,7 +2435,7 @@ class plotTrajWindow(QDialog):
             return
         msg = QMessageBox()
         rep = msg.question(self, 'Delete trajectory',
-                           'Are you sure to delete the current trajectory?', msg.Yes | msg.No)
+                           'Are you sure to DELETE the current trajectory?', msg.Yes | msg.No)
         if rep == msg.No:
             return
 
@@ -2137,6 +2448,12 @@ class plotTrajWindow(QDialog):
         if self.mdbFileLedit.text() == '':
             return
 
+        msg = QMessageBox()
+        rep = msg.question(self, 'Load trajectory',
+                           'Are you sure to LOAD all trajectories to database?', msg.Yes | msg.No)
+        if rep == msg.No:
+            return
+
         streetUserObjects = []
         no_users = 0
         for trj_idx in range(len(self.traj_line)):
@@ -2145,7 +2462,8 @@ class plotTrajWindow(QDialog):
             if userType != -1 and userType != 0 and lines != []:
                 instants = self.traj_line[trj_idx][2][2]
                 speeds = self.traj_line[trj_idx][2][3]
-                streetUserObjects = streetUserObjects + creatStreetusers(userType, lines, instants, speeds)
+                groupSize = self.traj_line[trj_idx][2][5]
+                streetUserObjects = streetUserObjects + creatStreetusers(userType, lines, instants, speeds, groupSize)
                 no_users += 1
 
         session.add_all(streetUserObjects)
@@ -2169,6 +2487,12 @@ class plotTrajWindow(QDialog):
             current_line.set_label(userTypeNames[user_indx])
             current_line.set_color(userTypeColors[user_indx])
             self.canvas.draw()
+
+    def groupSizeChanged(self):
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == -1:
+            return
+        self.traj_line[current_idx][2][5] = int(self.groupSizeCb.currentText())
 
     def openMdbFile(self):
         mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",
