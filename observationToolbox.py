@@ -25,8 +25,8 @@ import matplotlib.pyplot as plt
 
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
-    plotTrajectory, importTrajectory, speedBarPlot, userTypeNames, userTypeColors, creatStreetusers, \
-    modeShareCompChart
+    plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
+    modeShareCompChart, speedHistogram
 import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -82,7 +82,7 @@ class ObsToolbox(QMainWindow):
                                     font: bold;
                                     color: darkblue;
                                 }
-                                QToolBox{ icon-size: 24px; }
+                                QToolBox{ icon-size: 15px; }
                              """
 
         self.toolbox = QToolBox()
@@ -1032,26 +1032,32 @@ class TempHistWindow(QDialog):
 
         gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
         gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Interval:'), 0, 6, Qt.AlignRight)
+        self.intervaLe = QLineEdit('10')
+        self.intervaLe.setFixedWidth(35)
+        gridLayout.addWidget(self.intervaLe, 0, 7)#, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotTHist)
         self.plotBtn.setEnabled(False)
-        gridLayout.addWidget(self.plotBtn, 0, 6)
+        gridLayout.addWidget(self.plotBtn, 1, 7, 1, 2)
 
         # self.saveBtn = QPushButton()
         # self.saveBtn.setIcon(QIcon('icons/save.png'))
@@ -1075,16 +1081,18 @@ class TempHistWindow(QDialog):
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
+        interval = int(self.intervaLe.text())
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
         if None in [start_obs_time, end_obs_time]:
             QMessageBox.information(self, 'Error!', 'There is no observation!')
             return
-        bins = calculateBinsEdges(start_obs_time, end_obs_time)
+        bins = calculateBinsEdges(start_obs_time, end_obs_time, interval)
 
-        if len(bins) < 2:
-            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
-            return
+        # if len(bins) < 3:
+        #     QMessageBox.information(self, 'Error!',
+        #                             'The observation duration is not enough for the selected interval!')
+        #     return
         err = tempDistHist(transport, actionType, unitIdx, ax, session, bins=bins)
         if err != None:
             msg = QMessageBox()
@@ -1221,28 +1229,42 @@ class SpeedPlotWindow(QDialog):
         self.openDbFileBtn2.clicked.connect(self.opendbFile2)
         dbLayout2.addWidget(self.openDbFileBtn2)
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 5, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Plot type:'), 0, 0, Qt.AlignRight)
+        self.plotTypeCmbx = QComboBox()
+        self.plotTypeCmbx.addItems(['Box plot', 'Histogram'])
+        self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
+        gridLayout.addWidget(self.plotTypeCmbx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Transport:'), 0, 2, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 4, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 5, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Index:'), 0, 6, 1, 2, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 8, Qt.AlignLeft)
+
+        self.intervalType = QLabel('Time interval:')
+        gridLayout.addWidget(self.intervalType, 1, 5, Qt.AlignRight)
+        self.intervaLe = QLineEdit('30')
+        self.intervaLe.setFixedWidth(35)
+        gridLayout.addWidget(self.intervaLe, 1, 6)  # , Qt.AlignLeft)
+        self.intervalUnit = QLabel('(min.)')
+        gridLayout.addWidget(self.intervalUnit, 1, 7, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotSpeed)
         self.plotBtn.setEnabled(False)
-        gridLayout.addWidget(self.plotBtn, 0, 6)
+        gridLayout.addWidget(self.plotBtn, 1, 8)
 
         winLayout.addLayout(dbLayout1)
         winLayout.addLayout(dbLayout2)
@@ -1250,6 +1272,16 @@ class SpeedPlotWindow(QDialog):
         winLayout.addWidget(self.canvas)
 
         self.setLayout(winLayout)
+
+    def plotTypeChanged(self):
+        if self.plotTypeCmbx.currentText() == 'Box plot':
+            self.intervalType.setText('Time interval')
+            self.intervaLe.setText('30')
+            self.intervalUnit.setText('(min.)')
+        elif self.plotTypeCmbx.currentText() == 'Histogram':
+            self.intervalType.setText('Speed interval')
+            self.intervaLe.setText('5')
+            self.intervalUnit.setText('(km/h)')
 
     def plotSpeed(self):
         self.figure.clear()
@@ -1261,6 +1293,7 @@ class SpeedPlotWindow(QDialog):
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
+        interval = int(self.intervaLe.text())
 
         dbFilename1 = self.dbFile1Ledit.text()
         dbFilename2 = self.dbFile2Ledit.text()
@@ -1279,45 +1312,53 @@ class SpeedPlotWindow(QDialog):
         self.session2 = createDatabase(dbFilename2)
         if self.session2 is None:
             self.session2 = connectDatabase(dbFilename2)
+        if self.plotTypeCmbx.currentText() == 'Box plot':
+            cls_obs = LinePassing
+            first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
+            last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
 
-        cls_obs = LinePassing
-        first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
-        last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
+            first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
+            last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
 
-        first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
-        last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
+            if first_obs_time1.time() >= first_obs_time2.time():
+                bins_start = first_obs_time1
+            else:
+                bins_start = first_obs_time2
 
-        if first_obs_time1.time() >= first_obs_time2.time():
-            bins_start = first_obs_time1
-        else:
-            bins_start = first_obs_time2
+            if last_obs_time1.time() <= last_obs_time2.time():
+                bins_end = last_obs_time1
+            else:
+                bins_end = last_obs_time2
 
-        if last_obs_time1.time() <= last_obs_time2.time():
-            bins_end = last_obs_time1
-        else:
-            bins_end = last_obs_time2
+            start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
+            end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
 
-        start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
-        end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
-
-        duration = end - start
-        duration_in_s = duration.total_seconds()
-
-        bins = calculateBinsEdges(start, end, 30)
-        if len(bins) < 2:
-            QMessageBox.information(self, 'Error!',
-                                    'The common observation duration is too short!')
-            return
-        times = [b.time() for b in bins]
-        err = speedBarPlot(transport, actionType, unitIdx, times, ax, [self.session1, self.session2])
-        if err != None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText(err)
-            msg.exec_()
-        else:
-            # refresh canvas
-            self.canvas.draw()
+            bins = calculateBinsEdges(start, end, interval)
+            if len(bins) < 2:
+                QMessageBox.information(self, 'Error!',
+                                        'The common observation duration is too short!')
+                return
+            times = [b.time() for b in bins]
+            err = speedBoxPlot(transport, actionType, unitIdx, times, ax, [self.session1, self.session2])
+            if err != None:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText(err)
+                msg.exec_()
+            else:
+                # refresh canvas
+                self.canvas.draw()
+        elif self.plotTypeCmbx.currentText() == 'Histogram':
+            err = speedHistogram(transport, actionType, unitIdx, interval, ax,
+                                 [self.session1, self.session2])
+            if err != None:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText(err)
+                msg.exec_()
+            else:
+                # refresh canvas
+                self.canvas.draw()
 
     def opendbFile1(self):
         dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
@@ -1574,25 +1615,25 @@ class ModeChartWindow(QDialog):
 
         gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
-        self.transportCombobx = QComboBox()
-        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('time interval:'), 0, 0, Qt.AlignRight)
+        self.intervalLe = QLineEdit('60')
+        gridLayout.addWidget(self.intervalLe, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 2, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('action type:'), 0, 3, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 4, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('unit Idx:'), 0, 5, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 6, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotModeChart)
-        gridLayout.addWidget(self.plotBtn, 0, 6)
+        gridLayout.addWidget(self.plotBtn, 0, 7)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(dbLayout1)
@@ -1626,7 +1667,6 @@ class ModeChartWindow(QDialog):
         if self.session2 is None:
             self.session2 = connectDatabase(dbFilename2)
 
-        transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
 
@@ -1657,7 +1697,8 @@ class ModeChartWindow(QDialog):
         duration = end - start
         duration_in_s = duration.total_seconds()
 
-        bins = calculateBinsEdges(start, end, 60)
+        timeInterval = int(self.intervalLe.text())
+        bins = calculateBinsEdges(start, end, timeInterval)
         if len(bins) < 2:
             QMessageBox.information(self, 'Error!',
                     'The common observation duration is too short!')
@@ -1668,7 +1709,7 @@ class ModeChartWindow(QDialog):
 
         times = [b.time() for b in bins]
 
-        modeShareCompChart(transport, times, ax, [label1, label2], [self.session1, self.session2])
+        modeShareCompChart(times, ax, [label1, label2], [self.session1, self.session2])
         self.canvas.draw()
         # err = tempDistHist(transport, actionType, unitIdx, ax, [self.session1, self.session2],
         #                    bins=bins, alpha=0.7, color=['skyblue', 'red'], ec='grey',
@@ -1748,26 +1789,32 @@ class CompHistWindow(QDialog):
 
         gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
         gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Interval:'), 0, 6, Qt.AlignRight)
+        self.intervaLe = QLineEdit('10')
+        self.intervaLe.setFixedWidth(35)
+        gridLayout.addWidget(self.intervaLe, 0, 7)  # , Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotCompHist)
         self.plotBtn.setEnabled(False)
-        gridLayout.addWidget(self.plotBtn, 0, 6)
+        gridLayout.addWidget(self.plotBtn, 1, 7, 1 ,2)
 
         # self.saveBtn = QPushButton()
         # self.saveBtn.setIcon(QIcon('icons/save.png'))
@@ -1810,6 +1857,7 @@ class CompHistWindow(QDialog):
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
+        interval = int(self.intervaLe.text())
 
         if 'line' in actionType.split(' '):
             cls_obs = LinePassing
@@ -1838,7 +1886,7 @@ class CompHistWindow(QDialog):
         duration = end - start
         duration_in_s = duration.total_seconds()
 
-        bins = calculateBinsEdges(start, end)
+        bins = calculateBinsEdges(start, end, interval)
         if len(bins) < 2:
             QMessageBox.information(self, 'Error!',
                     'The common observation duration is too short!')
@@ -1849,8 +1897,8 @@ class CompHistWindow(QDialog):
         label2 = self.session2.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
 
         err = tempDistHist(transport, actionType, unitIdx, ax, [self.session1, self.session2],
-                           bins=bins, alpha=0.7, color=['skyblue', 'red'], ec='grey',
-                           label=[label1, label2], rwidth=0.9)
+                           bins=bins, alpha=0.7, color=['skyblue', 'red'],
+                           label=[label1, label2])
         plt.legend(loc='upper right', fontsize=6)
         if err != None:
             msg = QMessageBox()

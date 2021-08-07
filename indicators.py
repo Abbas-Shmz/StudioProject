@@ -50,8 +50,11 @@ else:
     binsMinutes = 10
 
 # ==============================================================
-def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, color='skyblue',
-                 ec='grey', label=None, rwidth=0.9, histtype='bar'):
+def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
+                 color='skyblue', label=None):
+    if len(bins) < 3:
+        err = 'The observation duration is not enough for the selected interval!'
+        return err
 
     to_timestamp = np.vectorize(lambda x: x.timestamp())
     if not isinstance(session, list):
@@ -158,8 +161,10 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, 
     locator = mdates.AutoDateLocator()
     ax.xaxis.set_major_locator(locator)
 
-    ax.xaxis.set_minor_locator(mdates.HourLocator())
+    # ax.xaxis.set_major_locator(mdates.HourLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+
+    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
     # print((locator()))
 
     if not isinstance(session, list):
@@ -182,7 +187,7 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1, 
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_title('Temporal distribution of {}s {} #{}'.format(tm, actionType, unitIdx),
                  fontsize=8)
-    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+    ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
 
     # if not isinstance(session, list):
     #     ax.text(0.05, 0.95, str(time_list[0].strftime('%A, %b %d, %Y')),
@@ -292,8 +297,56 @@ def stackedHist(user, attr, ax, session, bins=20):
 
 
 # ==============================================================
-def speedBarPlot(transport, actionType, unitIdx, times, ax, sessions, alpha=0.8, color='skyblue',
-                 ec='grey', label=None, rwidth=0.9):
+def speedHistogram(transport, actionType, unitIdx, interval, ax, sessions,
+                 alpha=0.4, colors=['skyblue', 'salmon'], ec='k',
+                 labels=['before', 'after'], rwidth=0.9):
+    q1 = sessions[0].query(LinePassing.speed).filter(LinePassing.lineIdx == unitIdx). \
+        join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx) \
+        .join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+        .filter(Mode.transport == transport)
+
+    speed_list1 = [i[0] for i in q1.all()]
+
+    q2 = sessions[1].query(LinePassing.speed).filter(LinePassing.lineIdx == unitIdx). \
+        join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx) \
+        .join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+        .filter(Mode.transport == transport)
+
+    speed_list2 = [i[0] for i in q2.all()]
+
+    # bins_start = int(np.floor(min([min(speed_list1), min(speed_list2)])))
+    bins_end = np.ceil(max([max(speed_list1), max(speed_list2)]))
+    bins_end = int(((bins_end // 10) + 1) * 10)
+
+    bins = [b for b in range(0, bins_end, interval)]
+
+    ax.hist(speed_list1, alpha=alpha, color=colors[0], ec=ec, label=labels[0],
+            rwidth=rwidth, bins=bins)
+    ax.hist(speed_list2, alpha=alpha, color=colors[1], ec=ec, label=labels[1],
+            rwidth=rwidth, bins=bins)
+
+    ax.tick_params(axis='x', labelsize=8, rotation=0)
+    ax.tick_params(axis='y', labelsize=7)
+    ax.set_xlabel('Speed (km/h)', fontsize=8)
+    ax.legend(fontsize=5)
+    # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    userTitle = transport
+    if transport == 'cardriver':
+        userTitle = 'car'
+    elif transport == 'walking':
+        userTitle = 'pedestrian'
+    ax.set_title('Speed histogram of {}s {} #{}'.format(userTitle, actionType, unitIdx), fontsize=8)
+    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+
+    ax.text(0.03, 0.93, str('StudioProject'),
+            fontsize=9, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
+
+
+
+def speedBoxPlot(transport, actionType, unitIdx, times, ax, sessions):
 
     date1 = getObsStartEnd(sessions[0])[0].date()
     date2 = getObsStartEnd(sessions[1])[0].date()
@@ -1246,8 +1299,8 @@ def creatStreetusers(userType, lines, instants, speeds, groupSize):
 
     return [group] + linePass_list + modes_list
 
-def modeShareCompChart(transport, times, axs, labels, sessions):
-    w = 0.4
+def modeShareCompChart(times, axs, labels, sessions):
+
     ax = [axs[0,0], axs[0,1], axs[1,0], axs[1,1]]
     X = np.arange(len(times) - 1)
     before = {'cardriver':[], 'walking':[], 'bike':[], 'scooter':[]}
@@ -1274,13 +1327,18 @@ def modeShareCompChart(transport, times, axs, labels, sessions):
             else:
                 after[mode].append(0)
 
-    ticks = [t.strftime('%H:%M') for t in times[:-1]]
+    date = datetime.date(1, 1, 1)
+    datetime1 = datetime.datetime.combine(date, times[0])
+    datetime2 = datetime.datetime.combine(date, times[1])
+    interval = datetime2 - datetime1
+    middlePoint = [(datetime.datetime.combine(date, times[i]) + interval/2).time() for i in range(len(times)-1)]
+    ticks = [t.strftime('%H:%M') for t in middlePoint]
     titles = ['Car', 'Pedestrian', 'Bike', 'Scooter']
     for i, mode in enumerate(['cardriver', 'walking', 'bike', 'scooter']):
         ax[i].plot(X, before[mode], color='deepskyblue')#, width=w)
         ax[i].plot(X, after[mode], color='salmon')#, width=w)
         ax[i].set_xticks([i for i in range(len(times) - 1)])
-        ax[i].set_xticklabels(ticks)
+        ax[i].set_xticklabels(ticks, rotation=90)
         ax[i].tick_params(axis='both', labelsize=7)
         ax[i].grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
         ax[i].set_title(titles[i], fontsize=7)
@@ -1419,19 +1477,27 @@ def getObsStartEnd(session):
     return start_obs_time, end_obs_time
 
 def calculateBinsEdges(start, end, interval=None):
+    if start.date() != end.date():
+        end = datetime.datetime.combine(start.date(), end.time())
+
     if cfg != [] and interval == None:
         interval = int(config_object['BINS']['binsminutes'])
     elif cfg == [] and interval == None:
         interval = 10
-    m2 = np.ceil((start.minute + start.second / 60) / interval)
-    if m2 == 60 / interval:
-        start = datetime.datetime.combine(start.date(), datetime.time(start.hour + 1))
-    else:
-        start = datetime.datetime.combine(start.date(),
-                                          datetime.time(start.hour, int(m2 * interval)))
 
-    if start.date() != end.date():
-        end = datetime.datetime.combine(start.date(), end.time())
+    period_minutes = (end - start).seconds / 60
+    no_intervals = np.floor(period_minutes / interval)
+    if no_intervals == 0:
+        return []
+    remainder = period_minutes % interval
+    start = start + datetime.timedelta(minutes=round(remainder/2))
+
+    # m2 = np.ceil((start.minute + start.second / 60) / interval)
+    # if m2 == 60 / interval:
+    #     start = datetime.datetime.combine(start.date(), datetime.time(start.hour + 1))
+    # else:
+    #     start = datetime.datetime.combine(start.date(),
+    #                                       datetime.time(start.hour, int(m2 * interval)))
 
     bins = pd.date_range(start=start, end=end, freq=pd.offsets.Minute(interval))
     bins = [b.to_pydatetime() for b in bins]
