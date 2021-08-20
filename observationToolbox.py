@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
-                             QAbstractItemView, QTableView, QListWidget)
+                             QAbstractItemView, QTableView, QListWidget, QListWidgetItem)
 from PyQt5.QtGui import QColor, QIcon, QFont
 from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObject, QThread, pyqtSignal
 
@@ -49,7 +49,7 @@ class ObsToolbox(QMainWindow):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.person = None
-        self.groupPersons = {}
+        self.groupPersons = {}  # {person_idx: [person, mode, vehicle]}
         self.group = None
 
         global session
@@ -78,10 +78,8 @@ class ObsToolbox(QMainWindow):
         #              """
 
         styleSheet = """
-                                QToolBox::tab {
-                                    font: bold;
-                                    color: darkblue;
-                                }
+                                QToolBox::tab { color: darkblue; }
+                                QToolBox::tab:selected { font: bold; }
                                 QToolBox{ icon-size: 15px; }
                              """
 
@@ -163,18 +161,6 @@ class ObsToolbox(QMainWindow):
         user_newBtnsLayout.addWidget(self.user_newRecButton)
         user_tab_layout.addLayout(user_newBtnsLayout)
 
-        # ----------------- PERSON groupPersons box --------------------------
-        self.person_grpBox = self.generateWidgets(Person, 'All', True)
-        user_tab_layout.addWidget(self.person_grpBox)
-
-        # ----------------- VEHICLE -------------------------
-        self.veh_grpBox = self.generateWidgets(Vehicle, 'NoPrFo', True)
-        user_tab_layout.addWidget(self.veh_grpBox)
-
-        # ----------- MODE groupPersons box --------------
-        self.mode_grpBox = self.generateWidgets(Mode, 'NoPrFo', False)
-        user_tab_layout.addWidget(self.mode_grpBox)
-
         # ----------- GROUP groupPersons box -------------
         self.group_grpBox = QGroupBox('Group')
         # group_grpBox_wdgt = QWidget()
@@ -184,15 +170,17 @@ class ObsToolbox(QMainWindow):
         group_newBtnsLayout = QHBoxLayout()
         group_saveBtnsLayout = QHBoxLayout()
 
-        self.group_addToListButton = QPushButton(QIcon('icons/new.png'), 'Add user to list')
-        self.group_addToListButton.clicked.connect(self.group_AddToList_click)
-        # group_newBtnsLayout.addWidget(self.group_addToListButton)
-        # group_grid_layout.addLayout(group_newBtnsLayout)
-        group_grpBox_layout.addWidget(self.group_addToListButton)
-
         self.group_list_wdgt = QListWidget()
+        self.group_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.group_list_wdgt.currentRowChanged.connect(self.rowChanged)
         # group_grid_layout.addWidget(self.group_list_wdgt)
         group_grpBox_layout.addWidget(self.group_list_wdgt)
+
+        self.group_delFromListButton = QPushButton(QIcon('icons/new.png'), 'Delete selected user')
+        self.group_delFromListButton.clicked.connect(self.group_delFromList_click)
+        # group_newBtnsLayout.addWidget(self.group_delFromListButton)
+        # group_grid_layout.addLayout(group_newBtnsLayout)
+        group_grpBox_layout.addWidget(self.group_delFromListButton)
 
         # group_grpBox_wdgt.setLayout(group_grid_layout)
         # group_grpBox_layout.addWidget(group_grpBox_wdgt)
@@ -201,8 +189,20 @@ class ObsToolbox(QMainWindow):
 
         user_tab_layout.addWidget(self.group_grpBox)
 
+        # ----------------- PERSON groupPersons box --------------------------
+        self.person_grpBox = self.generateWidgets(Person, 'All', False)
+        user_tab_layout.addWidget(self.person_grpBox)
+
+        # ----------- MODE groupPersons box --------------
+        self.mode_grpBox = self.generateWidgets(Mode, 'NoPrFo', True)
+        user_tab_layout.addWidget(self.mode_grpBox)
+
+        # ----------------- VEHICLE -------------------------
+        self.veh_grpBox = self.generateWidgets(Vehicle, 'NoPrFo', True)
+        user_tab_layout.addWidget(self.veh_grpBox)
+
         # ------- ROAD USER save buttons --------------
-        self.user_saveButton = QPushButton(QIcon('icons/save.png'), 'Make group and save user(s)')
+        self.user_saveButton = QPushButton(QIcon('icons/save.png'), 'Save user(s) in the group')
         self.user_saveButton.clicked.connect(self.user_saveBtn_click)
         self.user_saveButton.setEnabled(False)
         user_saveBtnsLayout.addWidget(self.user_saveButton)
@@ -258,7 +258,7 @@ class ObsToolbox(QMainWindow):
         zonepass_tab_wdgt.setLayout(zonepass_tab_layout)
         self.toolbox.addItem(zonepass_tab_wdgt, QIcon('icons/zonePassing.png'), 'Zone Passing')
 
-        # ------------------ Activity tab --------------------------
+        # --------------------- Activity tab --------------------------
         act_tab_wdgt = QWidget()
         act_tab_layout = QVBoxLayout()
         act_newBtnsLayout = QHBoxLayout()
@@ -281,6 +281,104 @@ class ObsToolbox(QMainWindow):
         act_tab_wdgt.setLayout(act_tab_layout)
         self.toolbox.addItem(act_tab_wdgt, QIcon('icons/activity.png'), 'Activity')
 
+        # --------------------- TI Trajectory tab --------------------------
+        traj_tab_wdgt = QWidget()
+        traj_tab_layout = QVBoxLayout()
+        traj_tab_mdbLayout = QHBoxLayout()
+        traj_tab_gridLayout = QGridLayout()
+        traj_tab_editLayout = QGridLayout()
+
+        traj_tab_mdbLayout.addWidget(QLabel('Metadata:'))
+        self.mdbFileLedit = QLineEdit()
+        traj_tab_mdbLayout.addWidget(self.mdbFileLedit)
+
+        self.openMdbFileBtn = QPushButton()
+        self.openMdbFileBtn.setIcon(QIcon('icons/open-file.png'))
+        self.openMdbFileBtn.setToolTip('Open configuration file')
+        self.openMdbFileBtn.clicked.connect(self.openMdbFile)
+        traj_tab_mdbLayout.addWidget(self.openMdbFileBtn)
+
+        # traj_tab_gridLayout.addWidget(NavigationToolbar(self.canvas, self, False), 2, 0, 1, 4)  # , Qt.AlignLeft)
+
+        traj_tab_gridLayout.addWidget(QLabel('Site:'), 0, 0)  # , Qt.AlignRight)
+        self.siteNameCombobx = QComboBox()
+        # self.siteNameCombobx.setMinimumWidth(120)
+        self.siteNameCombobx.currentTextChanged.connect(self.siteChanged)
+        traj_tab_gridLayout.addWidget(self.siteNameCombobx, 0, 1)  # , Qt.AlignLeft)
+
+        traj_tab_gridLayout.addWidget(QLabel('Cam. view:'), 0, 2)  # , Qt.AlignRight)
+        self.camViewCombobx = QComboBox()
+        self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
+        traj_tab_gridLayout.addWidget(self.camViewCombobx, 0, 3)  # , Qt.AlignLeft)
+
+        traj_tab_gridLayout.addWidget(QLabel('Traj DB:'), 1, 0)  # , Qt.AlignRight)
+        self.trjDbCombobx = QComboBox()
+        # self.trjDbCombobx.setMinimumWidth(130)
+        # self.trjDbCombobx.currentTextChanged.connect(self.plotItems)
+        traj_tab_gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)  # , Qt.AlignLeft)
+
+        self.plotBtn = QPushButton('Plot')
+        self.plotBtn.clicked.connect(self.plotItems)
+        # self.plotBtn.setEnabled(False)
+        traj_tab_gridLayout.addWidget(self.plotBtn, 1, 3)
+
+        self.prevTrjBtn = QPushButton('<<')
+        self.prevTrjBtn.setFixedWidth(35)
+        self.prevTrjBtn.clicked.connect(self.prevTrajectory)
+        # self.prevTrjBtn.setEnabled(False)
+        traj_tab_editLayout.addWidget(self.prevTrjBtn, 0, 1)
+
+        self.trjIdxLe = QLineEdit('-1')
+        # self.trjIdxLe.setMinimumWidth(35)
+        self.trjIdxLe.setReadOnly(True)
+        traj_tab_editLayout.addWidget(self.trjIdxLe, 0, 2)
+
+        self.noTrjLabel = QLabel('/--')
+        traj_tab_editLayout.addWidget(self.noTrjLabel, 0, 3)
+
+        self.nextTrjBtn = QPushButton('>>')
+        self.nextTrjBtn.setFixedWidth(35)
+        self.nextTrjBtn.clicked.connect(self.nextTrajectory)
+        # self.nextTrjBtn.setEnabled(False)
+        traj_tab_editLayout.addWidget(self.nextTrjBtn, 0, 4)
+
+        self.saveTrjBtn = QPushButton('Load trajs')
+        # self.saveTrjBtn.clicked.connect(self.saveTrajectories)
+        # self.saveTrjBtn.setEnabled(False)
+        traj_tab_editLayout.addWidget(self.saveTrjBtn, 0, 5)
+
+        traj_tab_editLayout.addWidget(QLabel('Line idx:'), 1, 0)
+        self.refLineLe = QLineEdit('--')
+        # self.refLineLe.setFixedWidth(50)
+        self.refLineLe.setReadOnly(True)
+        traj_tab_editLayout.addWidget(self.refLineLe, 1, 1, 1, 4)
+
+        # self.delTrjBtn = QPushButton('Delete')
+        # self.delTrjBtn.clicked.connect(self.delTrajectory)
+        # self.delTrjBtn.setEnabled(False)
+        # traj_tab_editLayout.addWidget(self.delTrjBtn, 1, 5)
+
+        traj_tab_editLayout.addWidget(QLabel('User type:'), 2, 0)
+        self.userTypeCb = QComboBox()
+        self.userTypeCb.addItems(userTypeNames)
+        # self.userTypeCb.currentIndexChanged.connect(self.userTypeChanged)
+        traj_tab_editLayout.addWidget(self.userTypeCb, 2, 1, 1, 4)
+
+        self.groupSizeCb = QComboBox()
+        self.groupSizeCb.addItems(['1', '2', '3', '4', '5', '6', '7', '8'])
+        # self.groupSizeCb.currentIndexChanged.connect(self.groupSizeChanged)
+        traj_tab_editLayout.addWidget(self.groupSizeCb, 2, 5)
+
+        self.figure = plt.figure(tight_layout=True)
+        self.canvas = FigureCanvas(self.figure)
+
+        traj_tab_layout.addLayout(traj_tab_mdbLayout)
+        traj_tab_layout.addLayout(traj_tab_gridLayout)
+        traj_tab_layout.addWidget(self.canvas)
+        traj_tab_layout.addLayout(traj_tab_editLayout)
+        traj_tab_wdgt.setLayout(traj_tab_layout)
+        self.toolbox.addItem(traj_tab_wdgt, 'TI Trajectory')
+
         # -------- Create a widget for window contents --------
         wid = QWidget(self)
         self.setCentralWidget(wid)
@@ -289,88 +387,464 @@ class ObsToolbox(QMainWindow):
         wid.setLayout(layout)
 
     # ============== Buttons click functions ==============
+
+    # ------------ TI Trajectory buttons ------------------
+    def plotItems(self):
+        if self.mdbFileLedit.text() == '':
+            return
+
+        self.cur.execute(
+            'SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr, frameRate FROM camera_types WHERE idx=?',
+                         (self.cameraTypeIdx,))
+        row = self.cur.fetchall()
+        intrinsicCameraMatrixStr = row[0][0]
+        distortionCoefficientsStr = row[0][1]
+        self.intrinsicCameraMatrix = np.array(ast.literal_eval(intrinsicCameraMatrixStr))
+        self.distortionCoefficients = np.array(ast.literal_eval(distortionCoefficientsStr))
+        self.frameRate = row[0][2]
+
+        mdbPath = Path(self.mdbFileLedit.text()).parent
+        site_folder = mdbPath/self.siteNameCombobx.currentText()
+        date_folder = site_folder/self.dateStr
+        self.trjDBFile = date_folder/self.trjDbCombobx.currentText()
+        self.homoFile = site_folder/self.homographyFilename
+
+        if not self.trjDBFile.exists():
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The trajectory database does not exist!')
+            msg.exec_()
+            self.figure.clear()
+            self.canvas.draw()
+            return
+
+        trjDbName = self.trjDbCombobx.currentText()
+        self.cur.execute('SELECT name, startTime From video_sequences WHERE databaseFilename=?',
+                         (self.dateStr + '/' + trjDbName,))
+        row = self.cur.fetchall()
+        video_name = Path(row[0][0])
+        video_start_0 = datetime.datetime.strptime(row[0][1], '%Y-%m-%d %H:%M:%S.%f')
+        self.video_start = video_start_0.replace(microsecond=0)
+
+        video_file = site_folder/video_name
+        if video_file.exists():
+            self.parent().videoFile = str(video_file)
+            self.parent().openVideoFile()
+        else:
+            QMessageBox.information(self, 'Error!', 'The corresponding video file does not exist!')
+            return
+
+        if not self.homoFile.exists():
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The homography file does not exist!')
+            msg.exec_()
+            self.figure.clear()
+            self.canvas.draw()
+            return
+
+        self.figure.clear()
+        self.canvas.draw()
+
+        self.ax = self.figure.add_subplot(111)
+
+        self.traj_line = plotTrajectory(self.trjDBFile, self.intrinsicCameraMatrix, self.distortionCoefficients,
+                                       self.homoFile, self.ax, session)
+        for tl in self.traj_line:
+            tl.append([-1, [], [], [], [], 1])
+            #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs], groupSize]
+        self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
+        self.trjIdxLe.setText('-1')
+        self.userTypeCb.setCurrentIndex(-1)
+        self.refLineLe.setText('--')
+        self.canvas.draw()
+
+    def nextTrajectory(self):
+        if self.traj_line == None:
+            return
+        q_line = session.query(Line)
+        if q_line.all() == []:
+            QMessageBox.information(self, 'Warning!', 'At least one screenline is required!')
+            return
+
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == len(self.traj_line) -1:
+            return
+        if current_idx == -1:
+            for line in [tl[1] for tl in self.traj_line]:
+                line.set_visible(False)
+
+        current_line = self.traj_line[current_idx][1]
+        current_line.set_visible(False)
+
+        next_idx = current_idx + 1
+        self.trjIdxLe.setText(str(next_idx))
+        next_traj = self.traj_line[next_idx][0]
+        next_line = self.traj_line[next_idx][1]
+        next_line.set_visible(True)
+        self.userTypeCb.setCurrentIndex(next_traj.userType)
+        self.groupSizeCb.setCurrentIndex(self.traj_line[next_idx][2][5] - 1)
+        self.canvas.draw()
+
+        if self.traj_line[next_idx][2][0] == -1:
+            self.traj_line[next_idx][2][0] = next_traj.userType
+            homography = np.loadtxt(self.homoFile, delimiter=' ')
+            for line in q_line.all():
+                points = np.array([[line.points[0].x, line.points[1].x],
+                                   [line.points[0].y, line.points[1].y]])
+                prj_points = imageToWorldProject(points, self.intrinsicCameraMatrix, self.distortionCoefficients,
+                                                 homography)
+                p1 = moving.Point(prj_points[0][0], prj_points[1][0])
+                p2 = moving.Point(prj_points[0][1], prj_points[1][1])
+
+                instants_list = next_traj.getInstantsCrossingLane(p1, p2)
+                if len(instants_list) > 0:
+                    secs = instants_list[0] / self.frameRate
+                    instant = self.video_start + datetime.timedelta(seconds=round(secs))
+                    speed = round(next_traj.getVelocityAtInstant(int(instants_list[0]))
+                                  .norm2() * self.frameRate * 3.6, 1)  # km/h
+
+                    self.traj_line[next_idx][2][1].append(line)
+                    self.traj_line[next_idx][2][2].append(instant)
+                    self.traj_line[next_idx][2][3].append(speed)
+                    self.traj_line[next_idx][2][4].append(secs)
+                    # screenLine_Id = str(line.idx)
+            if self.traj_line[next_idx][2][1] == []:
+                secs = (next_traj.getLastInstant() / self.frameRate)
+                # self.traj_line[next_idx][2][1].append('None')
+                self.traj_line[next_idx][2][4].append(secs)
+
+        self.parent().mediaPlayer.setPosition(round(self.traj_line[next_idx][2][4][0]*1000))
+        if self.traj_line[next_idx][2][1] == []:
+            self.refLineLe.setText('None')
+        else:
+            self.refLineLe.setText(str(self.traj_line[next_idx][2][1][0].idx))
+
+    def prevTrajectory(self):
+        if self.traj_line == None:
+            return
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == -1:
+            return
+        prev_idx = current_idx - 1
+        if current_idx == 0:
+            for line in [tl[1] for tl in self.traj_line]:
+                line.set_visible(True)
+            self.trjIdxLe.setText(str(prev_idx))
+            self.canvas.draw()
+            return
+
+        current_line = self.traj_line[current_idx][1]
+        current_line.set_visible(False)
+
+        self.trjIdxLe.setText(str(prev_idx))
+        prev_traj = self.traj_line[prev_idx][0]
+        prev_line = self.traj_line[prev_idx][1]
+        prev_line.set_visible(True)
+        self.userTypeCb.setCurrentIndex(prev_traj.userType)
+        self.groupSizeCb.setCurrentIndex(self.traj_line[prev_idx][2][5] - 1)
+        self.canvas.draw()
+
+        homography = np.loadtxt(self.homoFile, delimiter=' ')
+        q_line = session.query(Line)
+        if q_line.all() != []:
+            for line in q_line.all():
+                points = np.array([[line.points[0].x, line.points[1].x],
+                                   [line.points[0].y, line.points[1].y]])
+                prj_points = imageToWorldProject(points, self.intrinsicCameraMatrix, self.distortionCoefficients,
+                                                 homography)
+                p1 = moving.Point(prj_points[0][0], prj_points[1][0])
+                p2 = moving.Point(prj_points[0][1], prj_points[1][1])
+
+                instants_list = prev_traj.getInstantsCrossingLane(p1, p2)
+                if len(instants_list) > 0:
+                    mil_secs = int((instants_list[0] / self.frameRate) * 1000)
+                    self.refLineLe.setText(str(line.idx))
+                    break
+            if len(instants_list) == 0:
+                mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
+                self.refLineLe.setText('None')
+        else:
+            mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
+            self.refLineLe.setText('None')
+
+        self.parent().mediaPlayer.setPosition(mil_secs)
+
+    def delTrajectory(self):
+        delete_idx = int(self.trjIdxLe.text())
+        delete_line = self.traj_line[delete_idx][1]
+        if delete_idx == -1:
+            return
+        msg = QMessageBox()
+        rep = msg.question(self, 'Delete trajectory',
+                           'Are you sure to DELETE the current trajectory?', msg.Yes | msg.No)
+        if rep == msg.No:
+            return
+
+        self.prevTrajectory()
+        self.traj_line.pop(delete_idx)
+        self.ax.lines.remove(delete_line)
+        self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
+
+    def saveTrajectories(self):
+        if self.mdbFileLedit.text() == '':
+            return
+
+        msg = QMessageBox()
+        rep = msg.question(self, 'Load trajectory',
+                           'Are you sure to LOAD all trajectories to database?', msg.Yes | msg.No)
+        if rep == msg.No:
+            return
+
+        streetUserObjects = []
+        no_users = 0
+        for trj_idx in range(len(self.traj_line)):
+            userType = self.traj_line[trj_idx][2][0]
+            lines = self.traj_line[trj_idx][2][1]
+            if userType != -1 and userType != 0 and lines != []:
+                instants = self.traj_line[trj_idx][2][2]
+                speeds = self.traj_line[trj_idx][2][3]
+                groupSize = self.traj_line[trj_idx][2][5]
+                streetUserObjects = streetUserObjects + creatStreetusers(userType, lines, instants, speeds, groupSize)
+                no_users += 1
+
+        session.add_all(streetUserObjects)
+        session.commit()
+        session.close()
+
+        QMessageBox.information(self, 'Import!', 'No. of imported street users: {}'.format(no_users))
+
+    def userTypeChanged(self):
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == -1:
+            return
+        user_indx = self.userTypeCb.currentIndex()
+        current_traj = self.traj_line[current_idx][0]
+
+        if user_indx != current_traj.userType:
+            current_line = self.traj_line[current_idx][1]
+            current_traj.setUserType(user_indx)
+            self.traj_line[current_idx][2][0] = user_indx
+            current_line.set_label(userTypeNames[user_indx])
+            current_line.set_color(userTypeColors[user_indx])
+            self.canvas.draw()
+
+    def groupSizeChanged(self):
+        current_idx = int(self.trjIdxLe.text())
+        if current_idx == -1:
+            return
+        self.traj_line[current_idx][2][5] = int(self.groupSizeCb.currentText())
+
+    def openMdbFile(self):
+        mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",
+                                                     QDir.homePath(), "Sqlite files (*.sqlite)")
+        if mdbFilename == '':
+            return
+
+        self.mdbFileLedit.setText(mdbFilename)
+
+        con = sqlite3.connect(self.mdbFileLedit.text())
+        self.cur = con.cursor()
+
+        # Check if database is a metadata file
+        self.cur.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='video_sequences' ''')
+        if self.cur.fetchone()[0] == 0:
+            QMessageBox.information(self, 'Error!',
+                                    'The selected database is NOT a metadata file! Select a proper file.')
+            self.mdbFileLedit.clear()
+            return
+
+        self.cur.execute('SELECT name FROM sites')
+        sites = self.cur.fetchall()
+        self.siteNameCombobx.clear()
+        self.siteNameCombobx.addItems([s[0] for s in sites])
+        # self.siteNameCombobx.setCurrentIndex(-1)
+
+    def siteChanged(self):
+        if self.siteNameCombobx.currentText() == '':
+            return
+        self.cur.execute('SELECT idx FROM sites WHERE name=?', (self.siteNameCombobx.currentText(),))
+        siteIdx = self.cur.fetchall()[0][0]
+        self.cur.execute('SELECT description FROM camera_views WHERE siteIdx=?', (siteIdx,))
+        views = self.cur.fetchall()
+        self.camViewCombobx.clear()
+        self.camViewCombobx.addItems([v[0] for v in views])
+        # self.camViewCombobx.setCurrentIndex(-1)
+
+    def viewChanged(self):
+        if self.camViewCombobx.currentText() == '':
+            return
+        self.cur.execute('SELECT idx FROM sites WHERE name=?', (self.siteNameCombobx.currentText(),))
+        siteIdx = self.cur.fetchall()[0][0]
+        self.cur.execute('SELECT idx, homographyFilename, cameraTypeIdx FROM camera_views WHERE description =? AND siteIdx=?',
+                         (self.camViewCombobx.currentText(), siteIdx))
+        row = self.cur.fetchall()
+        viewIdx = row[0][0]
+        self.homographyFilename = row[0][1]
+        self.cameraTypeIdx = row[0][2]
+        self.cur.execute('SELECT databaseFilename FROM video_sequences WHERE cameraViewIdx=?', (viewIdx,))
+        trjDbs = self.cur.fetchall()
+        self.trjDbCombobx.clear()
+        self.trjDbCombobx.addItems([t[0].split('/')[-1] for t in trjDbs])
+        # self.trjDbCombobx.setCurrentIndex(-1)
+        self.dateStr = trjDbs[0][0].split('/')[0]
+
+
     #--------------- Road user buttons --------------------
     def user_newGroup_click(self):
         self.user_newGroupButton.setEnabled(False)
-        self.user_newRecBtn_click()
-        self.group_list_wdgt.clear()
+        self.user_newRecButton.setEnabled(True)
+        self.group_delFromListButton.setEnabled(True)
         self.groupPersons = {}
+        self.group_list_wdgt.clear()
+        self.user_newRecBtn_click()
         self.group = None
 
     def user_newRecBtn_click(self):
-
         self.person_grpBox.setEnabled(True)
         self.veh_grpBox.setEnabled(True)
         self.mode_grpBox.setEnabled(True)
         self.group_grpBox.setEnabled(True)
 
         self.user_saveButton.setEnabled(True)
-        self.group_addToListButton.setEnabled(True)
-        self.user_newRecButton.setEnabled(False)
+        self.group_delFromListButton.setEnabled(True)
+        # self.user_newRecButton.setEnabled(False)
 
         self.init_input_widgets(self.mode_grpBox)
 
-        self.person = Person()
-        session.add(self.person)
+        person = Person()
+        self.person = person
+        # mode = Mode('walker', person)
+        session.add(person)
         session.flush()
+        self.person_grpBox.layout().itemAtPosition(0, 1).widget().setText(str(person.idx))
 
-        self.person_grpBox.layout().itemAtPosition(0, 1).widget().setText(str(self.person.idx))
+        if not person.idx in self.groupPersons.keys():
+            self.groupPersons[person.idx] = [person, None, None]
+
+            new_item = QListWidgetItem(str(person.idx))
+            self.group_list_wdgt.addItem(new_item)
+            self.group_list_wdgt.setCurrentItem(new_item)
 
 
     def user_saveBtn_click(self):
         if self.groupPersons == {}:
             QMessageBox.information(self, 'Error!', 'There is no person in the list!')
             return
+        btn_label = self.user_saveButton.text()
+        if btn_label.split(' ')[0] in ['Save', 'Update']:
+            self.user_saveButton.setText(btn_label.replace(btn_label.split(' ')[0], 'Edit'))
+            self.user_saveButton.setIcon(QIcon('icons/edit.png'))
+            enable = False
+        elif btn_label.split(' ')[0] == 'Edit':
+            self.user_saveButton.setText(btn_label.replace('Edit', 'Update'))
+            self.user_saveButton.setIcon(QIcon('icons/save.png'))
+            enable = True
 
-        self.person_grpBox.setEnabled(False)
-        self.veh_grpBox.setEnabled(False)
-        self.mode_grpBox.setEnabled(False)
-        self.group_grpBox.setEnabled(False)
+        self.group_grpBox.setEnabled(enable)
+        self.person_grpBox.setEnabled(enable)
+        self.veh_grpBox.setEnabled(enable)
+        self.mode_grpBox.setEnabled(enable)
 
-        self.user_saveButton.setEnabled(False)
-        self.user_newGroupButton.setEnabled(True)
-        self.user_newRecButton.setEnabled(False)
+        self.user_newGroupButton.setEnabled(not enable)
+        self.user_newRecButton.setEnabled(enable)
+        self.group_delFromListButton.setEnabled(enable)
 
-        self.group = Group(self.groupPersons.values())
+        persons = [inst_list[0] for inst_list in self.groupPersons.values()]
+        self.group = Group(persons)
+        session.add(self.group)
+        for inst_list in self.groupPersons.values():
+            for inst in inst_list[1:]:
+                if inst != None:
+                    session.add(inst)
 
         session.commit()
 
+
     # ------------------- Group Buttons --------------
-    def group_AddToList_click(self):
-        self.person_grpBox.setEnabled(False)
-        self.veh_grpBox.setEnabled(False)
-        self.mode_grpBox.setEnabled(False)
+    def group_delFromList_click(self):
+        if self.group_list_wdgt.count() == 1:
+            self.person_grpBox.setEnabled(False)
+            self.veh_grpBox.setEnabled(False)
+            self.mode_grpBox.setEnabled(False)
+            self.user_newRecButton.setEnabled(False)
+            self.user_newGroupButton.setEnabled(True)
+            self.group_delFromListButton.setEnabled(False)
+        current_item = self.group_list_wdgt.currentItem()
+        person_idx = int(current_item.text())
+        self.group_list_wdgt.takeItem(self.group_list_wdgt.row(current_item))
+        del_obj = session.query(Person).filter(Person.idx == person_idx).first()
+        session.delete(del_obj)
+        self.groupPersons.pop(person_idx)
 
-        self.group_addToListButton.setEnabled(False)
-        self.user_newRecButton.setEnabled(True)
 
-        if self.person_grpBox.isChecked():
-            person_layout = self.person_grpBox.layout()
-            self.person.age = person_layout.itemAtPosition(1, 1).widget().text()
-            self.person.gender = person_layout.itemAtPosition(2, 1).widget().currentText()
-            self.person.disability = person_layout.itemAtPosition(3, 1).widget().text()
-            self.person.stroller = self.toBool(person_layout.itemAtPosition(4, 1).widget().currentText())
-            self.person.bag = self.toBool(person_layout.itemAtPosition(5, 1).widget().currentText())
-            self.person.animal = self.toBool(person_layout.itemAtPosition(6, 1).widget().currentText())
+        #
+        # self.group_delFromListButton.setEnabled(False)
+        # self.user_newRecButton.setEnabled(True)
+        #
+        # if self.person_grpBox.isChecked():
+        #     person_layout = self.person_grpBox.layout()
+        #     self.person.age = person_layout.itemAtPosition(1, 1).widget().text()
+        #     self.person.gender = person_layout.itemAtPosition(2, 1).widget().currentText()
+        #     self.person.disability = person_layout.itemAtPosition(3, 1).widget().text()
+        #     self.person.stroller = self.toBool(person_layout.itemAtPosition(4, 1).widget().currentText())
+        #     self.person.bag = self.toBool(person_layout.itemAtPosition(5, 1).widget().currentText())
+        #     self.person.animal = self.toBool(person_layout.itemAtPosition(6, 1).widget().currentText())
+        #
+        # if self.veh_grpBox.isChecked():
+        #     vehicle_layout = self.veh_grpBox.layout()
+        #     category = vehicle_layout.itemAtPosition(0, 1).widget().currentText()
+        #     trailer = self.toBool(vehicle_layout.itemAtPosition(1, 1).widget().currentText())
+        #     vehicle = Vehicle(category=category, trailer=trailer)
+        # else:
+        #     vehicle = None
+        #
+        # mode_layout = self.mode_grpBox.layout()
+        # transport = mode_layout.itemAtPosition(0, 1).widget().currentText()
+        # startTime_wdgt = mode_layout.itemAtPosition(1, 1).widget()
+        # input_wdgt_val = startTime_wdgt.dateTime().toPyDateTime()
+        # startTime = input_wdgt_val.replace(microsecond=0)
+        # self.mode = Mode(transport=transport, person=self.person, vehicle=vehicle, startTime=None)
+        #
+        # if not self.person.idx in self.groupPersons.keys():
+        #     self.groupPersons[self.person.idx] = self.person
+        #     self.group_list_wdgt.addItem(str(self.person.idx))
 
-        if self.veh_grpBox.isChecked():
-            vehicle_layout = self.veh_grpBox.layout()
-            category = vehicle_layout.itemAtPosition(0, 1).widget().currentText()
-            trailer = self.toBool(vehicle_layout.itemAtPosition(1, 1).widget().currentText())
-            vehicle = Vehicle(category=category, trailer=trailer)
+    def rowChanged(self):
+        current_item = self.group_list_wdgt.currentItem()
+        if current_item == None:
+            return
+        person_idx = int(current_item.text())
+        person = self.groupPersons[person_idx][0]
+        mode = self.groupPersons[person_idx][1]
+        veh = self.groupPersons[person_idx][2]
+
+        self.set_widget_values(self.person_grpBox, person)
+
+        if mode == None:
+            self.mode_grpBox.setChecked(False)
         else:
-            vehicle = None
+            self.set_widget_values(self.mode_grpBox, mode)
 
-        mode_layout = self.mode_grpBox.layout()
-        transport = mode_layout.itemAtPosition(0, 1).widget().currentText()
-        startTime_wdgt = mode_layout.itemAtPosition(1, 1).widget()
-        input_wdgt_val = startTime_wdgt.dateTime().toPyDateTime()
-        startTime = input_wdgt_val.replace(microsecond=0)
-        self.mode = Mode(transport=transport, person=self.person, vehicle=vehicle, startTime=None)
+        if veh == None:
+            self.veh_grpBox.setChecked(False)
+        else:
+            self.set_widget_values(self.veh_grpBox, veh)
 
-        if not self.person.idx in self.groupPersons.keys():
-            self.groupPersons[self.person.idx] = self.person
-            self.group_list_wdgt.addItem(str(self.person.idx))
+
+    @staticmethod
+    def set_widget_values(grpBox, inst):
+        if grpBox.isCheckable():
+            grpBox.setChecked(True)
+        layout = grpBox.layout()
+        for i in range(layout.rowCount()):
+            attrib = layout.itemAtPosition(i, 0).widget().text()
+            widg = layout.itemAtPosition(i, 1).widget()
+            widg_val = getattr(inst, attrib)
+            if isinstance(widg, QLineEdit):
+                widg.setText(str(widg_val))
+            elif isinstance(widg, QComboBox):
+                widg.setCurrentText(str(widg_val))
 
     # -------------- LinePassing buttons ------------------
     def linepass_newRecBtn_click(self):
@@ -561,6 +1035,10 @@ class ObsToolbox(QMainWindow):
 
     def generateWidgets(self, tableClass, fieldConst, checkable):
         groupBox = QGroupBox(tableClass.__name__)
+        if checkable:
+            groupBox.setCheckable(True)
+            groupBox.setChecked(False)
+            groupBox.toggled.connect(self.grpBoxToggled)
         groupBox_layout = QGridLayout()
 
         # gridLayout = QGridLayout()
@@ -581,6 +1059,7 @@ class ObsToolbox(QMainWindow):
                 wdgt = QComboBox()
                 wdgt.addItems(column['enum'])
                 wdgt.setCurrentIndex(-1)
+                wdgt.currentTextChanged.connect(self.wdgtValueChanged)
             elif column['is_foreign_key']:
                 wdgt = QComboBox()
             elif column['is_datetime']:
@@ -591,6 +1070,8 @@ class ObsToolbox(QMainWindow):
                 wdgt = QLineEdit()
                 if column['is_primary_key']:
                     wdgt.setReadOnly(True) #.setEnabled(False)
+                else:
+                    wdgt.editingFinished.connect(self.wdgtValueChanged)
 
             groupBox_layout.addWidget(wdgt, i, 1)
             i += 1
@@ -602,9 +1083,69 @@ class ObsToolbox(QMainWindow):
         # groupBox.setAlignment(Qt.AlignHCenter)
         groupBox.setLayout(groupBox_layout)
 
-        groupBox.setCheckable(checkable)
         groupBox.setEnabled(False)
         return  groupBox
+
+    def wdgtValueChanged(self):
+        grpBox = self.sender().parentWidget()
+        layout = grpBox.layout()
+        wdgt_idx = layout.indexOf(self.sender())
+        attrib = layout.itemAt(wdgt_idx - 1).widget().text()
+        person_idx = int(self.group_list_wdgt.currentItem().text())
+        person = self.groupPersons[person_idx][0]
+        mode = self.groupPersons[person_idx][1]
+        veh = self.groupPersons[person_idx][2]
+        if grpBox.title() == 'Person':
+            inst = person
+        elif grpBox.title() == 'Mode':
+            inst = mode
+        elif grpBox.title() == 'Vehicle':
+            inst = veh
+        if isinstance(self.sender(), QLineEdit):
+            setattr(inst, attrib, self.sender().text())
+        elif isinstance(self.sender(), QComboBox):
+            new_val = self.sender().currentText()
+            if new_val in ['True', 'False']:
+                new_val = self.toBool(new_val)
+            setattr(inst, attrib, new_val)
+
+    def grpBoxToggled(self, on):
+        title = self.sender().title()
+        person_idx = int(self.group_list_wdgt.currentItem().text())
+        person0 = self.groupPersons[person_idx][0]
+        mode0 = self.groupPersons[person_idx][1]
+        veh0 = self.groupPersons[person_idx][2]
+        if title == 'Mode':
+            if mode0 == None and on:
+                person = self.groupPersons[person_idx][0]
+                mode = Mode('walking', person)
+                self.groupPersons[person_idx][1] = mode
+                self.set_widget_values(self.mode_grpBox, mode)
+            elif not on:
+                self.veh_grpBox.setChecked(False)
+                mode0_obj = session.query(Mode).filter(Mode.personIdx == person_idx).all()
+                if len(mode0_obj) > 0:
+                    session.delete(mode0_obj[0])
+                    session.commit()
+                self.groupPersons[person_idx][1] = None
+
+        if title == 'Vehicle':
+            if mode0 != None and veh0 == None and on:
+                veh = Vehicle('car')
+                mode0.vehicle = veh
+                self.groupPersons[person_idx][2] = veh
+                self.set_widget_values(self.veh_grpBox, veh)
+            elif mode0 == None and on:
+                QMessageBox.information(self, 'Error', 'The mode is not specified!')
+                self.sender().setChecked(False)
+                return
+            elif not on:
+                if mode0.vehicle != None:
+                    veh0_idx = mode0.vehicle.idx
+                    mode0.vehicle = None
+                    session.query(Vehicle).filter(Vehicle.idx == veh0_idx).delete()
+                    session.commit()
+                self.groupPersons[person_idx][2] = None
 
     def newRecord(self, grpBx, fieldVals = {}):
         newRecBtn = grpBx.layout().itemAt(0).layout().itemAt(0).widget()
@@ -1613,27 +2154,28 @@ class ModeChartWindow(QDialog):
         self.openDbFileBtn2.clicked.connect(self.opendbFile2)
         dbLayout2.addWidget(self.openDbFileBtn2)
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 0, 0, 1, 5, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('time interval:'), 0, 0, Qt.AlignRight)
+        # gridLayout.addWidget(QLabel('Action type:'), 0, 0, Qt.AlignRight)
+        # self.actionTypeCombobx = QComboBox()
+        # self.actionTypeCombobx.addItems(actionTypeList)
+        # self.actionTypeCombobx.setCurrentIndex(-1)
+        # self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
+        # gridLayout.addWidget(self.actionTypeCombobx, 0, 1, Qt.AlignLeft)
+        #
+        # gridLayout.addWidget(QLabel('Unit Idx:'), 0, 2, Qt.AlignRight)
+        # self.unitIdxCombobx = QComboBox()
+        # gridLayout.addWidget(self.unitIdxCombobx, 0, 3, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Interval:'), 0, 5, Qt.AlignRight)
         self.intervalLe = QLineEdit('60')
-        gridLayout.addWidget(self.intervalLe, 0, 1, Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 0, 2, Qt.AlignLeft)
-
-        gridLayout.addWidget(QLabel('action type:'), 0, 3, Qt.AlignRight)
-        self.actionTypeCombobx = QComboBox()
-        self.actionTypeCombobx.addItems(actionTypeList)
-        self.actionTypeCombobx.setCurrentIndex(-1)
-        self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 4, Qt.AlignLeft)
-
-        gridLayout.addWidget(QLabel('unit Idx:'), 0, 5, Qt.AlignRight)
-        self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 6, Qt.AlignLeft)
+        self.intervalLe.setFixedWidth(35)
+        gridLayout.addWidget(self.intervalLe, 0, 6)#, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 7)#, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotModeChart)
-        gridLayout.addWidget(self.plotBtn, 0, 7)
+        gridLayout.addWidget(self.plotBtn, 0, 8)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(dbLayout1)
@@ -1667,8 +2209,8 @@ class ModeChartWindow(QDialog):
         if self.session2 is None:
             self.session2 = connectDatabase(dbFilename2)
 
-        actionType = self.actionTypeCombobx.currentText()
-        unitIdx = self.unitIdxCombobx.currentText()
+        # actionType = self.actionTypeCombobx.currentText()
+        # unitIdx = self.unitIdxCombobx.currentText()
 
         # if 'line' in actionType.split(' '):
         #     cls_obs = LinePassing

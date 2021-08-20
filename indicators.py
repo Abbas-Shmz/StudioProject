@@ -411,6 +411,13 @@ def speedBoxPlot(transport, actionType, unitIdx, times, ax, sessions):
     ax.plot([], c='salmon', label='after')
     ax.legend(fontsize=5)
 
+    # ----------------------
+    # locator = mdates.AutoDateLocator()
+    # ax.xaxis.set_major_locator(locator)
+    # ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    # ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+    # ----------------------------
+
     ax.set_xticks(range(0, len(ticks) * 2, 2))
     ax.set_xticklabels(ticks)
     ax.set_xlim(-1, len(ticks) * 2)
@@ -1302,7 +1309,7 @@ def creatStreetusers(userType, lines, instants, speeds, groupSize):
 def modeShareCompChart(times, axs, labels, sessions):
 
     ax = [axs[0,0], axs[0,1], axs[1,0], axs[1,1]]
-    X = np.arange(len(times) - 1)
+    # X = np.arange(len(times) - 1)
     before = {'cardriver':[], 'walking':[], 'bike':[], 'scooter':[]}
     after = {'cardriver':[], 'walking':[], 'bike':[], 'scooter':[]}
     date1 = getObsStartEnd(sessions[0])[0].date()
@@ -1327,20 +1334,28 @@ def modeShareCompChart(times, axs, labels, sessions):
             else:
                 after[mode].append(0)
 
-    date = datetime.date(1, 1, 1)
+    date = datetime.date(2000, 1, 1)
     datetime1 = datetime.datetime.combine(date, times[0])
     datetime2 = datetime.datetime.combine(date, times[1])
     interval = datetime2 - datetime1
-    middlePoint = [(datetime.datetime.combine(date, times[i]) + interval/2).time() for i in range(len(times)-1)]
-    ticks = [t.strftime('%H:%M') for t in middlePoint]
+    middlePoint = [(datetime.datetime.combine(date, times[i]) + interval/2) for i in range(len(times)-1)]
+    # ticks = middlePoint #[t.strftime('%H:%M') for t in middlePoint]
+    locator = mdates.AutoDateLocator()
     titles = ['Car', 'Pedestrian', 'Bike', 'Scooter']
     for i, mode in enumerate(['cardriver', 'walking', 'bike', 'scooter']):
-        ax[i].plot(X, before[mode], color='deepskyblue')#, width=w)
-        ax[i].plot(X, after[mode], color='salmon')#, width=w)
-        ax[i].set_xticks([i for i in range(len(times) - 1)])
-        ax[i].set_xticklabels(ticks, rotation=90)
+        ax[i].plot(middlePoint, before[mode], color='deepskyblue')#, width=w)
+        ax[i].plot(middlePoint, after[mode], color='salmon')#, width=w)
+        # ax[i].set_xticks([i for i in range(len(times) - 1)])
+        # ax[i].set_xticklabels(ticks, rotation=90)
+
+        ax[i].xaxis.set_major_locator(locator)
+        ax[i].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax[i].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+
+
         ax[i].tick_params(axis='both', labelsize=7)
-        ax[i].grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+        ax[i].tick_params(axis='x', rotation=90)
+        ax[i].grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
         ax[i].set_title(titles[i], fontsize=7)
         if i > 1:
             ax[i].set_xlabel('Time', fontsize=7)
@@ -1355,6 +1370,11 @@ def modeShareCompChart(times, axs, labels, sessions):
                 transform=ax[i].transAxes,
                 weight="bold", alpha=.5)
     plt.suptitle('Comparison of transportation mode share', fontsize=8)
+
+    # locator = mdates.AutoDateLocator()
+    # ax[0].xaxis.set_major_locator(locator)
+    # ax[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    # ax[0].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
 
 # =========================================
 def image_to_ground(img_points, homography):
