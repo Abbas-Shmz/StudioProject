@@ -1145,14 +1145,14 @@ def compareIndicators(transport, actionType, unitIdx, start_time, end_time, sess
 def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homographyFile, ax, session):
     objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
     homography = np.loadtxt(homographyFile, delimiter=' ')
-    traj_line = []
+    traj_line = {}
     for traj in objects:
         xy_arr = traj.positions.asArray()
         x = xy_arr[0]
         y = xy_arr[1]
         userType = traj.getUserType()
         line, = ax.plot(x, y, color=userTypeColors[userType], lw=0.5, label=userTypeNames[userType])
-        traj_line.append([traj, line])
+        traj_line[str(traj.getNum())] = [traj, line]
 
     q_line = session.query(Line)
     q_zone = session.query(Zone)
