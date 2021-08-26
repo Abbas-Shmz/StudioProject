@@ -2673,32 +2673,39 @@ class genReportWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
         # self.siteNameCombobx.currentTextChanged.connect(self.genReport)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
         gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
+        gridLayout.addWidget(QLabel('Time interval:'), 0, 6, Qt.AlignRight)
+        self.intervalCombobx = QComboBox()
+        self.intervalCombobx.addItems(['5', '10', '15', '20', '30', '60', '90', '120'])
+        gridLayout.addWidget(self.intervalCombobx, 0, 7)#, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
+
+
         self.genRepBtn = QPushButton('Generate report')
         self.genRepBtn.clicked.connect(self.genReport)
-        gridLayout.addWidget(self.genRepBtn, 0, 6)
+        gridLayout.addWidget(self.genRepBtn, 0, 9)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save report')
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 7)
+        gridLayout.addWidget(self.saveBtn, 0, 10)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(gridLayout)
@@ -2711,20 +2718,21 @@ class genReportWindow(QDialog):
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
+        interval = int(self.intervalCombobx.currentText())
 
-        start_obs_time, end_obs_time = getObsStartEnd(session)
-        bins = calculateBinsEdges(start_obs_time, end_obs_time)
-        if len(bins) < 2:
-            QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
-            return
-        else:
-            start_time = bins[0]
-            end_time = bins[-1]
-        self.indicatorsDf = generateReport(transport, actionType, unitIdx, start_time, end_time, session)
+
+        # bins = calculateBinsEdges(start_obs_time, end_obs_time)
+        # if len(bins) < 2:
+        #     QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
+        #     return
+        # else:
+        #     start_time = bins[0]
+        #     end_time = bins[-1]
+        self.indicatorsDf = generateReport(transport, actionType, unitIdx, interval, session)
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)#.Stretch)
 
     def saveReport(self):
         if not self.indicatorsDf is None:
@@ -2787,33 +2795,39 @@ class compIndicatorsWindow(QDialog):
         self.openDbFileBtn2.clicked.connect(self.opendbFile2)
         dbLayout2.addWidget(self.openDbFileBtn2)
 
-        gridLayout.addWidget(QLabel('transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
         # self.siteNameCombobx.currentTextChanged.connect(self.compIndicators)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
         gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
         gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
+        gridLayout.addWidget(QLabel('Time interval:'), 0, 6, Qt.AlignRight)
+        self.intervalCombobx = QComboBox()
+        self.intervalCombobx.addItems(['5', '10', '15', '20', '30', '60', '90', '120'])
+        gridLayout.addWidget(self.intervalCombobx, 0, 7)  # , Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
+
         self.genRepBtn = QPushButton('Compare Indicators')
         self.genRepBtn.clicked.connect(self.compIndicators)
-        gridLayout.addWidget(self.genRepBtn, 0, 6)
+        gridLayout.addWidget(self.genRepBtn, 0, 9)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save results to clipboard')
         self.saveBtn.setFixedWidth(75)
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 7)
+        gridLayout.addWidget(self.saveBtn, 0, 10)
 
         # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(dbLayout1)
@@ -2845,35 +2859,14 @@ class compIndicatorsWindow(QDialog):
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
+        interval = int(self.intervalCombobx.currentText())
 
-        first_obs_time1, last_obs_time1 = getObsStartEnd(self.session1)
-        first_obs_time2, last_obs_time2 = getObsStartEnd(self.session2)
-
-        if first_obs_time1.time() >= first_obs_time2.time():
-            bins_start = first_obs_time1
-        else:
-            bins_start = first_obs_time2
-
-        if last_obs_time1.time() <= last_obs_time2.time():
-            bins_end = last_obs_time1
-        else:
-            bins_end = last_obs_time2
-
-        bins = calculateBinsEdges(bins_start, bins_end)
-
-        if len(bins) > 1:
-            start_time = bins[0].time()
-            end_time = bins[-1].time()
-        else:
-            QMessageBox.information(self, 'Error!', 'The common observaion duration is too short!')
-            return
-
-        self.indicatorsDf = compareIndicators(transport, actionType, unitIdx, start_time, end_time,
+        self.indicatorsDf = compareIndicators(transport, actionType, unitIdx, interval,
                                               self.session1, self.session2)
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)#.Stretch)
 
     def saveReport(self):
         if not self.indicatorsDf is None:

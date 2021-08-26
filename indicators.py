@@ -669,14 +669,24 @@ def pieChart(transport, attr, sTime, eTime, ax, session):
 
     plt.setp(autotexts, size=12, weight="bold")
 
-#=====================================================================
-def generateReport(transport, actionType, unitIdx, start_obs_time, end_obs_time, session):
+# =====================================================================
+def generateReport(transport, actionType, unitIdx, interval, session, start_time=None, end_time=None):
+    if start_time == None and end_time == None:
+        start_obs_time, end_obs_time = getObsStartEnd(session)
 
-    peakHours = getPeakHours(session, start_obs_time, end_obs_time)
-    entP_peakHours = {'Entire period': [start_obs_time.time(), end_obs_time.time()]}
-    entP_peakHours.update(peakHours)
+    elif start_time != None and end_time != None:
+        obs_date = getObsStartEnd(session)[0].date()
+        start_obs_time = datetime.datetime.combine(obs_date, start_time)
+        end_obs_time = datetime.datetime.combine(obs_date, end_time)
+    else:
+        return
 
-    indDf = pd.DataFrame(columns=list(entP_peakHours.keys()), index=['Start time', 'End time', 'Duration'])
+    entP_peakHours = getPeakHours(start_obs_time, end_obs_time, interval)
+
+    # entP_peakHours = {'Entire period': [start_obs_time.time(), end_obs_time.time()]}
+    # entP_peakHours.update(peakHours)
+
+    indDf = pd.DataFrame(columns=list(entP_peakHours.keys()))#, index=['Start time', 'End time', 'Duration'])
 
     duration = end_obs_time - start_obs_time
     duration_in_s = duration.total_seconds()
@@ -740,10 +750,10 @@ def generateReport(transport, actionType, unitIdx, start_obs_time, end_obs_time,
 
             no_all_peak = q_all_peaks.count()
 
-            indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-            indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-            indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
-                                                    int(duration_in_s / 60) % 60)
+            # indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
+            # indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
+            # indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
+            #                                         int(duration_in_s / 60) % 60)
 
             for ind in indicators:
                 if p == indDf.columns[0]:
@@ -823,10 +833,10 @@ def generateReport(transport, actionType, unitIdx, start_obs_time, end_obs_time,
 
             no_all_peak = q_all_peaks.count()
 
-            indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-            indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-            indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
-                                                    int(duration_in_s / 60) % 60)
+            # indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
+            # indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
+            # indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
+            #                                         int(duration_in_s / 60) % 60)
 
             for ind in indicators:
 
@@ -1054,10 +1064,10 @@ def generateReport(transport, actionType, unitIdx, start_obs_time, end_obs_time,
 
     indDf[indDf.isnull().values] = noDataSign
 
-    indDf.columns = [indDf.columns[0] + ' (% of all)',
-                     indDf.columns[1] + ' (% of item)',
-                     indDf.columns[2] + ' (% of item)',
-                     indDf.columns[3] + ' (% of item)']
+    # indDf.columns = [indDf.columns[0] + ' (% of all)',
+    #                  indDf.columns[1] + ' (% of item)',
+    #                  indDf.columns[2] + ' (% of item)',
+    #                  indDf.columns[3] + ' (% of item)']
     indDf = indDf.replace(['0 (0.0%)', '0 (0%)'], 0)
 
     for i in indDf.index:
@@ -1071,23 +1081,28 @@ def generateReport(transport, actionType, unitIdx, start_obs_time, end_obs_time,
     return indDf
 
 
-def compareIndicators(transport, actionType, unitIdx, start_time, end_time, session1, session2):
-    obs_date1 = getObsStartEnd(session1)[0].date()
-    obs_date2 = getObsStartEnd(session2)[0].date()
+def compareIndicators(transport, actionType, unitIdx, interval, session1, session2):
+    first_obs_time1, last_obs_time1 = getObsStartEnd(session1)
+    first_obs_time2, last_obs_time2 = getObsStartEnd(session2)
 
-    start_time1 = datetime.datetime.combine(obs_date1, start_time)
-    end_time1 = datetime.datetime.combine(obs_date1, end_time)
+    if first_obs_time1.time() >= first_obs_time2.time():
+        start_time = first_obs_time1.time()
+    else:
+        start_time = first_obs_time2.time()
 
-    start_time2 = datetime.datetime.combine(obs_date2, start_time)
-    end_time2 = datetime.datetime.combine(obs_date2, end_time)
+    if last_obs_time1.time() <= last_obs_time2.time():
+        end_time = last_obs_time1.time()
+    else:
+        end_time = last_obs_time2.time()
 
-    indDf1 = generateReport(transport, actionType, unitIdx, start_time1, end_time1, session1)
-    indDf2 = generateReport(transport, actionType, unitIdx, start_time2, end_time2, session2)
+    indDf1 = generateReport(transport, actionType, unitIdx, interval, session1, start_time, end_time)
+    indDf2 = generateReport(transport, actionType, unitIdx, interval, session2, start_time, end_time)
 
-    indDf = indDf1.iloc[0:3, :].copy()
+    indDf = pd.DataFrame()
+    # indDf = indDf1.iloc[0:3, :].copy()
 
-    idx1 = indDf1.index[3:]
-    idx2 = indDf2.index[3:]
+    idx1 = indDf1.index #[3:]
+    idx2 = indDf2.index #[3:]
 
     idx2_idx1 = list(set(idx2) - set(idx1))
     idx1_idx2 = list(set(idx1) - set(idx2))
@@ -1104,7 +1119,7 @@ def compareIndicators(transport, actionType, unitIdx, start_time, end_time, sess
             new_idx[(new_idx != noDataSign) & (new_idx != 'NA')] = 0
             indDf2 = indDf2.append(new_idx)
 
-    for row in indDf1.index[3:]:
+    for row in indDf1.index:#[3:]:
         for col in indDf1.columns:
             if indDf1.loc[row, col] == noDataSign or indDf1.loc[row, col] == 'NA':
                 continue
@@ -1134,10 +1149,10 @@ def compareIndicators(transport, actionType, unitIdx, start_time, end_time, sess
 
     indDf[indDf.isnull().values] = noDataSign
 
-    indDf.columns = [indDf.columns[0].split('(')[0][:-1] + ' [% of change]',
-                     indDf.columns[1].split('(')[0][:-1] + ' [% of change]',
-                     indDf.columns[2].split('(')[0][:-1] + ' [% of change]',
-                     indDf.columns[3].split('(')[0][:-1] + ' [% of change]']
+    # indDf.columns = [indDf.columns[0].split('(')[0][:-1] + ' [% of change]',
+    #                  indDf.columns[1].split('(')[0][:-1] + ' [% of change]',
+    #                  indDf.columns[2].split('(')[0][:-1] + ' [% of change]',
+    #                  indDf.columns[3].split('(')[0][:-1] + ' [% of change]']
 
     return indDf
 
@@ -1430,46 +1445,80 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
     return labels, sizes
 
 
-def getPeakHours(session, start_obs_time, end_obs_time,
-                 morningPeakStart = morningPeakStart,
-                 morningPeakEnd = morningPeakEnd,
-                 eveningPeakStart = eveningPeakStart,
-                 eveningPeakEnd = eveningPeakEnd):
+def getPeakHours(start_obs_time, end_obs_time, interval):
+    # morningPeakStart = morningPeakStart,
+    # morningPeakEnd = morningPeakEnd,
+    # eveningPeakStart = eveningPeakStart,
+    # eveningPeakEnd = eveningPeakEnd):
 
     peakHours = {}
-    if start_obs_time.time() < morningPeakStart:
-        peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
-        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
-        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+    key_config = '{} - {}'
+    key_format = '%H:%M'
 
-    elif morningPeakStart < start_obs_time.time() < morningPeakEnd:
-        peakHours['Morning peak'] = [start_obs_time.time(), morningPeakEnd]
-        peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
-        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+    bins_start = ceil_time(start_obs_time, interval)
+    bins_end = ceil_time(end_obs_time, interval) - datetime.timedelta(minutes=interval)
 
-    elif morningPeakEnd < start_obs_time.time() < eveningPeakStart:
-        peakHours['Morning peak'] = None
-        peakHours['Off-peak'] = [start_obs_time.time(), eveningPeakStart]
-        peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+    key = key_config.format(start_obs_time.strftime(key_format), end_obs_time.strftime(key_format))
+    peakHours[key] = [start_obs_time.time(), end_obs_time.time()]
 
-    elif eveningPeakStart < start_obs_time.time() < eveningPeakEnd:
-        peakHours['Morning peak'] = None
-        peakHours['Off-peak'] = None
-        peakHours['Evening peak'] = [start_obs_time.time(), eveningPeakEnd]
+    key = key_config.format(start_obs_time.strftime(key_format), bins_start.strftime(key_format))
+    peakHours[key] = [start_obs_time.time(), bins_start.time()]
 
-    if eveningPeakStart < end_obs_time.time() < eveningPeakEnd:
-        peakHours['Evening peak'][1] = end_obs_time.time()
+    bin_edge = bins_start
+    while bin_edge != bins_end:
+        bin_edge2 = bin_edge + datetime.timedelta(minutes=interval)
+        key = key_config.format(bin_edge.strftime(key_format), bin_edge2.strftime(key_format))
+        peakHours[key] = [bin_edge.time(), bin_edge2.time()]
+        bin_edge = bin_edge2
 
-    elif morningPeakEnd < end_obs_time.time() < eveningPeakStart:
-        peakHours['Evening peak'] = None
-        peakHours['Off-peak'][1] = end_obs_time.time()
-
-    elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
-        peakHours['Evening peak'] = None
-        peakHours['Off-peak'] = None
-        peakHours['Morning peak'][1] = end_obs_time.time()
+    key = key_config.format(bins_end.strftime(key_format), end_obs_time.strftime(key_format))
+    peakHours[key] = [bins_end.time(), end_obs_time.time()]
 
     return peakHours
+
+    # peakHours = {}
+    # if start_obs_time.time() < morningPeakStart:
+    #     peakHours['Morning peak'] = [morningPeakStart, morningPeakEnd]
+    #     peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+    #     peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+    #
+    # elif morningPeakStart < start_obs_time.time() < morningPeakEnd:
+    #     peakHours['Morning peak'] = [start_obs_time.time(), morningPeakEnd]
+    #     peakHours['Off-peak'] = [morningPeakEnd, eveningPeakStart]
+    #     peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+    #
+    # elif morningPeakEnd < start_obs_time.time() < eveningPeakStart:
+    #     peakHours['Morning peak'] = None
+    #     peakHours['Off-peak'] = [start_obs_time.time(), eveningPeakStart]
+    #     peakHours['Evening peak'] = [eveningPeakStart, eveningPeakEnd]
+    #
+    # elif eveningPeakStart < start_obs_time.time() < eveningPeakEnd:
+    #     peakHours['Morning peak'] = None
+    #     peakHours['Off-peak'] = None
+    #     peakHours['Evening peak'] = [start_obs_time.time(), eveningPeakEnd]
+    #
+    # if eveningPeakStart < end_obs_time.time() < eveningPeakEnd:
+    #     peakHours['Evening peak'][1] = end_obs_time.time()
+    #
+    # elif morningPeakEnd < end_obs_time.time() < eveningPeakStart:
+    #     peakHours['Evening peak'] = None
+    #     peakHours['Off-peak'][1] = end_obs_time.time()
+    #
+    # elif morningPeakStart < end_obs_time.time() < morningPeakEnd:
+    #     peakHours['Evening peak'] = None
+    #     peakHours['Off-peak'] = None
+    #     peakHours['Morning peak'][1] = end_obs_time.time()
+    #
+    # return peakHours
+
+def ceil_time(time, m):
+    if time.second == 0 and time.microsecond == 0 and time.minute % m == 0:
+        return time
+    minutes_by_m = time.minute // m
+    # get the difference in times
+    diff = (minutes_by_m + 1) * m - time.minute
+    time = (time + datetime.timedelta(minutes=diff)).replace(second=0, microsecond=0)
+    return time
 
 def getObsStartEnd(session):
     first_linePass_time = session.query(func.min(LinePassing.instant)).first()[0]
