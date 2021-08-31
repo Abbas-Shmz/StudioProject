@@ -51,7 +51,7 @@ else:
 
 # ==============================================================
 def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
-                 color='skyblue', label=None):
+                 color='skyblue', label=None, plotType='Line plot'):
     if len(bins) < 3:
         err = 'The observation duration is not enough for the selected interval!'
         return err
@@ -85,12 +85,12 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
 
         hist, bin_edges = np.histogram(time_stamps, bins=bins_stamps)
 
-        t = []
+        time_ticks = []
         for i in range(len(bins) - 1):
             mid_point = bins_stamps[i] + (bins_stamps[i+1] - bins_stamps[i])/2
-            t.append(datetime.datetime.fromtimestamp(mid_point))
+            time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
 
-        ax.plot(t, hist, label=label)
+        ax.plot(time_ticks, hist, label=label)
 
     else:
         time_lists = []
@@ -116,13 +116,13 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
             return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
 
         i = 0
-        for t in time_lists[0]:
-            time_lists[0][i] = datetime.datetime(2000,1,1,t.hour, t.minute, t.second)
+        for time_ticks in time_lists[0]:
+            time_lists[0][i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
             i += 1
 
         i = 0
-        for t in time_lists[1]:
-            time_lists[1][i] = datetime.datetime(2000, 1, 1, t.hour, t.minute, t.second)
+        for time_ticks in time_lists[1]:
+            time_lists[1][i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
             i += 1
 
         # fig = plt.figure()#figsize=(5, 5), dpi=200, tight_layout=True)
@@ -130,20 +130,69 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
         # (n, edges, patches) = ax.hist(time_lists, bins=bins, color=color, ec=ec,
         #                               rwidth=rwidth, alpha=alpha, label=label, histtype=histtype)
 
-        l = 0
-        for time_list in time_lists:
-            time_stamps = to_timestamp(time_list)
-            bins_stamps = to_timestamp(bins)
+        bins_stamps = to_timestamp(bins)
+        time_ticks = []
+        for i in range(len(bins) - 1):
+            mid_point = bins_stamps[i] + (bins_stamps[i + 1] - bins_stamps[i]) / 2
+            time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
 
-            hist, bin_edges = np.histogram(time_stamps, bins=bins_stamps)
+        if plotType == 'Line plot':
+            l = 0
+            for time_list in time_lists:
+                time_stamps = to_timestamp(time_list)
 
-            t = []
-            for i in range(len(bins) - 1):
-                mid_point = bins_stamps[i] + (bins_stamps[i + 1] - bins_stamps[i]) / 2
-                t.append(datetime.datetime.fromtimestamp(mid_point))
+                hist, bin_edges = np.histogram(time_stamps, bins=bins_stamps)
 
-            ax.plot(t, hist, label=label[l])
-            l += 1
+                ax.plot(time_ticks, hist, label=label[l])
+                l += 1
+        elif plotType == 'Scatter plot':
+            time_stamps1 = to_timestamp(time_lists[0])
+            hist1, bin_edges = np.histogram(time_stamps1, bins=bins_stamps)
+
+            time_stamps2 = to_timestamp(time_lists[1])
+            hist2, bin_edges = np.histogram(time_stamps2, bins=bins_stamps)
+
+            t_min = min(time_ticks)
+            t_max = max(time_ticks)
+            t_range = (t_max - t_min).total_seconds()
+            point_colors = []
+            for t in time_ticks:
+                point_colors.append((t - t_min).total_seconds() / t_range)
+
+            sc = ax.scatter(hist1, hist2, c=point_colors, cmap='jet')
+
+            b_inter0 = t_range/5
+            if b_inter0 >= 45*60: #45min * 60sec
+                b_interval = 60 #minutes
+            elif 15*60 <= b_inter0 < 45*60:
+                b_interval = 30
+            elif 5*60 <= b_inter0 < 15*60:
+                b_interval = 10
+            else:
+                b_interval = 5
+
+            b_start = ceil_time(t_min, b_interval)
+            cbar_ticks = []
+            cbar_ticklabels = []
+            while b_start < t_max:
+                cbar_ticks.append((b_start - t_min).total_seconds()/t_range)
+                cbar_ticklabels.append(b_start.strftime('%H:%M'))
+                b_start = b_start + datetime.timedelta(minutes=b_interval)
+
+            cbar = plt.colorbar(sc, ticks=cbar_ticks)
+            cbar.ax.set_yticklabels(cbar_ticklabels, fontsize=7)
+            cbar.ax.set_ylabel('Time of day', fontsize=8)
+
+            min_val = min([min(hist1), min(hist2)])
+            max_val = max([max(hist1), max(hist2)])
+            ax.plot([min_val, max_val],[min_val, max_val], ls='--', lw=.5, c='k', alpha=.3)
+
+            corrcoef = round(np.corrcoef(hist1, hist2)[0, 1], 3)
+            ax.text(0.9, 0.9, 'r = {}'.format(corrcoef),
+                    fontsize=7, color='k',
+                    ha='left', va='bottom',
+                    transform=ax.transAxes,
+                    weight="bold")
 
 
     # if not isinstance(n[0], np.ndarray):
@@ -157,36 +206,58 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
     #     print(lst_std)
     #     ax.axhline(y=avg, color=c[i], linestyle='-', lw=1.5)
     #     i += 1
+    if plotType == 'Line plot':
+        locator = mdates.AutoDateLocator()
+        ax.xaxis.set_major_locator(locator)
 
-    locator = mdates.AutoDateLocator()
-    ax.xaxis.set_major_locator(locator)
+        # ax.xaxis.set_major_locator(mdates.HourLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
 
-    # ax.xaxis.set_major_locator(mdates.HourLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+        # print((locator()))
 
-    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
-    # print((locator()))
+        if not isinstance(session, list):
+            xLabel = 'Time ({})'.format(time_list[0].strftime('%A, %b %d, %Y'))
+        else:
+            xLabel = 'Time'
 
-    if not isinstance(session, list):
-        xLabel = 'Time ({})'.format(time_list[0].strftime('%A, %b %d, %Y'))
-    else:
-        xLabel = 'Time'
+        # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
+        ax.tick_params(axis='x', labelsize=8, rotation=0)
+        ax.tick_params(axis='y', labelsize=7)
+        ax.set_xlabel(xLabel, fontsize=8)
 
-    # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
-    ax.tick_params(axis='x', labelsize=8, rotation=0)
-    ax.tick_params(axis='y', labelsize=7)
-    ax.set_xlabel(xLabel, fontsize=8)
+        tm = transport
+        if transport == 'cardriver':
+            tm = 'car'
+        elif transport == 'walking':
+            tm = 'pedestrian'
 
-    tm = transport
-    if transport == 'cardriver':
-        tm = 'car'
-    elif transport == 'walking':
-        tm = 'pedestrian'
+        ax.set_ylabel('No. of {}s'.format(tm), fontsize=8)
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.set_title('Temporal distribution of {}s {} #{}'.format(tm, actionType, unitIdx),
+                     fontsize=8)
+        ax.legend(loc='upper right', fontsize=6)
 
-    ax.set_ylabel('No. of {}s'.format(tm), fontsize=8)
-    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.set_title('Temporal distribution of {}s {} #{}'.format(tm, actionType, unitIdx),
-                 fontsize=8)
+    elif plotType == 'Scatter plot':
+
+        # max_val = max(max(hist1), max(hist2))
+        # ax.set_xlim(0, max_val + 10)
+        # ax.set_ylim(0, max_val + 10)
+
+        ax.tick_params(axis='both', labelsize=7)
+
+        tm = transport
+        if transport == 'cardriver':
+            tm = 'car'
+        elif transport == 'walking':
+            tm = 'pedestrian'
+
+        ax.set_xlabel('Number of {}s (Befre)'.format(tm), fontsize=8)
+        ax.set_ylabel('Number of {}s (After)'.format(tm), fontsize=8)
+        ax.set_title('Scatter plot of {}s {} #{}'.format(tm, actionType, unitIdx),
+                     fontsize=8)
+        ax.axis('equal')
+
     ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
 
     # if not isinstance(session, list):

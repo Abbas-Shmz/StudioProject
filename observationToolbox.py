@@ -20,6 +20,7 @@ from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObjec
 from iframework import createDatabase, connectDatabase, Person, Mode, Group, GroupBelonging, Vehicle,\
     Activity, LinePassing, ZonePassing, Point, Line, Zone
 
+import matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
@@ -2470,7 +2471,7 @@ class CompHistWindow(QDialog):
     def __init__(self, parent=None):
         super(CompHistWindow, self).__init__(parent)
 
-        self.setWindowTitle('Comparative Temporal Distribution Histogram')
+        self.setWindowTitle('Comparative Temporal Distribution Plot')
 
         self.figure = plt.figure(tight_layout=True)
 
@@ -2506,32 +2507,38 @@ class CompHistWindow(QDialog):
 
         gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Plot type:'), 0, 0, Qt.AlignRight)
+        self.plotTypeCmbx = QComboBox()
+        self.plotTypeCmbx.addItems(['Line plot', 'Scatter plot'])
+        # self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
+        gridLayout.addWidget(self.plotTypeCmbx, 0, 1, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Transport:'), 0, 2, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 4, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 5, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 6, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 7, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Interval:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Interval:'), 0, 8, Qt.AlignRight)
         self.intervaLe = QLineEdit('10')
         self.intervaLe.setFixedWidth(35)
-        gridLayout.addWidget(self.intervaLe, 0, 7)  # , Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervaLe, 0, 9)  # , Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 10, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotCompHist)
         self.plotBtn.setEnabled(False)
-        gridLayout.addWidget(self.plotBtn, 1, 7, 1 ,2)
+        gridLayout.addWidget(self.plotBtn, 1, 9, 1 ,2)
 
         # self.saveBtn = QPushButton()
         # self.saveBtn.setIcon(QIcon('icons/save.png'))
@@ -2575,6 +2582,7 @@ class CompHistWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
         interval = int(self.intervaLe.text())
+        plotType = self.plotTypeCmbx.currentText()
 
         if 'line' in actionType.split(' '):
             cls_obs = LinePassing
@@ -2615,8 +2623,8 @@ class CompHistWindow(QDialog):
 
         err = tempDistHist(transport, actionType, unitIdx, ax, [self.session1, self.session2],
                            bins=bins, alpha=0.7, color=['skyblue', 'red'],
-                           label=[label1, label2])
-        plt.legend(loc='upper right', fontsize=6)
+                           label=[label1, label2], plotType=plotType)
+
         if err != None:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -2730,7 +2738,29 @@ class genReportWindow(QDialog):
         #     end_time = bins[-1]
         self.indicatorsDf = generateReport(transport, actionType, unitIdx, interval, session)
 
-        model = dfTableModel(self.indicatorsDf)
+        norm_indDf = pd.DataFrame()
+        for i in range(self.indicatorsDf.shape[0]):
+            for j in range(self.indicatorsDf.shape[1]):
+                if j == 0:
+                    norm_indDf.loc[i, j] = None
+                    continue
+                val_str = str(self.indicatorsDf.iloc[i, j]).split(' ')[0]
+                if val_str.isdigit():
+                    value = int(val_str)
+                elif val_str.replace('.', '', 1).isdigit():
+                    value = float(val_str)
+                else:
+                    value = None
+                norm_indDf.loc[i, j] = value
+            min_val = np.nanmin(norm_indDf.loc[i, :])
+            max_val = np.nanmax(norm_indDf.loc[i, :])
+            range_val = max_val - min_val
+            if range_val != 0:
+                norm_indDf.loc[i, :] = norm_indDf.loc[i, :].apply(lambda x: (x - min_val)/range_val)
+            else:
+                norm_indDf.loc[i, :] = 0
+
+        model = dfTableModel(self.indicatorsDf, norm_indDf)
         self.table.setModel(model)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)#.Stretch)
 
@@ -3557,9 +3587,11 @@ class Worker(QObject):
 
 class dfTableModel(QAbstractTableModel):
 
-    def __init__(self, data):
+    def __init__(self, data, n_data=None, cmap='Wistia'):
         QAbstractTableModel.__init__(self)
         self._data = data
+        self.norm_data = n_data
+        self.cmap = matplotlib.cm.get_cmap(cmap)
 
     def rowCount(self, parent=None):
         return self._data.shape[0]
@@ -3574,15 +3606,26 @@ class dfTableModel(QAbstractTableModel):
             if role == Qt.TextAlignmentRole:
                 return Qt.AlignCenter
             if role == Qt.BackgroundRole:
-                if str(self._data.iloc[index.row(), index.column()])[0] == '-':
+                value = str(self._data.iloc[index.row(), index.column()])
+                if value[0] == '-':
                     return QColor(255, 204, 204)
-                elif str(self._data.iloc[index.row(), index.column()])[0] == '+':
+                elif value[0] == '+':
                     return QColor(204, 255, 204)
-                elif str(self._data.iloc[index.row(), index.column()])[0:3] == '0 [' or \
-                     str(self._data.iloc[index.row(), index.column()])[0:5] == '0.0 [':
+                elif value[0:3] == '0 [' or value[0:5] == '0.0 [':
                     return QColor(255, 255, 204)
-                elif str(self._data.iloc[index.row(), index.column()])[0] == 'x':
+                elif value[0] == 'x':
                     return QColor(244, 244, 244)
+
+                if not self.norm_data is None and index.column() > 0:
+                    norm_val = self.norm_data.iloc[index.row(), index.column()]
+                    if norm_val != None:
+                        rgba = self.cmap(norm_val)
+                        c = QColor()
+                        c.setRedF(rgba[0])
+                        c.setGreenF(rgba[1])
+                        c.setBlueF(rgba[2])
+                        return c
+
             if role == Qt.FontRole:
                 if index.column() == 0:
                     font = QFont()
