@@ -189,7 +189,7 @@ class ObsToolbox(QMainWindow):
 
         self.group_delGroupButton = QPushButton(QIcon('icons/delete.png'), 'Delete group')
         self.group_delGroupButton.setEnabled(False)
-        # self.group_delGroupButton.clicked.connect(self.group_delFromList_click)
+        self.group_delGroupButton.clicked.connect(self.group_delGroupBtn_click)
         group_grpBox_layout.addWidget(self.group_delGroupButton, 3, 2)
 
         # group_grpBox_wdgt.setLayout(group_grid_layout)
@@ -827,6 +827,7 @@ class ObsToolbox(QMainWindow):
         self.user_newGroupButton.setEnabled(False)
         self.user_newRecButton.setEnabled(True)
         self.group_delFromListButton.setEnabled(False)
+        self.group_delGroupButton.setEnabled(False)
         self.group_idx_cmbBox.setEnabled(False)
 
         btn_label = self.user_saveButton.text()
@@ -892,6 +893,7 @@ class ObsToolbox(QMainWindow):
         self.user_newGroupButton.setEnabled(not enable)
         self.user_newRecButton.setEnabled(enable)
         self.group_delFromListButton.setEnabled(enable)
+        self.group_delGroupButton.setEnabled(not enable)
         self.group_idx_cmbBox.setEnabled(not enable)
 
 
@@ -984,6 +986,53 @@ class ObsToolbox(QMainWindow):
 
         self.group_list_wdgt.takeItem(self.group_list_wdgt.row(current_item))
         self.groupPersons.pop(person_idx)
+
+    def group_delGroupBtn_click(self):
+        if self.act_list_wdgt.count() > 0:
+            for i in range(self.act_list_wdgt.count()):
+                self.act_delFromList_click()
+            self.act_newRecButton.setEnabled(True)
+            self.act_saveButton.setEnabled(False)
+            btn_label = self.act_saveButton.text()
+            self.act_saveButton.setText(btn_label.replace('Edit', 'Save'))
+            self.act_saveButton.setIcon(QIcon('icons/save.png'))
+
+        if self.zonepass_list_wdgt.count() > 0:
+            for i in range(self.zonepass_list_wdgt.count()):
+                self.zonepass_delFromList_click()
+            self.zonepass_newRecButton.setEnabled(True)
+            self.zonepass_saveButton.setEnabled(False)
+            btn_label = self.zonepass_saveButton.text()
+            self.zonepass_saveButton.setText(btn_label.replace('Edit', 'Save'))
+            self.zonepass_saveButton.setIcon(QIcon('icons/save.png'))
+
+        if self.linepass_list_wdgt.count() > 0:
+            for i in range(self.linepass_list_wdgt.count()):
+                self.linepass_delFromList_click()
+            self.linepass_newRecButton.setEnabled(True)
+            self.linepass_saveButton.setEnabled(False)
+            btn_label = self.linepass_saveButton.text()
+            self.linepass_saveButton.setText(btn_label.replace('Edit', 'Save'))
+            self.linepass_saveButton.setIcon(QIcon('icons/save.png'))
+
+        if self.group_list_wdgt.count() > 0:
+            for i in range(self.group_list_wdgt.count()):
+                self.group_delFromList_click()
+            # self.user_newGroupButton.setEnabled(True)
+            # self.user_newRecButton.setEnabled(False)
+            # self.user_saveButton.setEnabled(False)
+            # btn_label = self.user_saveButton.text()
+            # self.user_saveButton.setText(btn_label.replace('Edit', 'Save'))
+            # self.user_saveButton.setIcon(QIcon('icons/save.png'))
+
+        if self.group_idx_cmbBox.count() > 0:
+            group_idx = int(self.group_idx_cmbBox.currentText())
+            session.query(Group).filter(Group.idx == group_idx).delete()
+            session.commit()
+            self.groups.pop(group_idx)
+            self.group_idx_cmbBox.removeItem(self.group_idx_cmbBox.currentIndex())
+            if self.group_idx_cmbBox.count() == 0:
+                self.group_delGroupButton.setEnabled(False)
 
 
 
