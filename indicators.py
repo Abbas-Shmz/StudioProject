@@ -187,6 +187,9 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
             max_val = max([max(hist1), max(hist2)])
             ax.plot([min_val, max_val],[min_val, max_val], ls='--', lw=.5, c='k', alpha=.3)
 
+            m, b = np.polyfit(hist1, hist2, 1)
+            ax.plot(np.array(hist1), m * np.array(hist1) + b, ls='-', lw=.5, c='k', alpha=.5)
+
             corrcoef = round(np.corrcoef(hist1, hist2)[0, 1], 3)
             ax.text(0.9, 0.9, 'r = {}'.format(corrcoef),
                     fontsize=7, color='k',
