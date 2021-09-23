@@ -53,6 +53,7 @@ class ObsToolbox(QMainWindow):
         self.groupPersons = {} # {person_idx: [person, mode, vehicle]}
         self.groups = {}  # {group_idx: [group, {linepassings}, {zonepassings}, {Activities}]}
         self.IsChangedManually = True
+        self.traj_line = None
 
         global session
         self.dbFilename = '/Users/Abbas/AAAA/Stuart2019_iframework.sqlite'
@@ -400,10 +401,10 @@ class ObsToolbox(QMainWindow):
         # self.nextTrjBtn.setEnabled(False)
         traj_tab_editLayout.addWidget(self.nextTrjBtn, 0, 4)
 
-        self.saveTrjBtn = QPushButton('Load trajs')
-        self.saveTrjBtn.clicked.connect(self.saveTrajectories)
-        # self.saveTrjBtn.setEnabled(False)
-        traj_tab_editLayout.addWidget(self.saveTrjBtn, 0, 5)
+        self.loadTrjBtn = QPushButton('Load traj')
+        self.loadTrjBtn.clicked.connect(self.loadTrajectory)
+        # self.loadTrjBtn.setEnabled(False)
+        traj_tab_editLayout.addWidget(self.loadTrjBtn, 0, 5)
 
         traj_tab_editLayout.addWidget(QLabel('Line idx:'), 1, 0)
         self.refLineLe = QLineEdit('--')
@@ -423,9 +424,14 @@ class ObsToolbox(QMainWindow):
         traj_tab_editLayout.addWidget(self.userTypeCb, 2, 1, 1, 4)
 
         self.groupSizeCb = QComboBox()
-        self.groupSizeCb.addItems(['1', '2', '3', '4', '5', '6', '7', '8'])
+        self.groupSizeCb.addItems(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+        self.groupSizeCb.setToolTip('Group size')
         self.groupSizeCb.currentIndexChanged.connect(self.groupSizeChanged)
         traj_tab_editLayout.addWidget(self.groupSizeCb, 2, 5)
+
+        self.saveTrjsBtn = QPushButton('Save')
+        self.saveTrjsBtn.clicked.connect(self.saveTrajectories)
+        traj_tab_editLayout.addWidget(self.saveTrjsBtn, 3, 5)
 
         self.figure = plt.figure(tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
@@ -518,6 +524,8 @@ class ObsToolbox(QMainWindow):
         self.canvas.draw()
 
     def nextTrajectory(self):
+        if self.traj_line == None:
+            return
         traj_ids = [k for k in self.traj_line.keys()]
         if traj_ids == []:
             return
@@ -538,21 +546,22 @@ class ObsToolbox(QMainWindow):
             current_line.set_visible(False)
             next_idx = traj_ids[traj_ids.index(current_idx) + 1]
 
-        if self.traj_line[next_idx][2][6] != None:
-            self.saveTrjBtn.setEnabled(False)
+        if not self.traj_line[next_idx][2][6] in [None, -1]:
+            self.loadTrjBtn.setEnabled(False)
         else:
-            self.saveTrjBtn.setEnabled(True)
+            self.loadTrjBtn.setEnabled(True)
 
         self.trjIdxLe.setText(next_idx)
         next_traj = self.traj_line[next_idx][0]
         next_line = self.traj_line[next_idx][1]
         next_line.set_visible(True)
         self.userTypeCb.setCurrentIndex(next_traj.userType)
-        self.groupSizeCb.setCurrentIndex(self.traj_line[next_idx][2][5] - 1)
+        self.groupSizeCb.setCurrentIndex(next_traj.nObjects - 1)
         self.canvas.draw()
 
         if self.traj_line[next_idx][2][0] == -1:
             self.traj_line[next_idx][2][0] = next_traj.userType
+            self.traj_line[next_idx][2][6] = -1
             homography = np.loadtxt(self.homoFile, delimiter=' ')
             for line in q_line.all():
                 points = np.array([[line.points[0].x, line.points[1].x],
@@ -586,6 +595,8 @@ class ObsToolbox(QMainWindow):
             self.refLineLe.setText(str(self.traj_line[next_idx][2][1][0].idx))
 
     def prevTrajectory(self):
+        if self.traj_line == None:
+            return
         traj_ids = [k for k in self.traj_line.keys()]
         if traj_ids == []:
             return
@@ -605,10 +616,10 @@ class ObsToolbox(QMainWindow):
 
         prev_idx = traj_ids[traj_ids.index(current_idx) - 1]
 
-        if self.traj_line[prev_idx][2][6] != None:
-            self.saveTrjBtn.setEnabled(False)
+        if not self.traj_line[prev_idx][2][6] in [None, -1]:
+            self.loadTrjBtn.setEnabled(False)
         else:
-            self.saveTrjBtn.setEnabled(True)
+            self.loadTrjBtn.setEnabled(True)
 
         self.trjIdxLe.setText(prev_idx)
         prev_traj = self.traj_line[prev_idx][0]
@@ -659,8 +670,10 @@ class ObsToolbox(QMainWindow):
         self.ax.lines.remove(delete_line)
         self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
 
-    def saveTrajectories(self):
+    def loadTrajectory(self):
         if self.mdbFileLedit.text() == '':
+            return
+        if self.traj_line == None:
             return
 
         # msg = QMessageBox()
@@ -672,11 +685,11 @@ class ObsToolbox(QMainWindow):
         # streetUserObjects = []
         # no_users = 0
         # for trj_idx in range(len(self.traj_line)):
-        self.saveTrjBtn.setEnabled(False)
+        self.loadTrjBtn.setEnabled(False)
         trj_idx = self.trjIdxLe.text()
         userType = self.traj_line[trj_idx][2][0]
         lines = self.traj_line[trj_idx][2][1]
-        if userType != -1 and userType != 0 and lines != []:
+        if userType != -1 and userType != 0:# and lines != []:
             self.user_newGroup_click()
             group_idx = int(self.group_idx_cmbBox.currentText())
             self.traj_line[trj_idx][2][6] = group_idx
@@ -733,14 +746,33 @@ class ObsToolbox(QMainWindow):
         self.group_idx_cmbBox.setCurrentIndex(-1)
         self.group_idx_cmbBox.setCurrentText(str(group_idx))
 
-            # streetUserObjects = streetUserObjects + creatStreetusers(userType, lines, instants, speeds, groupSize)
-            # no_users += 1
 
-        # session.add_all(streetUserObjects)
-        # session.commit()
-        # session.close()
-        #
-        # QMessageBox.information(self, 'Import!', 'No. of imported street users: {}'.format(no_users))
+    def saveTrajectories(self):
+        trj_con = sqlite3.connect(self.trjDBFile)
+        trj_cur = trj_con.cursor()
+        for traj_idx in self.traj_line.keys():
+
+            if self.traj_line[traj_idx][2][0] != -1:
+                userType = self.traj_line[traj_idx][2][0]
+                groupSize = self.traj_line[traj_idx][2][5]
+                trj_cur.execute('UPDATE objects SET road_user_type=?, n_objects=? WHERE object_id=?',
+                    (userType, groupSize, traj_idx))
+
+            if self.traj_line[traj_idx][2][6] == -1:
+                trj_cur.execute('DELETE FROM objects WHERE object_id=?', (traj_idx,))
+
+                trj_cur.execute('SELECT trajectory_id FROM objects_features WHERE object_id=?', (traj_idx,))
+                traj_id_rows = trj_cur.fetchall()
+                trj_del_tuple_list = []
+                for trj_id_row in traj_id_rows:
+                    trj_del_tuple_list.append((trj_id_row[0],))
+
+                trj_cur.executemany('DELETE FROM positions WHERE trajectory_id=?', trj_del_tuple_list)
+                trj_cur.executemany('DELETE FROM velocities WHERE trajectory_id=?', trj_del_tuple_list)
+                trj_cur.execute('DELETE FROM objects_features WHERE object_id=?', (traj_idx,))
+
+        trj_con.commit()
+
 
     def userTypeChanged(self):
         current_idx = self.trjIdxLe.text()
@@ -3220,7 +3252,7 @@ class plotTrajWindow(QDialog):
 
         self.saveTrjBtn = QPushButton('Load trajs')
         self.saveTrjBtn.clicked.connect(self.saveTrajectories)
-        # self.saveTrjBtn.setEnabled(False)
+        # self.loadTrjBtn.setEnabled(False)
         editLayout.addWidget(self.saveTrjBtn, 3, 0)
 
         # winLayout.addWidget(self.toolbar)

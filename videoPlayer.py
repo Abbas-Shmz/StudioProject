@@ -632,14 +632,17 @@ class VideoWindow(QMainWindow):
         pointBbx.setSize(QSizeF(self.gView.labelSize, self.gView.labelSize))
         pointBbx.moveCenter(QPointF(np.mean(xs), np.mean(ys)))
 
+        textLabel = QGraphicsTextItem(str(text))
+
         if len(xs) == 1:
             pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = Qt.white
             textColor = Qt.black
-        elif len(xs) ==2:
+        elif len(xs) == 2:
             pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = Qt.black
             textColor = Qt.white
+            # textLabel.setRotation(np.arctan((ys[1] - ys[0])/(xs[1] - xs[0]))*(180/3.14))
         else:
             pointShape = QGraphicsRectItem(pointBbx)
             shapeColor = Qt.darkBlue
@@ -648,14 +651,16 @@ class VideoWindow(QMainWindow):
         pointShape.setBrush(QBrush(shapeColor))
         # self.gView.scene().addEllipse(pointBbx, QPen(Qt.white, 0.5), QBrush(Qt.black))
         gItemGroup.addToGroup(pointShape)
-        textLabel = QGraphicsTextItem(str(text))
+
         labelFont = QFont()
         labelFont.setPointSize(round(self.gView.labelSize/2))
         labelFont.setBold(True)
+
         textLabel.setFont(labelFont)
         textLabel.setDefaultTextColor(textColor)
         textLabel.setPos(np.mean(xs) - (textLabel.boundingRect().width() / 2),
                          np.mean(ys) - (textLabel.boundingRect().height() / 2))
+
         gItemGroup.addToGroup(textLabel)
         return gItemGroup
 
