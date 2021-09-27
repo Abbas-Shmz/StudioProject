@@ -56,17 +56,17 @@ class ObsToolbox(QMainWindow):
         self.traj_line = None
 
         global session
-        self.dbFilename = '/Users/Abbas/AAAA/Stuart2019_iframework.sqlite'
+        self.dbFilename = None #'/Users/Abbas/AAAA/Stuart2019_iframework.sqlite'
 
         layout = QVBoxLayout() #QGridLayout()
 
         #--------------------------------------------
-        self.setWindowTitle(os.path.basename(self.dbFilename))
-
-        session = createDatabase(self.dbFilename)
-
-        if session is None:
-            session = connectDatabase(self.dbFilename)
+        # self.setWindowTitle(os.path.basename(self.dbFilename))
+        #
+        # session = createDatabase(self.dbFilename)
+        #
+        # if session is None:
+        #     session = connectDatabase(self.dbFilename)
         #-----------------------------------------------
 
         # styleSheet = """
@@ -90,7 +90,7 @@ class ObsToolbox(QMainWindow):
         self.toolbox.setStyleSheet(styleSheet)
         layout.addWidget(self.toolbox)#, 0, 0)
 
-        self.openAction = QAction(QIcon('icons/database.png'), '&Open database file', self)
+        self.openAction = QAction(QIcon('icons/database.png'), '&Create/Open iFramework database', self)
         self.openAction.setShortcut('Ctrl+O')
         self.openAction.setStatusTip('Open database file')
         self.openAction.triggered.connect(self.opendbFile)
@@ -134,9 +134,9 @@ class ObsToolbox(QMainWindow):
         self.toolbar.setIconSize(QSize(24, 24))
         self.toolbar.addAction(self.openAction)
         self.toolbar.addAction(tempHistAction)
-        self.toolbar.addAction(stackHistAction)
+        # self.toolbar.addAction(stackHistAction)
         self.toolbar.addAction(speedPlotAction)
-        self.toolbar.addAction(odMatrixAction)
+        # self.toolbar.addAction(odMatrixAction)
         self.toolbar.addAction(pieChartAction)
         self.toolbar.addAction(modeChartAction)
         self.toolbar.addAction(compHistAction)
@@ -454,6 +454,10 @@ class ObsToolbox(QMainWindow):
 
     # ------------ TI Trajectory buttons ------------------
     def plotItems(self):
+        if self.dbFilename == None:
+            QMessageBox.information(self, 'Error!',
+                'The iFramework database is not defined. First use open/create database tool.')
+            return
         if self.mdbFileLedit.text() == '' or self.trjDbCombobx.currentText() == '':
             return
 
@@ -483,12 +487,13 @@ class ObsToolbox(QMainWindow):
             return
 
         trjDbName = self.trjDbCombobx.currentText()
-        self.cur.execute('SELECT name, startTime From video_sequences WHERE databaseFilename=?',
+        self.cur.execute('SELECT name, startTime, idx From video_sequences WHERE databaseFilename=?',
                          (self.dateStr + '/' + trjDbName,))
         row = self.cur.fetchall()
         video_name = Path(row[0][0])
         video_start_0 = datetime.datetime.strptime(row[0][1], '%Y-%m-%d %H:%M:%S.%f')
         self.video_start = video_start_0.replace(microsecond=0)
+        self.trjDbIdx = row[0][2]
 
         video_file = site_folder/video_name
         if video_file.exists():
@@ -594,6 +599,13 @@ class ObsToolbox(QMainWindow):
         else:
             self.refLineLe.setText(str(self.traj_line[next_idx][2][1][0].idx))
 
+
+        if self.traj_line[next_idx][2][6] == -1:
+            self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+        elif self.traj_line[next_idx][2][6] > -1:
+            self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+
+
     def prevTrajectory(self):
         if self.traj_line == None:
             return
@@ -608,6 +620,7 @@ class ObsToolbox(QMainWindow):
             for line in [tl[1] for tl in self.traj_line.values()]:
                 line.set_visible(True)
             self.trjIdxLe.setText('-1')
+            self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
             self.canvas.draw()
             return
 
@@ -654,6 +667,12 @@ class ObsToolbox(QMainWindow):
 
         self.parent().mediaPlayer.setPosition(mil_secs)
 
+        if prev_idx != '-1':
+            if self.traj_line[prev_idx][2][6] == -1:
+                self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+            elif self.traj_line[prev_idx][2][6] > -1:
+                self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+
     def delTrajectory(self):
         delete_idx = int(self.trjIdxLe.text())
         delete_line = self.traj_line[delete_idx][1]
@@ -694,6 +713,9 @@ class ObsToolbox(QMainWindow):
             group_idx = int(self.group_idx_cmbBox.currentText())
             self.traj_line[trj_idx][2][6] = group_idx
             groupSize = self.traj_line[trj_idx][2][5]
+            group = self.groups[group_idx][0]
+            group.trajectoryDB = self.trjDbIdx
+            group.trajectoryIdx = trj_idx
             for i in range(groupSize):
                 self.user_newRecBtn_click()
                 person_idx = int(self.group_list_wdgt.currentItem().text())
@@ -745,9 +767,14 @@ class ObsToolbox(QMainWindow):
             self.linepass_saveBtn_click()
         self.group_idx_cmbBox.setCurrentIndex(-1)
         self.group_idx_cmbBox.setCurrentText(str(group_idx))
+        self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
 
     def saveTrajectories(self):
+        if self.mdbFileLedit.text() == '':
+            return
+        if self.traj_line == None:
+            return
         trj_con = sqlite3.connect(self.trjDBFile)
         trj_cur = trj_con.cursor()
         for traj_idx in self.traj_line.keys():
@@ -856,6 +883,10 @@ class ObsToolbox(QMainWindow):
 
     #--------------- Road user buttons --------------------
     def user_newGroup_click(self):
+        if self.dbFilename == None:
+            QMessageBox.information(self, 'Error!',
+                'The iFramework database is not defined. First use open/create database tool.')
+            return
         self.user_newGroupButton.setEnabled(False)
         self.user_newRecButton.setEnabled(True)
         self.group_delFromListButton.setEnabled(False)

@@ -46,6 +46,8 @@ class Mode(Base):
 class Group(Base):
     __tablename__ = 'groups'
     idx = Column(Integer, primary_key=True)
+    trajectoryDB = Column(String)
+    trajectoryIdx = Column(String)
     
     def __init__(self, persons):
         for p in persons:
