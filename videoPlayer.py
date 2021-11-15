@@ -8,7 +8,7 @@ from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
         QGraphicsLineItem, QGraphicsTextItem, QGraphicsEllipseItem, QGridLayout, QComboBox,
-        QOpenGLWidget, QMessageBox, QActionGroup, QGraphicsRectItem)
+        QOpenGLWidget, QMessageBox, QActionGroup, QGraphicsRectItem, QGraphicsPolygonItem, QListWidgetItem)
 from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
                              QLineEdit, QGraphicsItem, QGraphicsItemGroup)
 from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor, QPolygonF
@@ -27,6 +27,7 @@ from iframework import connectDatabase, Point, Line, Zone
 from indicators import getVideoMetadata
 
 from observationToolbox import ObsToolbox
+import observationToolbox
 
 class GraphicView(QGraphicsView):
     def __init__(self, *args, **kwargs):
@@ -45,8 +46,8 @@ class GraphicView(QGraphicsView):
         # self.setMouseTracking(True)
 
     def mousePressEvent(self, event):
-        if event.buttons() == Qt.LeftButton and self.parent().parent().drawLineAction.isChecked() \
-                 and self.gLineItem == None:
+        if event.buttons() == Qt.LeftButton and (self.parent().parent().drawLineAction.isChecked() \
+                 or self.parent().parent().obsTb.line_newRecButton.isChecked()) and self.gLineItem == None:
 
             self.setMouseTracking(True)
             p1 = self.mapToScene(event.x(), event.y())
@@ -55,7 +56,8 @@ class GraphicView(QGraphicsView):
             self.gLineItem.setPen(QPen(QColor(r, g, b), self.labelSize/6))
             # self.gLineItem.setOpacity(0.25)
 
-        elif event.buttons() == Qt.LeftButton and self.parent().parent().drawZoneAction.isChecked():
+        elif event.buttons() == Qt.LeftButton and (self.parent().parent().maskGenAction.isChecked() \
+                or self.parent().parent().obsTb.zone_newRecButton.isChecked()):
             self.setMouseTracking(True)
             p_clicked = self.mapToScene(event.x(), event.y())
             if self.gPolyItem == None:
@@ -83,11 +85,13 @@ class GraphicView(QGraphicsView):
             self.parent().parent().play()
 
     def mouseMoveEvent(self, event):
-        if self.gLineItem != None and self.parent().parent().drawLineAction.isChecked():
+        if self.gLineItem != None and (self.parent().parent().drawLineAction.isChecked() \
+                or self.parent().parent().obsTb.line_newRecButton.isChecked()):
             p2 = self.mapToScene(event.x(), event.y())
             self.gLineItem.setLine(QLineF(self.gLineItem.line().p1(), p2))
 
-        elif self.gPolyItem != None and self.parent().parent().drawZoneAction.isChecked():
+        elif self.gPolyItem != None and (self.parent().parent().maskGenAction.isChecked() \
+                or self.parent().parent().obsTb.zone_newRecButton.isChecked()):
             p_floating = self.mapToScene(event.x(), event.y())
             self.gPolyItem.setPolygon(QPolygonF(list(self.currentPoly) + [p_floating]))
 
@@ -98,19 +102,64 @@ class GraphicView(QGraphicsView):
         self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
 
     def mouseDoubleClickEvent(self, event):
-        if self.parent().parent().drawLineAction.isChecked() and self.gLineItem != None:
+        if self.gLineItem != None and (self.parent().parent().drawLineAction.isChecked() \
+                or self.parent().parent().obsTb.line_newRecButton.isChecked()):
             self.setMouseTracking(False)
             self.parent().parent().drawLineAction.setChecked(False)
+            self.parent().parent().obsTb.line_newRecButton.setChecked(False)
             self.unsavedLines.append(self.gLineItem)
             self.unsetCursor()
+
+            x1 = round(self.gLineItem.line().x1(), 2)
+            y1 = round(self.gLineItem.line().y1(), 2)
+            x2 = round(self.gLineItem.line().x2(), 2)
+            y2 = round(self.gLineItem.line().y2(), 2)
+            line = Line(None, None, x1, y1, x2, y2)
+            observationToolbox.session.add(line)
+            observationToolbox.session.flush()
+
+            itmGroup = self.parent().parent().generate_itemGroup([x1, x2], [y1, y2], str(line.idx), None)
+            self.scene().addItem(itmGroup)
+
+            new_item = QListWidgetItem(str(line.idx))
+            self.parent().parent().obsTb.line_list_wdgt.addItem(new_item)
+            self.parent().parent().obsTb.line_list_wdgt.setCurrentItem(new_item)
+            self.parent().parent().obsTb.init_input_widgets(self.parent().parent().obsTb.line_grpBox)
+
             self.gLineItem = None
 
-        elif self.parent().parent().drawZoneAction.isChecked() and self.gPolyItem != None:
+        elif self.gPolyItem != None and (self.parent().parent().maskGenAction.isChecked() \
+                or self.parent().parent().obsTb.zone_newRecButton.isChecked()):
             self.setMouseTracking(False)
-            self.parent().parent().drawZoneAction.setChecked(False)
+            self.parent().parent().obsTb.zone_newRecButton.setChecked(False)
             self.gPolyItem.setPolygon(self.currentPoly)
             self.unsavedZones.append(self.gPolyItem)
             self.unsetCursor()
+
+            if self.parent().parent().maskGenAction.isChecked():
+                self.parent().parent().maskGenAction.setChecked(False)
+                # self.scene().addItem(self.gPolyItem)
+                self.parent().parent().saveMaskFile()
+                self.gPolyItem = None
+                return
+
+            xs = []
+            ys = []
+            for p in self.gPolyItem.polygon():
+                xs.append(round(p.x(), 2))
+                ys.append(round(p.y(), 2))
+            zone = Zone(None, None, xs, ys)
+            observationToolbox.session.add(zone)
+            observationToolbox.session.flush()
+
+            itmGroup = self.parent().parent().generate_itemGroup(xs, ys, str(zone.idx), None)
+            self.scene().addItem(itmGroup)
+
+            new_item = QListWidgetItem(str(zone.idx))
+            self.parent().parent().obsTb.zone_list_wdgt.addItem(new_item)
+            self.parent().parent().obsTb.zone_list_wdgt.setCurrentItem(new_item)
+            self.parent().parent().obsTb.init_input_widgets(self.parent().parent().obsTb.zone_grpBox)
+
             self.gPolyItem = None
         else:
             self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
@@ -220,6 +269,8 @@ class VideoWindow(QMainWindow):
 
         self.maskGenAction = QAction(QIcon('icons/mask.png'), 'Generate mask file', self)
         self.maskGenAction.setStatusTip('Generate mask file for TrafficIntelligence')
+        self.maskGenAction.setCheckable(True)
+        self.maskGenAction.setEnabled(False)
         self.maskGenAction.triggered.connect(self.generateMask)
 
         actionGroup = QActionGroup(self)
@@ -267,14 +318,14 @@ class VideoWindow(QMainWindow):
         self.toolbar.addAction(self.saveProjectAction)
         self.toolbar.addAction(self.openVideoAction)
 
-        self.toolbar.insertSeparator(self.loadGraphAction)
-        self.toolbar.addAction(self.loadGraphAction)
-        self.toolbar.addAction(self.saveGraphAction)
-        self.toolbar.addAction(self.drawPointAction)
-        self.toolbar.addAction(self.drawLineAction)
-        self.toolbar.addAction(self.drawZoneAction)
+        # self.toolbar.insertSeparator(self.loadGraphAction)
+        # self.toolbar.addAction(self.loadGraphAction)
+        # self.toolbar.addAction(self.saveGraphAction)
+        # self.toolbar.addAction(self.drawPointAction)
+        # self.toolbar.addAction(self.drawLineAction)
+        # self.toolbar.addAction(self.drawZoneAction)
         self.toolbar.addAction(self.maskGenAction)
-        self.toolbar.insertSeparator(self.drawPointAction)
+        # self.toolbar.insertSeparator(self.drawPointAction)
 
 
         self.toolbar.insertSeparator(obsTbAction)
@@ -320,11 +371,12 @@ class VideoWindow(QMainWindow):
             self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
                                                  os.path.basename(self.projectFile)))
             self.saveProjectAction.setEnabled(True)
-            self.loadGraphAction.setEnabled(True)
-            self.saveGraphAction.setEnabled(True)
-            self.drawPointAction.setEnabled(True)
-            self.drawLineAction.setEnabled(True)
-            self.drawZoneAction.setEnabled(True)
+            self.maskGenAction.setEnabled(True)
+            # self.loadGraphAction.setEnabled(True)
+            # self.saveGraphAction.setEnabled(True)
+            # self.drawPointAction.setEnabled(True)
+            # self.drawLineAction.setEnabled(True)
+            # self.drawZoneAction.setEnabled(True)
 
             creation_datetime, width, height = getVideoMetadata(self.videoFile)
             self.videoStartDatetime = self.videoCurrentDatetime = creation_datetime
@@ -409,25 +461,32 @@ class VideoWindow(QMainWindow):
         self.gView.setCursor(cursor)
 
     def generateMask(self):
-        dbfilename = self.obsTb.dbFilename
-        if dbfilename != None:
-            self.session = connectDatabase(dbfilename)
-        else:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText('The database file is not defined.')
-            msg.setInformativeText('In order to set the database file, open the Observation Toolbox')
-            msg.setIcon(QMessageBox.Critical)
-            msg.exec_()
+        if not self.sender().isChecked():
+            self.gView.unsetCursor()
             return
+        cursor = QCursor(Qt.CrossCursor)
+        self.gView.setCursor(cursor)
 
-        if self.gView.unsavedLines == [] and self.gView.unsavedZones == [] and \
-                self.gView.unsavedPoints == []:
-            QMessageBox.information(self, 'Save', 'There is no polygon to generate mask!')
-            return
+        # dbfilename = self.obsTb.dbFilename
+        # if dbfilename != None:
+        #     self.session = connectDatabase(dbfilename)
+        # else:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Information)
+        #     msg.setText('The database file is not defined.')
+        #     msg.setInformativeText('In order to set the database file, open the Observation Toolbox')
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.exec_()
+        #     return
 
+        # if self.gView.unsavedLines == [] and self.gView.unsavedZones == [] and \
+        #         self.gView.unsavedPoints == []:
+        #     QMessageBox.information(self, 'Save', 'There is no polygon to generate mask!')
+        #     return
+
+    def saveMaskFile(self):
         creation_datetime, width, height = getVideoMetadata(self.videoFile)
-        item = self.gView.unsavedZones[0]
+        item = self.gView.gPolyItem #self.gView.unsavedZones[0]
         mask_polygon = item.polygon()
         xy = []
         for p in mask_polygon:
@@ -454,11 +513,12 @@ class VideoWindow(QMainWindow):
             return
 
         self.saveProjectAction.setEnabled(True)
-        self.loadGraphAction.setEnabled(True)
-        self.saveGraphAction.setEnabled(True)
-        self.drawPointAction.setEnabled(True)
-        self.drawLineAction.setEnabled(True)
-        self.drawZoneAction.setEnabled(True)
+        self.maskGenAction.setEnabled(True)
+        # self.loadGraphAction.setEnabled(True)
+        # self.saveGraphAction.setEnabled(True)
+        # self.drawPointAction.setEnabled(True)
+        # self.drawLineAction.setEnabled(True)
+        # self.drawZoneAction.setEnabled(True)
 
         tree = ET.parse(self.projectFile)
         root = tree.getroot()
@@ -585,10 +645,10 @@ class VideoWindow(QMainWindow):
             y1 = round(item.line().y1(), 2)
             x2 = round(item.line().x2(), 2)
             y2 = round(item.line().y2(), 2)
-            line = Line(x1, y1, x2, y2)
+            line = Line(None, None, x1, y1, x2, y2)
             self.session.add(line)
             self.session.flush()
-            label = self.generate_label([x1, x2], [y1, y2], line.idx)
+            label = self.generate_itemGroup([x1, x2], [y1, y2], line.idx)
             self.gView.scene().addItem(label)
 
         for item in self.gView.unsavedZones:
@@ -597,11 +657,11 @@ class VideoWindow(QMainWindow):
             for p in item.polygon():
                 xs.append(round(p.x(), 2))
                 ys.append(round(p.y(), 2))
-            zone = Zone(xs, ys)
+            zone = Zone(None, None, xs, ys)
             self.session.add(zone)
             self.session.flush()
 
-            label = self.generate_label(xs, ys, zone.idx)
+            label = self.generate_itemGroup(xs, ys, zone.idx)
             self.gView.scene().addItem(label)
 
         for item in self.gView.unsavedPoints:
@@ -612,7 +672,7 @@ class VideoWindow(QMainWindow):
             self.session.add(point)
             self.session.flush()
 
-            label = self.generate_label([x], [y], point.idx)
+            label = self.generate_itemGroup([x], [y], point.idx)
             self.gView.scene().removeItem(item)
             self.gView.scene().addItem(label)
 
@@ -626,30 +686,49 @@ class VideoWindow(QMainWindow):
 
         self.session.commit()
 
-    def generate_label(self, xs, ys, text):
+    def generate_itemGroup(self, xs, ys, label, type):
         gItemGroup = QGraphicsItemGroup()
+
         pointBbx = QRectF()
         pointBbx.setSize(QSizeF(self.gView.labelSize, self.gView.labelSize))
         pointBbx.moveCenter(QPointF(np.mean(xs), np.mean(ys)))
 
-        textLabel = QGraphicsTextItem(str(text))
+        textLabel = QGraphicsTextItem(label)
 
         if len(xs) == 1:
             pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = Qt.white
             textColor = Qt.black
+            tooltip = 'P{}:{}'
         elif len(xs) == 2:
+            r, g, b = np.random.choice(range(256), size=3)
+            line_item = QGraphicsLineItem(xs[0], ys[0], xs[1], ys[1])
+            line_item.setPen(QPen(QColor(r, g, b), self.gView.labelSize / 6))
+            gItemGroup.addToGroup(line_item)
+
             pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = Qt.black
             textColor = Qt.white
+            tooltip = 'L{}:{}'
             # textLabel.setRotation(np.arctan((ys[1] - ys[0])/(xs[1] - xs[0]))*(180/3.14))
         else:
+            points = [QPointF(x, y) for x, y in zip(xs, ys)]
+            polygon = QPolygonF(points)
+            r, g, b = np.random.choice(range(256), size=3)
+            zone_item = QGraphicsPolygonItem(polygon)
+            zone_item.setPen(QPen(QColor(r, g, b), self.gView.labelSize / 10))
+            zone_item.setBrush(QBrush(QColor(r, g, b, 40)))
+            gItemGroup.addToGroup(zone_item)
+
             pointShape = QGraphicsRectItem(pointBbx)
             shapeColor = Qt.darkBlue
             textColor = Qt.white
+            tooltip = 'Z{}:{}'
+
         pointShape.setPen(QPen(Qt.white, 0.5))
         pointShape.setBrush(QBrush(shapeColor))
         # self.gView.scene().addEllipse(pointBbx, QPen(Qt.white, 0.5), QBrush(Qt.black))
+        gItemGroup.setToolTip(tooltip.format(label, type))
         gItemGroup.addToGroup(pointShape)
 
         labelFont = QFont()
@@ -677,33 +756,59 @@ class VideoWindow(QMainWindow):
             msg.exec_()
             return
 
+        for gitem in self.gView.scene().items():
+            if isinstance(gitem, QGraphicsItemGroup):
+                self.gView.scene().removeItem(gitem)
+
         q_line = self.session.query(Line)
         q_zone = self.session.query(Zone)
         if q_line.all() == [] and q_zone.all() == []:
             QMessageBox.information(self, 'Warning!', 'There is no graphics to load!')
             return
 
+        line_items = []
         for line in q_line:
             p1 = line.points[0]
             p2 = line.points[1]
-            r, g, b = np.random.choice(range(256), size=3)
-            self.gScene.addLine(p1.x, p1.y, p2.x, p2.y, QPen(QColor(r, g, b),
-                                                             self.gView.labelSize/6))
 
-            label = self.generate_label([p1.x, p2.x], [p1.y, p2.y], line.idx)
-            self.gScene.addItem(label)
+            if line.type != None:
+                lineType = line.type.name
+            else:
+                lineType = None
+            gItmGroup = self.generate_itemGroup([p1.x, p2.x], [p1.y, p2.y], str(line.idx), lineType)
+            self.gScene.addItem(gItmGroup)
 
+            line_items.append(str(line.idx))
+
+        self.obsTb.line_list_wdgt.clear()
+        self.obsTb.line_list_wdgt.addItems(line_items)
+        self.obsTb.line_list_wdgt.setCurrentRow(0)
+
+        self.obsTb.line_newRecButton.setEnabled(False)
+        self.obsTb.line_saveButton.setEnabled(True)
+        self.obsTb.line_saveButton.setText('Edit line(s)')
+        self.obsTb.line_saveButton.setIcon(QIcon('icons/edit.png'))
+
+        zone_items = []
         for zone in q_zone:
-            points = [QPointF(point.x, point.y) for point in zone.points]
-            polygon = QPolygonF(points)
-            r, g, b = np.random.choice(range(256), size=3)
-            self.gScene.addPolygon(polygon, QPen(QColor(r, g, b), self.gView.labelSize/10),
-                                   QBrush(QColor(r, g, b, 40)))
+            if zone.type != None:
+                zoneType = zone.type.name
+            else:
+                zoneType = None
+            gItmGroup = self.generate_itemGroup([point.x for point in zone.points], [point.y for point in zone.points],
+                                                str(zone.idx), zoneType)
+            self.gScene.addItem(gItmGroup)
 
-            label = self.generate_label([point.x for point in zone.points],
-                                        [point.y for point in zone.points], zone.idx)
-            self.gScene.addItem(label)
+            zone_items.append(str(zone.idx))
 
+        self.obsTb.zone_list_wdgt.clear()
+        self.obsTb.zone_list_wdgt.addItems(zone_items)
+        self.obsTb.zone_list_wdgt.setCurrentRow(0)
+
+        self.obsTb.zone_newRecButton.setEnabled(False)
+        self.obsTb.zone_saveButton.setEnabled(True)
+        self.obsTb.zone_saveButton.setText('Edit zone(s)')
+        self.obsTb.zone_saveButton.setIcon(QIcon('icons/edit.png'))
 
 
     @staticmethod

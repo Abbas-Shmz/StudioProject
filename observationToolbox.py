@@ -11,14 +11,14 @@ from configparser import ConfigParser
 from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
-                             QFileDialog, QToolBar, QMessageBox, QDialog, QLabel,
+                             QFileDialog, QToolBar, QMessageBox, QDialog, QLabel, QGraphicsItemGroup,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
                              QAbstractItemView, QTableView, QListWidget, QListWidgetItem)
-from PyQt5.QtGui import QColor, QIcon, QFont
+from PyQt5.QtGui import QColor, QIcon, QFont, QCursor
 from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObject, QThread, pyqtSignal
 
 from iframework import createDatabase, connectDatabase, Person, Mode, Group, GroupBelonging, Vehicle,\
-    Activity, LinePassing, ZonePassing, Point, Line, Zone
+    Activity, LinePassing, ZoneCrossing, Point, Line, Zone, pointLineAssociation
 
 import matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -37,6 +37,7 @@ from sqlalchemy import Enum, Boolean, DateTime
 from sqlalchemy.inspection import inspect
 from sqlalchemy import func
 
+global session
 session = None
 
 config_object = ConfigParser()
@@ -51,11 +52,11 @@ class ObsToolbox(QMainWindow):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.groupPersons = {} # {person_idx: [person, mode, vehicle]}
-        self.groups = {}  # {group_idx: [group, {linepassings}, {zonepassings}, {Activities}]}
+        self.groups = {}  # {group_idx: [group, {linepassings}, {ZoneCrossings}, {Activities}]}
         self.IsChangedManually = True
         self.traj_line = None
 
-        global session
+        # global session
         self.dbFilename = None #'/Users/Abbas/AAAA/Stuart2019_iframework.sqlite'
 
         layout = QVBoxLayout() #QGridLayout()
@@ -262,19 +263,19 @@ class ObsToolbox(QMainWindow):
         linepass_tab_wdgt.setLayout(linepass_tab_layout)
         self.toolbox.addItem(linepass_tab_wdgt, QIcon('icons/linePassing.png'), 'Line Passing')
 
-        # ------------------ ZonePassing tab --------------------------
+        # ------------------ ZoneCrossing tab --------------------------
         zonepass_tab_wdgt = QWidget()
         zonepass_tab_layout = QVBoxLayout()
         zonepass_listGrpB_layout = QVBoxLayout()
         zonepass_newBtnsLayout = QHBoxLayout()
         zonepass_saveBtnsLayout = QHBoxLayout()
 
-        self.zonepass_newRecButton = QPushButton(QIcon('icons/new.png'), 'New zone passing')
+        self.zonepass_newRecButton = QPushButton(QIcon('icons/new.png'), 'New zone crossing')
         self.zonepass_newRecButton.clicked.connect(self.zonepass_newRecBtn_click)
         zonepass_newBtnsLayout.addWidget(self.zonepass_newRecButton)
         zonepass_tab_layout.addLayout(zonepass_newBtnsLayout)
 
-        self.zonepass_listGrpBox = QGroupBox('Zone passings')
+        self.zonepass_listGrpBox = QGroupBox('Zone crossings')
         # self.zonepass_listGrpBox.setEnabled(False)
 
         self.zonepass_list_wdgt = QListWidget()
@@ -284,22 +285,22 @@ class ObsToolbox(QMainWindow):
         self.zonepass_listGrpBox.setLayout(zonepass_listGrpB_layout)
         zonepass_tab_layout.addWidget(self.zonepass_listGrpBox)
 
-        self.zonepass_delFromListButton = QPushButton(QIcon('icons/delete.png'), 'Delete selected zonepassing')
+        self.zonepass_delFromListButton = QPushButton(QIcon('icons/delete.png'), 'Delete selected ZoneCrossing')
         self.zonepass_delFromListButton.setEnabled(False)
         self.zonepass_delFromListButton.clicked.connect(self.zonepass_delFromList_click)
         zonepass_listGrpB_layout.addWidget(self.zonepass_delFromListButton)
 
-        self.zonepass_grpBox = self.generateWidgets(ZonePassing, 'NoPrFo', False)
+        self.zonepass_grpBox = self.generateWidgets(ZoneCrossing, 'NoPrFo', False)
         zonepass_tab_layout.addWidget(self.zonepass_grpBox)
 
-        self.zonepass_saveButton = QPushButton(QIcon('icons/save.png'), 'Save zone passing')
+        self.zonepass_saveButton = QPushButton(QIcon('icons/save.png'), 'Save zone crossing')
         self.zonepass_saveButton.clicked.connect(self.zonepass_saveBtn_click)
         self.zonepass_saveButton.setEnabled(False)
         zonepass_saveBtnsLayout.addWidget(self.zonepass_saveButton)
         zonepass_tab_layout.addLayout(zonepass_saveBtnsLayout)
 
         zonepass_tab_wdgt.setLayout(zonepass_tab_layout)
-        self.toolbox.addItem(zonepass_tab_wdgt, QIcon('icons/zonePassing.png'), 'Zone Passing')
+        self.toolbox.addItem(zonepass_tab_wdgt, QIcon('icons/Zonepassing.png'), 'Zone Crossing')
 
         # --------------------- Activity tab --------------------------
         act_tab_wdgt = QWidget()
@@ -339,6 +340,86 @@ class ObsToolbox(QMainWindow):
 
         act_tab_wdgt.setLayout(act_tab_layout)
         self.toolbox.addItem(act_tab_wdgt, QIcon('icons/activity.png'), 'Activity')
+
+        # ---------------------------- Line tab --------------------------
+        line_tab_wdgt = QWidget()
+        line_tab_layout = QVBoxLayout()
+        line_listGrpB_layout = QVBoxLayout()
+        line_newBtnsLayout = QHBoxLayout()
+        line_saveBtnsLayout = QHBoxLayout()
+
+        self.line_newRecButton = QPushButton(QIcon('icons/drawLine.png'), 'Draw a new line over the video')
+        self.line_newRecButton.setCheckable(True)
+        self.line_newRecButton.clicked.connect(self.line_newRecBtn_click)
+        line_newBtnsLayout.addWidget(self.line_newRecButton)
+        line_tab_layout.addLayout(line_newBtnsLayout)
+
+        self.line_listGrpBox = QGroupBox('Lines')
+        # self.act_listGrpBox.setEnabled(False)
+
+        self.line_list_wdgt = QListWidget()
+        self.line_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.line_list_wdgt.currentRowChanged.connect(self.rowChanged)
+        line_listGrpB_layout.addWidget(self.line_list_wdgt)
+        self.line_listGrpBox.setLayout(line_listGrpB_layout)
+        line_tab_layout.addWidget(self.line_listGrpBox)
+
+        self.line_delFromListButton = QPushButton(QIcon('icons/delete.png'), 'Delete selected line')
+        self.line_delFromListButton.setEnabled(False)
+        self.line_delFromListButton.clicked.connect(self.line_delFromList_click)
+        line_listGrpB_layout.addWidget(self.line_delFromListButton)
+
+        self.line_grpBox = self.generateWidgets(Line, 'NoPrFo', False)
+        line_tab_layout.addWidget(self.line_grpBox)
+
+        self.line_saveButton = QPushButton(QIcon('icons/save.png'), 'Save line(s)')
+        self.line_saveButton.clicked.connect(self.line_saveBtn_click)
+        self.line_saveButton.setEnabled(False)
+        line_saveBtnsLayout.addWidget(self.line_saveButton)
+        line_tab_layout.addLayout(line_saveBtnsLayout)
+
+        line_tab_wdgt.setLayout(line_tab_layout)
+        self.toolbox.addItem(line_tab_wdgt, QIcon('icons/line.png'), 'Line')
+
+        # ---------------------------- Zone tab --------------------------
+        zone_tab_wdgt = QWidget()
+        zone_tab_layout = QVBoxLayout()
+        zone_listGrpB_layout = QVBoxLayout()
+        zone_newBtnsLayout = QHBoxLayout()
+        zone_saveBtnsLayout = QHBoxLayout()
+
+        self.zone_newRecButton = QPushButton(QIcon('icons/drawZone.png'), 'Draw a new zone over the video')
+        self.zone_newRecButton.setCheckable(True)
+        self.zone_newRecButton.clicked.connect(self.zone_newRecBtn_click)
+        zone_newBtnsLayout.addWidget(self.zone_newRecButton)
+        zone_tab_layout.addLayout(zone_newBtnsLayout)
+
+        self.zone_listGrpBox = QGroupBox('Zones')
+        # self.act_listGrpBox.setEnabled(False)
+
+        self.zone_list_wdgt = QListWidget()
+        self.zone_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.zone_list_wdgt.currentRowChanged.connect(self.rowChanged)
+        zone_listGrpB_layout.addWidget(self.zone_list_wdgt)
+        self.zone_listGrpBox.setLayout(zone_listGrpB_layout)
+        zone_tab_layout.addWidget(self.zone_listGrpBox)
+
+        self.zone_delFromListButton = QPushButton(QIcon('icons/delete.png'), 'Delete selected zone')
+        self.zone_delFromListButton.setEnabled(False)
+        self.zone_delFromListButton.clicked.connect(self.zone_delFromList_click)
+        zone_listGrpB_layout.addWidget(self.zone_delFromListButton)
+
+        self.zone_grpBox = self.generateWidgets(Zone, 'NoPrFo', False)
+        zone_tab_layout.addWidget(self.zone_grpBox)
+
+        self.zone_saveButton = QPushButton(QIcon('icons/save.png'), 'Save zone(s)')
+        self.zone_saveButton.clicked.connect(self.zone_saveBtn_click)
+        self.zone_saveButton.setEnabled(False)
+        zone_saveBtnsLayout.addWidget(self.zone_saveButton)
+        zone_tab_layout.addLayout(zone_saveBtnsLayout)
+
+        zone_tab_wdgt.setLayout(zone_tab_layout)
+        self.toolbox.addItem(zone_tab_wdgt, QIcon('icons/zone.png'), 'Zone')
 
         # --------------------- TI Trajectory tab --------------------------
         traj_tab_wdgt = QWidget()
@@ -520,8 +601,8 @@ class ObsToolbox(QMainWindow):
         self.traj_line = plotTrajectory(self.trjDBFile, self.intrinsicCameraMatrix, self.distortionCoefficients,
                                        self.homoFile, self.ax, session)
         for tl in self.traj_line.values():
-            tl.append([-1, [], [], [], [], 1, None])
-            #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs], groupSize, groupIdx]
+            tl.append([-1, [], [], [], [], 1, None, []])
+            #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs], groupSize, groupIdx, [rightTols]]
         self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
         self.trjIdxLe.setText('-1')
         self.userTypeCb.setCurrentIndex(-1)
@@ -576,17 +657,19 @@ class ObsToolbox(QMainWindow):
                 p1 = moving.Point(prj_points[0][0], prj_points[1][0])
                 p2 = moving.Point(prj_points[0][1], prj_points[1][1])
 
-                instants_list = next_traj.getInstantsCrossingLane(p1, p2)
+                instants_list, intersections, rightToLefts = next_traj.getInstantsCrossingLine(p1, p2, True)
                 if len(instants_list) > 0:
                     secs = instants_list[0] / self.frameRate
                     instant = self.video_start + datetime.timedelta(seconds=round(secs))
                     speed = round(next_traj.getVelocityAtInstant(int(instants_list[0]))
                                   .norm2() * self.frameRate * 3.6, 1)  # km/h
+                    rightToLeft = rightToLefts[0]
 
                     self.traj_line[next_idx][2][1].append(line)
                     self.traj_line[next_idx][2][2].append(instant)
                     self.traj_line[next_idx][2][3].append(speed)
                     self.traj_line[next_idx][2][4].append(secs)
+                    self.traj_line[next_idx][2][7].append(rightToLeft)
                     # screenLine_Id = str(line.idx)
             if self.traj_line[next_idx][2][1] == []:
                 secs = (next_traj.getLastInstant() / self.frameRate)
@@ -757,10 +840,12 @@ class ObsToolbox(QMainWindow):
                 line = lines[i]
                 instant = self.traj_line[trj_idx][2][2][i]
                 speed = self.traj_line[trj_idx][2][3][i]
+                rightToleft = self.traj_line[trj_idx][2][7][i]
 
                 linepass.line = line
                 linepass.instant = instant
                 linepass.speed = speed
+                linepass.rightToLeft = rightToleft
             # self.set_widget_values(self.linepass_grpBox, linepass)
             # self.linepass_list_wdgt.setCurrentRow(-1)
             # self.linepass_list_wdgt.setCurrentRow(0)
@@ -903,7 +988,7 @@ class ObsToolbox(QMainWindow):
         session.add(group)
         session.flush()
 
-        self.groups[group.idx] = [group, {}, {}, {}]  #[group, {linePassings}, {zonePassings}, {Activities}]
+        self.groups[group.idx] = [group, {}, {}, {}]  #[group, {linePassings}, {ZoneCrossings}, {Activities}]
         self.group_idx_cmbBox.insertItem(0, str(group.idx))
         self.group_idx_cmbBox.setCurrentText(str(group.idx))
 
@@ -1090,21 +1175,26 @@ class ObsToolbox(QMainWindow):
 
         if self.group_idx_cmbBox.count() > 0:
             group_idx = int(self.group_idx_cmbBox.currentText())
-            session.query(Group).filter(Group.idx == group_idx).delete()
+            group = session.query(Group).filter(Group.idx == group_idx).first()
+            traj_Idx = group.trajectoryIdx
+            group.delete()
             session.commit()
             self.groups.pop(group_idx)
             self.group_idx_cmbBox.removeItem(self.group_idx_cmbBox.currentIndex())
             if self.group_idx_cmbBox.count() == 0:
                 self.group_delGroupButton.setEnabled(False)
 
-
+        if self.traj_line != None and traj_Idx != None:
+            self.traj_line[traj_Idx][2][6] = -1
 
     def rowChanged(self):
         current_item = self.sender().currentItem()
         if current_item == None:
             return
 
-        group_idx = int(self.group_idx_cmbBox.currentText())
+        if not self.sender() in [self.line_list_wdgt, self.zone_list_wdgt]:
+            group_idx = int(self.group_idx_cmbBox.currentText())
+
         if self.sender() == self.group_list_wdgt:
             person_idx = int(current_item.text())
             person = self.groupPersons[person_idx][0]
@@ -1137,6 +1227,16 @@ class ObsToolbox(QMainWindow):
             act_idx = int(current_item.text())
             act = self.groups[group_idx][3][act_idx]
             self.set_widget_values(self.act_grpBox, act)
+
+        elif self.sender() == self.line_list_wdgt:
+            line_idx = int(self.line_list_wdgt.currentItem().text())
+            line = session.query(Line).filter(Line.idx == line_idx).first()
+            self.set_widget_values(self.line_grpBox, line)
+
+        elif self.sender() == self.zone_list_wdgt:
+            zone_idx = int(self.zone_list_wdgt.currentItem().text())
+            zone = session.query(Zone).filter(Zone.idx == zone_idx).first()
+            self.set_widget_values(self.zone_grpBox, zone)
 
 
     # @staticmethod
@@ -1226,7 +1326,7 @@ class ObsToolbox(QMainWindow):
         session.commit()
 
 
-    # -------------- ZonePassing buttons ------------------
+    # -------------- ZoneCrossing buttons ------------------
     def zonepass_newRecBtn_click(self):
         if len(self.groups.keys()) == 0 or self.group_list_wdgt.count() == 0:
             QMessageBox.information(self, 'Error!', 'No group or user is defined!')
@@ -1243,7 +1343,7 @@ class ObsToolbox(QMainWindow):
         group_idx = int(self.group_idx_cmbBox.currentText())
         group = self.groups[group_idx][0]
 
-        zonepass = ZonePassing(zone=None, instant=None, entering=None, group=group)
+        zonepass = ZoneCrossing(zone=None, instant=None, entering=None, group=group)
         session.add(zonepass)
         session.flush()
 
@@ -1263,7 +1363,7 @@ class ObsToolbox(QMainWindow):
         current_item = self.zonepass_list_wdgt.currentItem()
         zonepass_idx = int(current_item.text())
         self.zonepass_list_wdgt.takeItem(self.zonepass_list_wdgt.row(current_item))
-        del_obj = session.query(ZonePassing).filter(ZonePassing.idx == zonepass_idx).first()
+        del_obj = session.query(ZoneCrossing).filter(ZoneCrossing.idx == zonepass_idx).first()
         session.delete(del_obj)
         group_idx = int(self.group_idx_cmbBox.currentText())
         self.groups[group_idx][2].pop(zonepass_idx)
@@ -1302,7 +1402,7 @@ class ObsToolbox(QMainWindow):
         group_idx = int(self.group_idx_cmbBox.currentText())
         group = self.groups[group_idx][0]
 
-        act = Activity(activity=None, startTime=None, endTime=None, zone=None, group=group)
+        act = Activity(startTime=None, endTime=None, zone=None, group=group)
         session.add(act)
         session.flush()
 
@@ -1341,6 +1441,138 @@ class ObsToolbox(QMainWindow):
         self.act_grpBox.setEnabled(enable)
         self.act_delFromListButton.setEnabled(enable)
         self.act_newRecButton.setEnabled(enable)
+
+        session.commit()
+
+    # -------------- Line buttons ------------------
+    def line_newRecBtn_click(self):
+        if session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText('The database file is not defined.')
+            msg.setInformativeText('Use Creat/Open iFramework database tool')
+            msg.setIcon(QMessageBox.Critical)
+            msg.exec_()
+            return
+
+        if not self.sender().isChecked():
+            self.parent().gView.unsetCursor()
+            return
+
+        cursor = QCursor(Qt.CrossCursor)
+        self.parent().gView.setCursor(cursor)
+        self.parent().raise_()
+        self.parent().activateWindow()
+
+        btn_label = self.line_saveButton.text()
+        self.line_saveButton.setText(btn_label.replace('Edit', 'Save'))
+        self.line_saveButton.setIcon(QIcon('icons/save.png'))
+
+        self.line_grpBox.setEnabled(True)
+        self.line_saveButton.setEnabled(True)
+        self.line_delFromListButton.setEnabled(True)
+
+    def line_delFromList_click(self):
+        if self.line_list_wdgt.count() == 1:
+            self.line_delFromListButton.setEnabled(False)
+            self.line_grpBox.setEnabled(False)
+
+        current_item = self.line_list_wdgt.currentItem()
+        line_idx = int(current_item.text())
+        self.line_list_wdgt.takeItem(self.line_list_wdgt.row(current_item))
+        del_line = session.query(Line).filter(Line.idx == line_idx).first()
+        del_points = del_line.points
+        session.delete(del_line)
+        for del_point in del_points:
+            session.query(Point).filter(Point.idx == del_point.idx).delete()
+
+        session.commit()
+
+        for gitem in self.parent().gView.scene().items():
+            if isinstance(gitem, QGraphicsItemGroup):
+                if gitem.toolTip().split(':')[0] == 'L' + current_item.text():
+                    self.parent().gView.scene().removeItem(gitem)
+
+    def line_saveBtn_click(self):
+        btn_label = self.line_saveButton.text()
+        if btn_label.split(' ')[0] in ['Save', 'Update']:
+            self.line_saveButton.setText(btn_label.replace(btn_label.split(' ')[0], 'Edit'))
+            self.line_saveButton.setIcon(QIcon('icons/edit.png'))
+            enable = False
+        elif btn_label.split(' ')[0] == 'Edit':
+            self.line_saveButton.setText(btn_label.replace('Edit', 'Update'))
+            self.line_saveButton.setIcon(QIcon('icons/save.png'))
+            enable = True
+
+        self.line_grpBox.setEnabled(enable)
+        self.line_delFromListButton.setEnabled(enable)
+        self.line_newRecButton.setEnabled(enable)
+
+        session.commit()
+
+    # -------------- Zone buttons ------------------
+    def zone_newRecBtn_click(self):
+        if session == None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText('The database file is not defined.')
+            msg.setInformativeText('Use Creat/Open iFramework database tool')
+            msg.setIcon(QMessageBox.Critical)
+            msg.exec_()
+            return
+
+        if not self.sender().isChecked():
+            self.parent().gView.unsetCursor()
+            return
+
+        cursor = QCursor(Qt.CrossCursor)
+        self.parent().gView.setCursor(cursor)
+        self.parent().raise_()
+        self.parent().activateWindow()
+
+        btn_label = self.zone_saveButton.text()
+        self.zone_saveButton.setText(btn_label.replace('Edit', 'Save'))
+        self.zone_saveButton.setIcon(QIcon('icons/save.png'))
+
+        self.zone_grpBox.setEnabled(True)
+        self.zone_saveButton.setEnabled(True)
+        self.zone_delFromListButton.setEnabled(True)
+
+    def zone_delFromList_click(self):
+        if self.zone_list_wdgt.count() == 1:
+            self.zone_delFromListButton.setEnabled(False)
+            self.zone_grpBox.setEnabled(False)
+
+        current_item = self.zone_list_wdgt.currentItem()
+        zone_idx = int(current_item.text())
+        self.zone_list_wdgt.takeItem(self.zone_list_wdgt.row(current_item))
+        del_zone = session.query(Zone).filter(Zone.idx == zone_idx).first()
+        del_points = del_zone.points
+        session.delete(del_zone)
+        for del_point in del_points:
+            session.query(Point).filter(Point.idx == del_point.idx).delete()
+
+        session.commit()
+
+        for gitem in self.parent().gView.scene().items():
+            if isinstance(gitem, QGraphicsItemGroup):
+                if gitem.toolTip().split(':')[0] == 'Z' + current_item.text():
+                    self.parent().gView.scene().removeItem(gitem)
+
+    def zone_saveBtn_click(self):
+        btn_label = self.zone_saveButton.text()
+        if btn_label.split(' ')[0] in ['Save', 'Update']:
+            self.zone_saveButton.setText(btn_label.replace(btn_label.split(' ')[0], 'Edit'))
+            self.zone_saveButton.setIcon(QIcon('icons/edit.png'))
+            enable = False
+        elif btn_label.split(' ')[0] == 'Edit':
+            self.zone_saveButton.setText(btn_label.replace('Edit', 'Update'))
+            self.zone_saveButton.setIcon(QIcon('icons/save.png'))
+            enable = True
+
+        self.zone_grpBox.setEnabled(enable)
+        self.zone_delFromListButton.setEnabled(enable)
+        self.zone_newRecButton.setEnabled(enable)
 
         session.commit()
 
@@ -1494,43 +1726,60 @@ class ObsToolbox(QMainWindow):
         layout = grpBox.layout()
         wdgt_idx = layout.indexOf(self.sender())
         attrib = layout.itemAt(wdgt_idx - 1).widget().text()
-        person_idx = int(self.group_list_wdgt.currentItem().text())
-        group_idx = int(self.group_idx_cmbBox.currentText())
-        person = self.groupPersons[person_idx][0]
-        mode = self.groupPersons[person_idx][1]
-        veh = self.groupPersons[person_idx][2]
-        if self.linepass_list_wdgt.count() > 0:
-            linepass_idx = int(self.linepass_list_wdgt.currentItem().text())
-            linepass = self.groups[group_idx][1][linepass_idx]
-        else:
-            linepass = None
-
-        if self.zonepass_list_wdgt.count() > 0:
-            zonepass_idx = int(self.zonepass_list_wdgt.currentItem().text())
-            zonepass = self.groups[group_idx][2][zonepass_idx]
-        else:
-            zonepass = None
-
-        if self.act_list_wdgt.count() > 0:
-            act_idx = int(self.act_list_wdgt.currentItem().text())
-            act = self.groups[group_idx][3][act_idx]
-        else:
-            act = None
 
         if grpBox.title() == 'Person':
-            inst = person
+            person_idx = int(self.group_list_wdgt.currentItem().text())
+            inst = self.groupPersons[person_idx][0]
+
         elif grpBox.title() == 'Mode':
-            inst = mode
+            person_idx = int(self.group_list_wdgt.currentItem().text())
+            inst = self.groupPersons[person_idx][1]
+
         elif grpBox.title() == 'Vehicle':
-            inst = veh
-        elif grpBox.title() == 'LinePassing' and linepass != None:
-            inst = linepass
-        elif grpBox.title() == 'ZonePassing' and zonepass != None:
-            inst = zonepass
-        elif grpBox.title() == 'Activity' and act != None:
-            inst = act
+            person_idx = int(self.group_list_wdgt.currentItem().text())
+            inst = self.groupPersons[person_idx][2]
+
+        elif grpBox.title() == 'LinePassing':
+            group_idx = int(self.group_idx_cmbBox.currentText())
+            if self.linepass_list_wdgt.count() > 0:
+                linepass_idx = int(self.linepass_list_wdgt.currentItem().text())
+                inst = self.groups[group_idx][1][linepass_idx]
+            else:
+                return
+
+        elif grpBox.title() == 'ZoneCrossing':
+            group_idx = int(self.group_idx_cmbBox.currentText())
+            if self.zonepass_list_wdgt.count() > 0:
+                zonepass_idx = int(self.zonepass_list_wdgt.currentItem().text())
+                inst = self.groups[group_idx][2][zonepass_idx]
+            else:
+                return
+
+        elif grpBox.title() == 'Activity':
+            group_idx = int(self.group_idx_cmbBox.currentText())
+            if self.act_list_wdgt.count() > 0:
+                act_idx = int(self.act_list_wdgt.currentItem().text())
+                inst = self.groups[group_idx][3][act_idx]
+            else:
+                return
+
+        elif grpBox.title() == 'Line':
+            if self.line_list_wdgt.count() > 0:
+                line_idx = int(self.line_list_wdgt.currentItem().text())
+                inst = session.query(Line).filter(Line.idx == line_idx).first()
+            else:
+                return
+
+        elif grpBox.title() == 'Zone':
+            if self.zone_list_wdgt.count() > 0:
+                zone_idx = int(self.zone_list_wdgt.currentItem().text())
+                inst = session.query(Zone).filter(Zone.idx == zone_idx).first()
+            else:
+                return
+
         else:
             return
+
         if isinstance(self.sender(), QLineEdit):
             setattr(inst, attrib, self.sender().text())
         elif isinstance(self.sender(), QComboBox):
@@ -2650,7 +2899,7 @@ class ModeChartWindow(QDialog):
         # if 'line' in actionType.split(' '):
         #     cls_obs = LinePassing
         # elif 'zone' in actionType.split(' '):
-        #     cls_obs = ZonePassing
+        #     cls_obs = ZoneCrossing
         cls_obs = LinePassing
         first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
         last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
@@ -2846,7 +3095,7 @@ class CompHistWindow(QDialog):
         if 'line' in actionType.split(' '):
             cls_obs = LinePassing
         elif 'zone' in actionType.split(' '):
-            cls_obs = ZonePassing
+            cls_obs = ZoneCrossing
 
         first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
         last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]

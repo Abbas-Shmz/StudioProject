@@ -24,7 +24,7 @@ from trafficintelligence import storage, moving
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
 from trafficintelligence.storage import ProcessParameters
 import iframework
-from iframework import connectDatabase, LinePassing, ZonePassing, Person, Mode, GroupBelonging,\
+from iframework import connectDatabase, LinePassing, ZoneCrossing, Person, Mode, GroupBelonging,\
     Vehicle, Line, Zone, Group
 
 noDataSign = 'x'
@@ -63,12 +63,12 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
             q = session.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
                 join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
         elif 'zone' in actionType.split(' '):
-            q = session.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
-                join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+            q = session.query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdx). \
+                join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
             if 'entering' in actionType.split(' '):
-                q = q.filter(ZonePassing.entering == True)
+                q = q.filter(ZoneCrossing.entering == True)
             elif 'exiting' in actionType.split(' '):
-                q = q.filter(ZonePassing.entering == False)
+                q = q.filter(ZoneCrossing.entering == False)
         q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
             .filter(Mode.transport == transport)
 
@@ -100,12 +100,12 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
                 q = s.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
                     join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
             elif 'zone' in actionType.split(' '):
-                q = s.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
-                    join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+                q = s.query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdx). \
+                    join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
                 if 'entering' in actionType.split(' '):
-                    q = q.filter(ZonePassing.entering == True)
+                    q = q.filter(ZoneCrossing.entering == True)
                 elif 'exiting' in actionType.split(' '):
-                    q = q.filter(ZonePassing.entering == False)
+                    q = q.filter(ZoneCrossing.entering == False)
             q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
                 .filter(Mode.transport == transport)
 
@@ -539,12 +539,12 @@ def speedBoxPlot(transport, actionType, unitIdx, times, ax, sessions):
     #             q = s.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
     #                 join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
     #         elif 'zone' in actionType.split(' '):
-    #             q = s.query(ZonePassing.instant).filter(ZonePassing.zoneIdx == unitIdx). \
-    #                 join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+    #             q = s.query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdx). \
+    #                 join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
     #             if 'entering' in actionType.split(' '):
-    #                 q = q.filter(ZonePassing.entering == True)
+    #                 q = q.filter(ZoneCrossing.entering == True)
     #             elif 'exiting' in actionType.split(' '):
-    #                 q = q.filter(ZonePassing.entering == False)
+    #                 q = q.filter(ZoneCrossing.entering == False)
     #         q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
     #             .filter(Mode.transport == transport)
     #
@@ -780,10 +780,10 @@ def generateReport(transport, actionType, unitIdx, interval, session, start_time
             .filter(LinePassing.lineIdx == unitIdx) \
             .join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
     elif 'zone' in actionType.split(' '):
-        q = session.query(ZonePassing.idx) \
-            .filter(ZonePassing.instant >= start_obs_time) \
-            .filter(ZonePassing.instant < end_obs_time) \
-            .join(GroupBelonging, GroupBelonging.groupIdx == ZonePassing.groupIdx)
+        q = session.query(ZoneCrossing.idx) \
+            .filter(ZoneCrossing.instant >= start_obs_time) \
+            .filter(ZoneCrossing.instant < end_obs_time) \
+            .join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
     q = q.join(Person, Person.idx == GroupBelonging.personIdx) \
          .join(Mode, Mode.personIdx == Person.idx) \
          .filter(Mode.transport == transport)
@@ -1598,8 +1598,8 @@ def getObsStartEnd(session):
     first_linePass_time = session.query(func.min(LinePassing.instant)).first()[0]
     last_linePass_time = session.query(func.max(LinePassing.instant)).first()[0]
 
-    first_zonePass_time = session.query(func.min(ZonePassing.instant)).first()[0]
-    last_zonePass_time = session.query(func.max(ZonePassing.instant)).first()[0]
+    first_zonePass_time = session.query(func.min(ZoneCrossing.instant)).first()[0]
+    last_zonePass_time = session.query(func.max(ZoneCrossing.instant)).first()[0]
 
     first_times = [first_linePass_time, first_zonePass_time]
     last_times = [last_linePass_time, last_zonePass_time]
