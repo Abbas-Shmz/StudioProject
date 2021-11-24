@@ -14,8 +14,9 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel, QGraphicsItemGroup,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
                              QAbstractItemView, QTableView, QListWidget, QListWidgetItem)
-from PyQt5.QtGui import QColor, QIcon, QFont, QCursor
+from PyQt5.QtGui import QColor, QIcon, QFont, QCursor, QPen, QBrush
 from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObject, QThread, pyqtSignal
+from PyQt5.QtMultimediaWidgets import QGraphicsVideoItem
 
 from iframework import createDatabase, connectDatabase, Person, Mode, Group, GroupBelonging, Vehicle,\
     Activity, LinePassing, ZoneCrossing, Point, Line, Zone, pointLineAssociation
@@ -55,6 +56,7 @@ class ObsToolbox(QMainWindow):
         self.groups = {}  # {group_idx: [group, {linepassings}, {ZoneCrossings}, {Activities}]}
         self.IsChangedManually = True
         self.traj_line = None
+        # self.session_trjDb = None
 
         # global session
         self.dbFilename = None #'/Users/Abbas/AAAA/Stuart2019_iframework.sqlite'
@@ -83,7 +85,7 @@ class ObsToolbox(QMainWindow):
 
         styleSheet = """
                                 QToolBox::tab { color: darkblue; }
-                                QToolBox::tab:selected { font: bold; }
+                                QToolBox::tab:selected { font: bold; font-size: 17px; }
                                 QToolBox{ icon-size: 15px; }
                              """
 
@@ -491,7 +493,13 @@ class ObsToolbox(QMainWindow):
         self.refLineLe = QLineEdit('--')
         # self.refLineLe.setFixedWidth(50)
         self.refLineLe.setReadOnly(True)
-        traj_tab_editLayout.addWidget(self.refLineLe, 1, 1, 1, 4)
+        traj_tab_editLayout.addWidget(self.refLineLe, 1, 1, 1, 2)
+
+        traj_tab_editLayout.addWidget(QLabel('Speed:'), 1, 3)#, 1, 2)
+        self.userSpeedLe = QLineEdit('--')
+        # self.refLineLe.setFixedWidth(50)
+        self.userSpeedLe.setReadOnly(True)
+        traj_tab_editLayout.addWidget(self.userSpeedLe, 1, 4, 1, 2)
 
         # self.delTrjBtn = QPushButton('Delete')
         # self.delTrjBtn.clicked.connect(self.delTrajectory)
@@ -510,9 +518,9 @@ class ObsToolbox(QMainWindow):
         self.groupSizeCb.currentIndexChanged.connect(self.groupSizeChanged)
         traj_tab_editLayout.addWidget(self.groupSizeCb, 2, 5)
 
-        self.saveTrjsBtn = QPushButton('Save')
-        self.saveTrjsBtn.clicked.connect(self.saveTrajectories)
-        traj_tab_editLayout.addWidget(self.saveTrjsBtn, 3, 5)
+        # self.saveTrjsBtn = QPushButton('Save')
+        # self.saveTrjsBtn.clicked.connect(self.saveTrajectories)
+        # traj_tab_editLayout.addWidget(self.saveTrjsBtn, 3, 5)
 
         self.figure = plt.figure(tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
@@ -578,8 +586,10 @@ class ObsToolbox(QMainWindow):
 
         video_file = site_folder/video_name
         if video_file.exists():
+            # self.parent().gView.scene().clear()
             self.parent().videoFile = str(video_file)
             self.parent().openVideoFile()
+            self.parent().loadGraphics()
         else:
             QMessageBox.information(self, 'Error!', 'The corresponding video file does not exist!')
             return
@@ -603,7 +613,7 @@ class ObsToolbox(QMainWindow):
         for tl in self.traj_line.values():
             tl.append([-1, [], [], [], [], 1, None, []])
             #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs], groupSize, groupIdx, [rightTols]]
-        self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
+        self.noTrjLabel.setText('/' + str(list(self.traj_line.keys())[-1]))
         self.trjIdxLe.setText('-1')
         self.userTypeCb.setCurrentIndex(-1)
         self.refLineLe.setText('--')
@@ -634,8 +644,12 @@ class ObsToolbox(QMainWindow):
 
         if not self.traj_line[next_idx][2][6] in [None, -1]:
             self.loadTrjBtn.setEnabled(False)
+            self.userTypeCb.setEnabled(False)
+            self.groupSizeCb.setEnabled(False)
         else:
             self.loadTrjBtn.setEnabled(True)
+            self.userTypeCb.setEnabled(True)
+            self.groupSizeCb.setEnabled(True)
 
         self.trjIdxLe.setText(next_idx)
         next_traj = self.traj_line[next_idx][0]
@@ -658,11 +672,19 @@ class ObsToolbox(QMainWindow):
                 p2 = moving.Point(prj_points[0][1], prj_points[1][1])
 
                 instants_list, intersections, rightToLefts = next_traj.getInstantsCrossingLine(p1, p2, True)
+
                 if len(instants_list) > 0:
                     secs = instants_list[0] / self.frameRate
                     instant = self.video_start + datetime.timedelta(seconds=round(secs))
-                    speed = round(next_traj.getVelocityAtInstant(int(instants_list[0]))
-                                  .norm2() * self.frameRate * 3.6, 1)  # km/h
+
+                    inst_range = 5
+                    if (next_traj.getLastInstant() - instants_list[0]) < inst_range or \
+                            (instants_list[0] - next_traj.getFirstInstant()) < inst_range:
+                        inst_range = 0
+
+                    speed = round(np.mean([next_traj.getVelocityAtInstant(round(instants_list[0]) + i)\
+                            .norm2() * self.frameRate * 3.6 for i in range(-inst_range,(inst_range+1))]), 1)
+
                     rightToLeft = rightToLefts[0]
 
                     self.traj_line[next_idx][2][1].append(line)
@@ -671,16 +693,33 @@ class ObsToolbox(QMainWindow):
                     self.traj_line[next_idx][2][4].append(secs)
                     self.traj_line[next_idx][2][7].append(rightToLeft)
                     # screenLine_Id = str(line.idx)
+
+                    # img_inters_pnts = worldToImageProject(np.array([[intersections[0].x], [intersections[0].y]]),
+                    #                 self.intrinsicCameraMatrix, self.distortionCoefficients, homography)
+                    #
+                    # self.parent().gView.scene().addEllipse(img_inters_pnts[0][0], img_inters_pnts[1][0],
+                    #                                        self.parent().gView.labelSize,
+                    #                                        self.parent().gView.labelSize,
+                    #                                        QPen(QColor(255, 0, 0)),
+                    #                                        QBrush(QColor(255, 0, 0)))
+
             if self.traj_line[next_idx][2][1] == []:
                 secs = (next_traj.getLastInstant() / self.frameRate)
                 # self.traj_line[next_idx][2][1].append('None')
                 self.traj_line[next_idx][2][4].append(secs)
 
         self.parent().mediaPlayer.setPosition(round(self.traj_line[next_idx][2][4][0]*1000))
+
         if self.traj_line[next_idx][2][1] == []:
             self.refLineLe.setText('None')
+            self.userSpeedLe.setText('--')
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
         else:
-            self.refLineLe.setText(str(self.traj_line[next_idx][2][1][0].idx))
+            self.refLineLe.setText(str([rl.idx for rl in self.traj_line[next_idx][2][1]]))
+            self.userSpeedLe.setText(str(self.traj_line[next_idx][2][3]))
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
 
         if self.traj_line[next_idx][2][6] == -1:
@@ -699,11 +738,16 @@ class ObsToolbox(QMainWindow):
 
         if current_idx == '-1':
             return
-        if current_idx == '0':
+
+        if traj_ids.index(current_idx) == 0:
             for line in [tl[1] for tl in self.traj_line.values()]:
                 line.set_visible(True)
             self.trjIdxLe.setText('-1')
             self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
+            self.refLineLe.setText('--')
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
+            self.userSpeedLe.setText('--')
+            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
             self.canvas.draw()
             return
 
@@ -714,8 +758,12 @@ class ObsToolbox(QMainWindow):
 
         if not self.traj_line[prev_idx][2][6] in [None, -1]:
             self.loadTrjBtn.setEnabled(False)
+            self.userTypeCb.setEnabled(False)
+            self.groupSizeCb.setEnabled(False)
         else:
             self.loadTrjBtn.setEnabled(True)
+            self.userTypeCb.setEnabled(True)
+            self.groupSizeCb.setEnabled(True)
 
         self.trjIdxLe.setText(prev_idx)
         prev_traj = self.traj_line[prev_idx][0]
@@ -725,30 +773,43 @@ class ObsToolbox(QMainWindow):
         self.groupSizeCb.setCurrentIndex(self.traj_line[prev_idx][2][5] - 1)
         self.canvas.draw()
 
-        homography = np.loadtxt(self.homoFile, delimiter=' ')
-        q_line = session.query(Line)
-        if q_line.all() != []:
-            for line in q_line.all():
-                points = np.array([[line.points[0].x, line.points[1].x],
-                                   [line.points[0].y, line.points[1].y]])
-                prj_points = imageToWorldProject(points, self.intrinsicCameraMatrix, self.distortionCoefficients,
-                                                 homography)
-                p1 = moving.Point(prj_points[0][0], prj_points[1][0])
-                p2 = moving.Point(prj_points[0][1], prj_points[1][1])
+        # homography = np.loadtxt(self.homoFile, delimiter=' ')
+        # q_line = session.query(Line)
+        # if q_line.all() != []:
+        #     for line in q_line.all():
+        #         points = np.array([[line.points[0].x, line.points[1].x],
+        #                            [line.points[0].y, line.points[1].y]])
+        #         prj_points = imageToWorldProject(points, self.intrinsicCameraMatrix, self.distortionCoefficients,
+        #                                          homography)
+        #         p1 = moving.Point(prj_points[0][0], prj_points[1][0])
+        #         p2 = moving.Point(prj_points[0][1], prj_points[1][1])
+        #
+        #         instants_list, intersections, rightToLefts  = prev_traj.getInstantsCrossingLine(p1, p2, True)
+        #         if len(instants_list) > 0:
+        #             mil_secs = int((instants_list[0] / self.frameRate) * 1000)
+        #             self.refLineLe.setText(str(line.idx))
+        #             break
+        #     if len(instants_list) == 0:
+        #         mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
+        #         self.refLineLe.setText('None')
+        # else:
+        #     mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
+        #     self.refLineLe.setText('None')
+        #
+        # self.parent().mediaPlayer.setPosition(mil_secs)
 
-                instants_list = prev_traj.getInstantsCrossingLane(p1, p2)
-                if len(instants_list) > 0:
-                    mil_secs = int((instants_list[0] / self.frameRate) * 1000)
-                    self.refLineLe.setText(str(line.idx))
-                    break
-            if len(instants_list) == 0:
-                mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
-                self.refLineLe.setText('None')
-        else:
-            mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
+        self.parent().mediaPlayer.setPosition(round(self.traj_line[prev_idx][2][4][0] * 1000))
+
+        if self.traj_line[prev_idx][2][1] == []:
             self.refLineLe.setText('None')
-
-        self.parent().mediaPlayer.setPosition(mil_secs)
+            self.userSpeedLe.setText('--')
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+        else:
+            self.refLineLe.setText(str([rl.idx for rl in self.traj_line[prev_idx][2][1]]))
+            self.userSpeedLe.setText(str(self.traj_line[prev_idx][2][3]))
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
         if prev_idx != '-1':
             if self.traj_line[prev_idx][2][6] == -1:
@@ -788,6 +849,9 @@ class ObsToolbox(QMainWindow):
         # no_users = 0
         # for trj_idx in range(len(self.traj_line)):
         self.loadTrjBtn.setEnabled(False)
+        self.userTypeCb.setEnabled(False)
+        self.groupSizeCb.setEnabled(False)
+
         trj_idx = self.trjIdxLe.text()
         userType = self.traj_line[trj_idx][2][0]
         lines = self.traj_line[trj_idx][2][1]
@@ -811,8 +875,11 @@ class ObsToolbox(QMainWindow):
                 if userType == 1 or userType == 7:
                     mode.transport = 'cardriver'
                     veh.category = 'car'
-                elif userType == 4 or userType == 3:
-                    mode.transport = 'bike'
+                elif userType == 3:
+                    mode.transport = 'motorcycle'
+                    veh.category = 'motorcycle'
+                elif userType == 4:
+                    mode.transport = 'cycling'
                     veh.category = 'bike'
                 elif userType == 5:
                     mode.transport = 'cardriver'
@@ -821,10 +888,10 @@ class ObsToolbox(QMainWindow):
                     mode.transport = 'cardriver'
                     veh.category = 'truck'
                 elif userType == 8:
-                    mode.transport = 'scooter'
+                    mode.transport = 'other'
                     veh.category = 'scooter'
                 elif userType == 9:
-                    mode.transport = 'skating'
+                    mode.transport = 'other'
                     veh.category='skate'
             # if userType != 2:
             #     self.set_widget_values(self.mode_grpBox, mode)
@@ -860,6 +927,13 @@ class ObsToolbox(QMainWindow):
             return
         if self.traj_line == None:
             return
+
+        msg = QMessageBox()
+        rep = msg.question(self, 'Save trajectories',
+                           'Are you sure to SAVE all loaded trajectories?', msg.Yes | msg.No)
+        if rep == msg.No:
+            return
+
         trj_con = sqlite3.connect(self.trjDBFile)
         trj_cur = trj_con.cursor()
         for traj_idx in self.traj_line.keys():
@@ -1136,6 +1210,13 @@ class ObsToolbox(QMainWindow):
         self.groupPersons.pop(person_idx)
 
     def group_delGroupBtn_click(self):
+
+        msg = QMessageBox()
+        rep = msg.question(self, 'Delete group',
+                           'Are you sure to DELETE the group and its corresponding records?', msg.Yes | msg.No)
+        if rep == msg.No:
+            return
+
         if self.act_list_wdgt.count() > 0:
             for i in range(self.act_list_wdgt.count()):
                 self.act_delFromList_click()
@@ -1177,7 +1258,7 @@ class ObsToolbox(QMainWindow):
             group_idx = int(self.group_idx_cmbBox.currentText())
             group = session.query(Group).filter(Group.idx == group_idx).first()
             traj_Idx = group.trajectoryIdx
-            group.delete()
+            session.delete(group)
             session.commit()
             self.groups.pop(group_idx)
             self.group_idx_cmbBox.removeItem(self.group_idx_cmbBox.currentIndex())

@@ -96,10 +96,12 @@ class GraphicView(QGraphicsView):
             self.gPolyItem.setPolygon(QPolygonF(list(self.currentPoly) + [p_floating]))
 
     def resizeEvent(self, event):
-        self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
+        if len(self.items()) > 0:
+            self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
 
     def showEvent(self, event):
-        self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
+        if len(self.items()) > 0:
+            self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
 
     def mouseDoubleClickEvent(self, event):
         if self.gLineItem != None and (self.parent().parent().drawLineAction.isChecked() \
@@ -200,14 +202,14 @@ class VideoWindow(QMainWindow):
 
         self.obsTb = ObsToolbox(self)
 
-        # ===================== Setting video item ==============================
-        self.videoItem = QGraphicsVideoItem()
-        self.videoItem.setAspectRatioMode(Qt.KeepAspectRatio)
-        self.gScene.addItem(self.videoItem)
-        self.videoItem.mouseMoveEvent = self.gView.mouseMoveEvent
+        # # ===================== Setting video item ==============================
+        # self.videoItem = QGraphicsVideoItem()
+        # self.videoItem.setAspectRatioMode(Qt.KeepAspectRatio)
+        # self.gScene.addItem(self.videoItem)
+        # self.videoItem.mouseMoveEvent = self.gView.mouseMoveEvent
 
         self.mediaPlayer = QMediaPlayer(self, QMediaPlayer.VideoSurface)
-        self.mediaPlayer.setVideoOutput(self.videoItem)
+        # self.mediaPlayer.setVideoOutput(self.videoItem)
         self.mediaPlayer.stateChanged.connect(self.mediaStateChanged)
         self.mediaPlayer.positionChanged.connect(self.positionChanged)
         self.mediaPlayer.durationChanged.connect(self.durationChanged)
@@ -383,12 +385,20 @@ class VideoWindow(QMainWindow):
             self.dateLabel.setText(creation_datetime.strftime('%a, %b %d, %Y'))
 
             self.gView.setSceneRect(0, 0, width, height)
+
+            self.videoItem = QGraphicsVideoItem()
+            self.videoItem.setAspectRatioMode(Qt.KeepAspectRatio)
+            self.gScene.addItem(self.videoItem)
+            self.videoItem.mouseMoveEvent = self.gView.mouseMoveEvent
             self.videoItem.setSize(QSizeF(width, height))
+
+            self.mediaPlayer.setVideoOutput(self.videoItem)
+            self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(self.videoFile)))
+
             self.gView.labelSize = width/50
 
-            self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(self.videoFile)))
             self.playButton.setEnabled(True)
-            self.gView.setViewport(QOpenGLWidget())
+            # self.gView.setViewport(QOpenGLWidget())
             self.mediaPlayer.pause()
 
     def exitCall(self):
