@@ -32,6 +32,7 @@ userTypeNames = ['unknown', 'car', 'pedestrian', 'motorcycle', 'bicycle', 'bus',
                  'scooter', 'skate']
 userTypeColors = ['gray',   'blue', 'orange',    'violet',       'green',  'yellow', 'black', 'cyan',
                   'red',  'brown']
+plotColors = ['skyblue', 'red', 'green', 'violet', 'orange', 'yellow', 'black', 'cyan', 'brown', 'gray']
 
 config_object = ConfigParser()
 cfg = config_object.read("config.ini")
@@ -50,165 +51,149 @@ else:
     binsMinutes = 10
 
 # ==============================================================
-def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
-                 color='skyblue', label=None, plotType='Line plot'):
+def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
+                 ax=None, interval=20, plotType='Line plot', alpha=1, colors=plotColors):
+
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+        if 'line' in actionTypes[i].split(' '):
+            cls_obs = LinePassing
+        elif 'zone' in actionTypes[i].split(' '):
+            cls_obs = ZoneCrossing
+
+        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_times.append(first_obs_time)
+        last_obs_times.append(last_obs_time)
+
+    bins_start = max(first_obs_times)
+    bins_end = min(last_obs_times)
+
+    start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
+    end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
+
+    duration = end - start
+    duration_in_s = duration.total_seconds()
+
+    bins = calculateBinsEdges(start, end, interval)
+
     if len(bins) < 3:
         err = 'The observation duration is not enough for the selected interval!'
         return err
 
     to_timestamp = np.vectorize(lambda x: x.timestamp())
-    if not isinstance(session, list):
-        time_list = []
-        if 'line' in actionType.split(' '):
-            q = session.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
+
+    time_lists = []
+    for i in range(inputNo):
+        if 'line' in actionTypes[i].split(' '):
+            q = sessions[i].query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdxs[i]). \
                 join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
-        elif 'zone' in actionType.split(' '):
-            q = session.query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdx). \
+            if directions[i] == 'Right to left':
+                q = q.filter(LinePassing.rightToLeft == True)
+            elif directions[i] == 'Left to right':
+                q = q.filter(LinePassing.rightToLeft == False)
+        elif 'zone' in actionTypes[i].split(' '):
+            q = sessions[i].query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdxs[i]). \
                 join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
-            if 'entering' in actionType.split(' '):
+            if 'entering' in actionTypes[i].split(' '):
                 q = q.filter(ZoneCrossing.entering == True)
-            elif 'exiting' in actionType.split(' '):
+            elif 'exiting' in actionTypes[i].split(' '):
                 q = q.filter(ZoneCrossing.entering == False)
-        q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
-            .filter(Mode.transport == transport)
+        q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+            .filter(Mode.transport == transports[i])
 
-        time_list = [i[0] for i in q.all()]
+        time_lists.append([i[0] for i in q.all()])
 
-        if time_list == []:
-            return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
+    for i in range(inputNo):
+        if time_lists[i] == []:
+            return 'No {} is observed {} #{}!'.format(transports[i], actionTypes[i], unitIdxs[i])
 
-        # (n, edges, patches) = ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth,
-        #                               alpha=alpha, label=label, histtype=histtype)
-
-        time_stamps = to_timestamp(time_list)
-        bins_stamps = to_timestamp(bins)
-
-        hist, bin_edges = np.histogram(time_stamps, bins=bins_stamps)
-
-        time_ticks = []
-        for i in range(len(bins) - 1):
-            mid_point = bins_stamps[i] + (bins_stamps[i+1] - bins_stamps[i])/2
-            time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
-
-        ax.plot(time_ticks, hist, label=label)
-
-    else:
-        time_lists = []
-        for s in session:
-            time_list = []
-            if 'line' in actionType.split(' '):
-                q = s.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
-                    join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
-            elif 'zone' in actionType.split(' '):
-                q = s.query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdx). \
-                    join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
-                if 'entering' in actionType.split(' '):
-                    q = q.filter(ZoneCrossing.entering == True)
-                elif 'exiting' in actionType.split(' '):
-                    q = q.filter(ZoneCrossing.entering == False)
-            q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
-                .filter(Mode.transport == transport)
-
-            time_list = [i[0] for i in q.all()]
-            time_lists.append(time_list)
-
-        if time_lists[0] == [] and time_lists[1] == []:
-            return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
-
+    for time_list in time_lists:
         i = 0
-        for time_ticks in time_lists[0]:
-            time_lists[0][i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
+        for time_ticks in time_list:
+            time_list[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
             i += 1
 
-        i = 0
-        for time_ticks in time_lists[1]:
-            time_lists[1][i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
-            i += 1
+    bins_stamps = to_timestamp(bins)
+    time_ticks = []
+    for i in range(len(bins) - 1):
+        mid_point = bins_stamps[i] + (bins_stamps[i + 1] - bins_stamps[i]) / 2
+        time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
 
-        # fig = plt.figure()#figsize=(5, 5), dpi=200, tight_layout=True)
-        # ax = fig.add_subplot(111) #plt.subplots(1, 1)
-        # (n, edges, patches) = ax.hist(time_lists, bins=bins, color=color, ec=ec,
-        #                               rwidth=rwidth, alpha=alpha, label=label, histtype=histtype)
+    if ax == None:
+        fig = plt.figure()  # figsize=(5, 5), dpi=200, tight_layout=True)
+        ax = fig.add_subplot(111)  # plt.subplots(1, 1)
 
-        bins_stamps = to_timestamp(bins)
-        time_ticks = []
-        for i in range(len(bins) - 1):
-            mid_point = bins_stamps[i] + (bins_stamps[i + 1] - bins_stamps[i]) / 2
-            time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
+    if plotType == 'Line plot':
+        l = 0
+        for time_list in time_lists:
+            time_stamps = to_timestamp(time_list)
 
-        if plotType == 'Line plot':
-            l = 0
-            for time_list in time_lists:
-                time_stamps = to_timestamp(time_list)
+            hist, bin_edges = np.histogram(time_stamps, bins=bins_stamps)
 
-                hist, bin_edges = np.histogram(time_stamps, bins=bins_stamps)
+            ax.plot(time_ticks, hist, label=labels[l])
+            l += 1
+    elif plotType == 'Scatter plot':
+        if inputNo != 2:
+            return 'The scatter plot is possible for only two datasets!'
+        time_stamps1 = to_timestamp(time_lists[0])
+        hist1, bin_edges = np.histogram(time_stamps1, bins=bins_stamps)
 
-                ax.plot(time_ticks, hist, label=label[l])
-                l += 1
-        elif plotType == 'Scatter plot':
-            time_stamps1 = to_timestamp(time_lists[0])
-            hist1, bin_edges = np.histogram(time_stamps1, bins=bins_stamps)
+        time_stamps2 = to_timestamp(time_lists[1])
+        hist2, bin_edges = np.histogram(time_stamps2, bins=bins_stamps)
 
-            time_stamps2 = to_timestamp(time_lists[1])
-            hist2, bin_edges = np.histogram(time_stamps2, bins=bins_stamps)
+        t_min = min(time_ticks)
+        t_max = max(time_ticks)
+        t_range = (t_max - t_min).total_seconds()
+        point_colors = []
+        for t in time_ticks:
+            point_colors.append((t - t_min).total_seconds() / t_range)
 
-            t_min = min(time_ticks)
-            t_max = max(time_ticks)
-            t_range = (t_max - t_min).total_seconds()
-            point_colors = []
-            for t in time_ticks:
-                point_colors.append((t - t_min).total_seconds() / t_range)
+        sc = ax.scatter(hist1, hist2, c=point_colors, cmap='jet')
 
-            sc = ax.scatter(hist1, hist2, c=point_colors, cmap='jet')
+        b_inter0 = t_range/5
+        if b_inter0 >= 45*60: #45min * 60sec
+            b_interval = 60 #minutes
+        elif 15*60 <= b_inter0 < 45*60:
+            b_interval = 30
+        elif 5*60 <= b_inter0 < 15*60:
+            b_interval = 10
+        else:
+            b_interval = 5
 
-            b_inter0 = t_range/5
-            if b_inter0 >= 45*60: #45min * 60sec
-                b_interval = 60 #minutes
-            elif 15*60 <= b_inter0 < 45*60:
-                b_interval = 30
-            elif 5*60 <= b_inter0 < 15*60:
-                b_interval = 10
-            else:
-                b_interval = 5
+        b_start = ceil_time(t_min, b_interval)
+        cbar_ticks = []
+        cbar_ticklabels = []
+        while b_start < t_max:
+            cbar_ticks.append((b_start - t_min).total_seconds()/t_range)
+            cbar_ticklabels.append(b_start.strftime('%H:%M'))
+            b_start = b_start + datetime.timedelta(minutes=b_interval)
 
-            b_start = ceil_time(t_min, b_interval)
-            cbar_ticks = []
-            cbar_ticklabels = []
-            while b_start < t_max:
-                cbar_ticks.append((b_start - t_min).total_seconds()/t_range)
-                cbar_ticklabels.append(b_start.strftime('%H:%M'))
-                b_start = b_start + datetime.timedelta(minutes=b_interval)
+        cbar = plt.colorbar(sc, ticks=cbar_ticks)
+        cbar.ax.set_yticklabels(cbar_ticklabels, fontsize=7)
+        cbar.ax.set_ylabel('Time of day', fontsize=8)
 
-            cbar = plt.colorbar(sc, ticks=cbar_ticks)
-            cbar.ax.set_yticklabels(cbar_ticklabels, fontsize=7)
-            cbar.ax.set_ylabel('Time of day', fontsize=8)
+        min_val = min([min(hist1), min(hist2)])
+        max_val = max([max(hist1), max(hist2)])
+        ax.plot([min_val, max_val],[min_val, max_val], ls='--', lw=.5, c='k', alpha=.3)
 
-            min_val = min([min(hist1), min(hist2)])
-            max_val = max([max(hist1), max(hist2)])
-            ax.plot([min_val, max_val],[min_val, max_val], ls='--', lw=.5, c='k', alpha=.3)
+        m, b = np.polyfit(hist1, hist2, 1)
+        ax.plot(np.array(hist1), m * np.array(hist1) + b, ls='-', lw=.5, c='k', alpha=.5)
 
-            m, b = np.polyfit(hist1, hist2, 1)
-            ax.plot(np.array(hist1), m * np.array(hist1) + b, ls='-', lw=.5, c='k', alpha=.5)
+        corrcoef = round(np.corrcoef(hist1, hist2)[0, 1], 3)
+        ax.text(0.9, 0.9, 'r = {}'.format(corrcoef),
+                fontsize=7, color='k',
+                ha='left', va='bottom',
+                transform=ax.transAxes,
+                weight="bold")
 
-            corrcoef = round(np.corrcoef(hist1, hist2)[0, 1], 3)
-            ax.text(0.9, 0.9, 'r = {}'.format(corrcoef),
-                    fontsize=7, color='k',
-                    ha='left', va='bottom',
-                    transform=ax.transAxes,
-                    weight="bold")
-
-
-    # if not isinstance(n[0], np.ndarray):
-    #     n = [n]
-    #
-    # c = ['skyblue', 'red']
-    # i = 0
-    # for lst in n:
-    #     avg = np.mean(lst)
-    #     lst_std = np.std(lst)
-    #     print(lst_std)
-    #     ax.axhline(y=avg, color=c[i], linestyle='-', lw=1.5)
-    #     i += 1
     if plotType == 'Line plot':
         locator = mdates.AutoDateLocator()
         ax.xaxis.set_major_locator(locator)
@@ -219,7 +204,7 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
         ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
         # print((locator()))
 
-        if not isinstance(session, list):
+        if inputNo == 1:
             xLabel = 'Time ({})'.format(time_list[0].strftime('%A, %b %d, %Y'))
         else:
             xLabel = 'Time'
@@ -229,15 +214,15 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
         ax.tick_params(axis='y', labelsize=7)
         ax.set_xlabel(xLabel, fontsize=8)
 
-        tm = transport
-        if transport == 'cardriver':
+        tm = transports[0]
+        if transports[0] == 'cardriver':
             tm = 'car'
-        elif transport == 'walking':
+        elif transports[0] == 'walking':
             tm = 'pedestrian'
 
         ax.set_ylabel('No. of {}s'.format(tm), fontsize=8)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.set_title('Temporal distribution of {}s {} #{}'.format(tm, actionType, unitIdx),
+        ax.set_title('Temporal distribution of {}s {} #{}'.format(tm, actionTypes[0], unitIdxs[0]),
                      fontsize=8)
         ax.legend(loc='upper right', fontsize=6)
 
@@ -249,26 +234,24 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
 
         ax.tick_params(axis='both', labelsize=7)
 
-        tm = transport
-        if transport == 'cardriver':
-            tm = 'car'
-        elif transport == 'walking':
-            tm = 'pedestrian'
+        tm1 = transports[0]
+        tm2 = transports[1]
+        if transports[0] == 'cardriver':
+            tm1 = 'car'
+        elif transports[0] == 'walking':
+            tm1 = 'pedestrian'
+        if transports[1] == 'cardriver':
+            tm2 = 'car'
+        elif transports[1] == 'walking':
+            tm2 = 'pedestrian'
 
-        ax.set_xlabel('Number of {}s (Befre)'.format(tm), fontsize=8)
-        ax.set_ylabel('Number of {}s (After)'.format(tm), fontsize=8)
-        ax.set_title('Scatter plot of {}s {} #{}'.format(tm, actionType, unitIdx),
+        ax.set_xlabel('Number of {}s ({})'.format(tm1, labels[0]), fontsize=8)
+        ax.set_ylabel('Number of {}s ({})'.format(tm2, labels[1]), fontsize=8)
+        ax.set_title('Scatter plot of {}s {} #{}'.format(tm1, actionTypes[0], unitIdxs[0]),
                      fontsize=8)
         ax.axis('equal')
 
     ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
-
-    # if not isinstance(session, list):
-    #     ax.text(0.05, 0.95, str(time_list[0].strftime('%A, %b %d, %Y')),
-    #             horizontalalignment='left',
-    #             verticalalignment='center',
-    #             transform=ax.transAxes,
-    #             fontsize=8)
 
     ax.text(0.03, 0.93, str('StudioProject'),
             fontsize=9, color='gray',
@@ -276,7 +259,7 @@ def tempDistHist(transport, actionType, unitIdx, ax, session, bins=20, alpha=1,
             transform=ax.transAxes,
             weight="bold", alpha=.5)
 
-    # plt.show()
+        # # plt.show()
 
 # ==============================================================
 def stackedHist(user, attr, ax, session, bins=20):
