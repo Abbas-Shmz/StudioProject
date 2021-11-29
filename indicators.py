@@ -32,7 +32,7 @@ userTypeNames = ['unknown', 'car', 'pedestrian', 'motorcycle', 'bicycle', 'bus',
                  'scooter', 'skate']
 userTypeColors = ['gray',   'blue', 'orange',    'violet',       'green',  'yellow', 'black', 'cyan',
                   'red',  'brown']
-plotColors = ['skyblue', 'red', 'green', 'violet', 'orange', 'yellow', 'black', 'cyan', 'brown', 'gray']
+plotColors = ['deepskyblue', 'salmon', 'green', 'violet', 'orange', 'yellow', 'black', 'cyan', 'brown', 'gray']
 
 config_object = ConfigParser()
 cfg = config_object.read("config.ini")
@@ -1378,52 +1378,85 @@ def creatStreetusers(userType, lines, instants, speeds, groupSize):
 
     return [group] + linePass_list + modes_list
 
-def modeShareCompChart(times, axs, labels, sessions):
+def modeShareCompChart(dbFiles, labels, interval, axs=None):
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+
+        cls_obs = LinePassing
+        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_times.append(first_obs_time)
+        last_obs_times.append(last_obs_time)
+
+    bins_start = max(first_obs_times)
+    bins_end = min(last_obs_times)
+
+    start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
+    end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
+
+    duration = end - start
+    duration_in_s = duration.total_seconds()
+
+    bins = calculateBinsEdges(start, end, interval)
+
+    if len(bins) < 3:
+        err = 'The observation duration is not enough for the selected interval!'
+        return err
+
+    times = [b.time() for b in bins]
+
+    if axs is None:
+        fig = plt.figure()
+        ax = fig.subplots(2, 2, sharex=True, sharey='row')
 
     ax = [axs[0,0], axs[0,1], axs[1,0], axs[1,1]]
     # X = np.arange(len(times) - 1)
-    before = {'cardriver':[], 'walking':[], 'bike':[], 'scooter':[]}
-    after = {'cardriver':[], 'walking':[], 'bike':[], 'scooter':[]}
-    date1 = getObsStartEnd(sessions[0])[0].date()
-    date2 = getObsStartEnd(sessions[1])[0].date()
-    times1 = [datetime.datetime.combine(date1, t) for t in times]
-    times2 = [datetime.datetime.combine(date2, t) for t in times]
-    for t in range(len(times) - 1):
-        startTime1 = times1[t]
-        endTime1 = times1[t + 1]
-        startTime2 = times2[t]
-        endTime2 = times2[t + 1]
-        labels1, sizes1 = getLabelSizePie('all types', 'transport', startTime1, endTime1, sessions[0])
-        labels2, sizes2 = getLabelSizePie('all types', 'transport', startTime2, endTime2, sessions[1])
-        for mode in ['cardriver', 'walking', 'bike', 'scooter']:
-            if mode in labels1:
-                before[mode].append(sizes1[labels1.index(mode)])
-            else:
-                before[mode].append(0)
 
-            if mode in labels2:
-                after[mode].append(sizes2[labels2.index(mode)])
-            else:
-                after[mode].append(0)
+    # before = {'cardriver':[], 'walking':[], 'bike':[], 'scooter':[]}
+    # after = {'cardriver':[], 'walking':[], 'bike':[], 'scooter':[]}
+
+    users_dics = []
+    for _ in range(inputNo):
+        users_dics.append({'cardriver': [], 'walking': [], 'cycling': [], 'other': []})
+
+    for i in range(inputNo):
+        date1 = getObsStartEnd(sessions[i])[0].date()
+        times1 = [datetime.datetime.combine(date1, t) for t in times]
+        for j in range(len(times) - 1):
+            startTime1 = times1[j]
+            endTime1 = times1[j + 1]
+            labels1, sizes1 = getLabelSizePie('all types', 'transport', startTime1, endTime1, sessions[i])
+            for mode in ['cardriver', 'walking', 'cycling', 'other']:
+                if mode in labels1:
+                    users_dics[i][mode].append(sizes1[labels1.index(mode)])
+                else:
+                    users_dics[i][mode].append(0)
 
     date = datetime.date(2000, 1, 1)
     datetime1 = datetime.datetime.combine(date, times[0])
     datetime2 = datetime.datetime.combine(date, times[1])
-    interval = datetime2 - datetime1
-    middlePoint = [(datetime.datetime.combine(date, times[i]) + interval/2) for i in range(len(times)-1)]
+    interval_dt = datetime2 - datetime1
+    middlePoint = [(datetime.datetime.combine(date, times[i]) + interval_dt / 2) for i in range(len(times) - 1)]
+
     # ticks = middlePoint #[t.strftime('%H:%M') for t in middlePoint]
     locator = mdates.AutoDateLocator()
-    titles = ['Car', 'Pedestrian', 'Bike', 'Scooter']
-    for i, mode in enumerate(['cardriver', 'walking', 'bike', 'scooter']):
-        ax[i].plot(middlePoint, before[mode], color='deepskyblue')#, width=w)
-        ax[i].plot(middlePoint, after[mode], color='salmon')#, width=w)
+    titles = ['Car', 'Pedestrian', 'Bike', 'Other']
+    for i, mode in enumerate(['cardriver', 'walking', 'cycling', 'other']):
+        for j in range(inputNo):
+            ax[i].plot(middlePoint, users_dics[j][mode], color=plotColors[j])  # , width=w)
         # ax[i].set_xticks([i for i in range(len(times) - 1)])
         # ax[i].set_xticklabels(ticks, rotation=90)
 
         ax[i].xaxis.set_major_locator(locator)
         ax[i].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
         ax[i].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
-
 
         ax[i].tick_params(axis='both', labelsize=7)
         ax[i].tick_params(axis='x', rotation=90)
@@ -1434,19 +1467,77 @@ def modeShareCompChart(times, axs, labels, sessions):
         if i == 0 or i == 2:
             ax[i].set_ylabel('No. of street users', fontsize=7)
         ax[i].yaxis.set_major_locator(MaxNLocator(integer=True))
-        ax[i].legend(['before', 'after'], loc='upper right', fontsize=5)
+        ax[i].legend(labels, loc='upper right', fontsize=5)
 
         ax[i].text(0.03, 0.92, str('StudioProject'),
-                fontsize=5, color='gray',
-                ha='left', va='bottom',
-                transform=ax[i].transAxes,
-                weight="bold", alpha=.5)
+                   fontsize=5, color='gray',
+                   ha='left', va='bottom',
+                   transform=ax[i].transAxes,
+                   weight="bold", alpha=.5)
     plt.suptitle('Comparison of transportation mode share', fontsize=8)
 
+    # date1 = getObsStartEnd(sessions[0])[0].date()
+    # date2 = getObsStartEnd(sessions[1])[0].date()
+    # times1 = [datetime.datetime.combine(date1, t) for t in times]
+    # times2 = [datetime.datetime.combine(date2, t) for t in times]
+    # for t in range(len(times) - 1):
+    #     startTime1 = times1[t]
+    #     endTime1 = times1[t + 1]
+    #     startTime2 = times2[t]
+    #     endTime2 = times2[t + 1]
+    #     labels1, sizes1 = getLabelSizePie('all types', 'transport', startTime1, endTime1, sessions[0])
+    #     labels2, sizes2 = getLabelSizePie('all types', 'transport', startTime2, endTime2, sessions[1])
+    #     for mode in ['cardriver', 'walking', 'bike', 'scooter']:
+    #         if mode in labels1:
+    #             before[mode].append(sizes1[labels1.index(mode)])
+    #         else:
+    #             before[mode].append(0)
+    #
+    #         if mode in labels2:
+    #             after[mode].append(sizes2[labels2.index(mode)])
+    #         else:
+    #             after[mode].append(0)
+
+    # date = datetime.date(2000, 1, 1)
+    # datetime1 = datetime.datetime.combine(date, times[0])
+    # datetime2 = datetime.datetime.combine(date, times[1])
+    # interval = datetime2 - datetime1
+    # middlePoint = [(datetime.datetime.combine(date, times[i]) + interval / 2) for i in range(len(times) - 1)]
+    # # ticks = middlePoint #[t.strftime('%H:%M') for t in middlePoint]
     # locator = mdates.AutoDateLocator()
-    # ax[0].xaxis.set_major_locator(locator)
-    # ax[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    # ax[0].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+    # titles = ['Car', 'Pedestrian', 'Bike', 'Scooter']
+    # for i, mode in enumerate(['cardriver', 'walking', 'bike', 'scooter']):
+    #     ax[i].plot(middlePoint, before[mode], color='deepskyblue')#, width=w)
+    #     ax[i].plot(middlePoint, after[mode], color='salmon')#, width=w)
+    #     # ax[i].set_xticks([i for i in range(len(times) - 1)])
+    #     # ax[i].set_xticklabels(ticks, rotation=90)
+    #
+    #     ax[i].xaxis.set_major_locator(locator)
+    #     ax[i].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    #     ax[i].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+    #
+    #     ax[i].tick_params(axis='both', labelsize=7)
+    #     ax[i].tick_params(axis='x', rotation=90)
+    #     ax[i].grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
+    #     ax[i].set_title(titles[i], fontsize=7)
+    #     if i > 1:
+    #         ax[i].set_xlabel('Time', fontsize=7)
+    #     if i == 0 or i == 2:
+    #         ax[i].set_ylabel('No. of street users', fontsize=7)
+    #     ax[i].yaxis.set_major_locator(MaxNLocator(integer=True))
+    #     ax[i].legend(['before', 'after'], loc='upper right', fontsize=5)
+    #
+    #     ax[i].text(0.03, 0.92, str('StudioProject'),
+    #             fontsize=5, color='gray',
+    #             ha='left', va='bottom',
+    #             transform=ax[i].transAxes,
+    #             weight="bold", alpha=.5)
+    # plt.suptitle('Comparison of transportation mode share', fontsize=8)
+    #
+    # # locator = mdates.AutoDateLocator()
+    # # ax[0].xaxis.set_major_locator(locator)
+    # # ax[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    # # ax[0].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
 
 # =========================================
 def image_to_ground(img_points, homography):
