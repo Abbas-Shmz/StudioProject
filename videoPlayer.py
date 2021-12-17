@@ -831,6 +831,7 @@ class VideoWindow(QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    # app.setAttribute()
     app.setStyle('Fusion') #'Fusion', 'Windows', 'WindowsVista', 'Macintosh'
     player = VideoWindow()
     player.resize(640, 480)

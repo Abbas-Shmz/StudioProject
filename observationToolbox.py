@@ -19,7 +19,7 @@ from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObjec
 from PyQt5.QtMultimediaWidgets import QGraphicsVideoItem
 
 from iframework import createDatabase, connectDatabase, Person, Mode, Group, GroupBelonging, Vehicle,\
-    Activity, LinePassing, ZoneCrossing, Point, Line, Zone, pointLineAssociation
+    Activity, LineCrossing, ZoneCrossing, Point, Line, Zone, pointLineAssociation
 
 import matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -225,7 +225,7 @@ class ObsToolbox(QMainWindow):
         user_tab_wdgt.setLayout(user_tab_layout)
         self.toolbox.addItem(user_tab_wdgt, QIcon('icons/person.png'), 'Street user')
 
-        # ------------------ LinePassing tab --------------------------
+        # ------------------ LineCrossing tab --------------------------
         linepass_tab_wdgt = QWidget()
         linepass_tab_layout = QVBoxLayout()
         linepass_newBtnsLayout = QHBoxLayout()
@@ -253,7 +253,7 @@ class ObsToolbox(QMainWindow):
         self.linepass_listGrpBox.setLayout(linepass_listGrpB_layout)
         linepass_tab_layout.addWidget(self.linepass_listGrpBox)
 
-        self.linepass_grpBox = self.generateWidgets(LinePassing, 'NoPrFo', False)
+        self.linepass_grpBox = self.generateWidgets(LineCrossing, 'NoPrFo', False)
         linepass_tab_layout.addWidget(self.linepass_grpBox)
 
         self.linepass_saveButton = QPushButton(QIcon('icons/save.png'), 'Save line passings')
@@ -694,14 +694,14 @@ class ObsToolbox(QMainWindow):
                     self.traj_line[next_idx][2][7].append(rightToLeft)
                     # screenLine_Id = str(line.idx)
 
-                    # img_inters_pnts = worldToImageProject(np.array([[intersections[0].x], [intersections[0].y]]),
-                    #                 self.intrinsicCameraMatrix, self.distortionCoefficients, homography)
-                    #
-                    # self.parent().gView.scene().addEllipse(img_inters_pnts[0][0], img_inters_pnts[1][0],
-                    #                                        self.parent().gView.labelSize,
-                    #                                        self.parent().gView.labelSize,
-                    #                                        QPen(QColor(255, 0, 0)),
-                    #                                        QBrush(QColor(255, 0, 0)))
+                    img_inters_pnts = worldToImageProject(np.array([[intersections[0].x], [intersections[0].y]]),
+                                    self.intrinsicCameraMatrix, self.distortionCoefficients, np.linalg.inv(homography))
+
+                    self.parent().gView.scene().addEllipse(img_inters_pnts[0][0], img_inters_pnts[1][0],
+                                                           self.parent().gView.labelSize,
+                                                           self.parent().gView.labelSize,
+                                                           QPen(QColor(255, 0, 0)),
+                                                           QBrush(QColor(255, 0, 0)))
 
             if self.traj_line[next_idx][2][1] == []:
                 secs = (next_traj.getLastInstant() / self.frameRate)
@@ -1347,7 +1347,7 @@ class ObsToolbox(QMainWindow):
         self.IsChangedManually = True
 
 
-    # -------------- LinePassing buttons ------------------
+    # -------------- LineCrossing buttons ------------------
     def linepass_newRecBtn_click(self):
         if len(self.groups.keys()) == 0 or self.group_list_wdgt.count() == 0:
             QMessageBox.information(self, 'Error!', 'No group or user is defined!')
@@ -1364,7 +1364,7 @@ class ObsToolbox(QMainWindow):
         group_idx = int(self.group_idx_cmbBox.currentText())
         group = self.groups[group_idx][0]
 
-        linepass = LinePassing(line=None, instant=None, group=group)
+        linepass = LineCrossing(line=None, instant=None, group=group)
         session.add(linepass)
         session.flush()
 
@@ -1384,7 +1384,7 @@ class ObsToolbox(QMainWindow):
         current_item = self.linepass_list_wdgt.currentItem()
         linepass_idx = int(current_item.text())
         self.linepass_list_wdgt.takeItem(self.linepass_list_wdgt.row(current_item))
-        del_obj = session.query(LinePassing).filter(LinePassing.idx == linepass_idx).first()
+        del_obj = session.query(LineCrossing).filter(LineCrossing.idx == linepass_idx).first()
         session.delete(del_obj)
         group_idx = int(self.group_idx_cmbBox.currentText())
         self.groups[group_idx][1].pop(linepass_idx)
@@ -1820,7 +1820,7 @@ class ObsToolbox(QMainWindow):
             person_idx = int(self.group_list_wdgt.currentItem().text())
             inst = self.groupPersons[person_idx][2]
 
-        elif grpBox.title() == 'LinePassing':
+        elif grpBox.title() == 'LineCrossing':
             group_idx = int(self.group_idx_cmbBox.currentText())
             if self.linepass_list_wdgt.count() > 0:
                 linepass_idx = int(self.linepass_list_wdgt.currentItem().text())
@@ -2189,12 +2189,12 @@ class ObsToolbox(QMainWindow):
 
 
     def stackedHist(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         stackHistWin = StackHistWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
@@ -2202,12 +2202,12 @@ class ObsToolbox(QMainWindow):
         stackHistWin.exec_()
 
     def speedPlot(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         speedPlotWin = SpeedPlotWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
@@ -2215,12 +2215,12 @@ class ObsToolbox(QMainWindow):
         speedPlotWin.exec_()
 
     def odMatrix(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         odMtrxWin = OdMatrixWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
@@ -2228,36 +2228,36 @@ class ObsToolbox(QMainWindow):
         odMtrxWin.exec_()
 
     def pieChart(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         pieChartWin = PieChartWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
         pieChartWin.exec_()
 
     def modeChart(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         modeChartWin = ModeChartWindow(self)
         # modeChartWin.setModal(True)
         # modeChartWin.setAttribute(Qt.WA_DeleteOnClose)
         modeChartWin.exec_()
 
     def compHist(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         compHistWin = CompHistWindow(self)
 
         # tempHistWin.setModal(True)
@@ -2266,12 +2266,12 @@ class ObsToolbox(QMainWindow):
         compHistWin.exec_()
 
     def genReport(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         genRepWin = genReportWindow(self)
         genRepWin.setGeometry(200, 200, 800, 480)
 
@@ -2280,12 +2280,12 @@ class ObsToolbox(QMainWindow):
         genRepWin.exec_()
 
     def compIndicators(self):
-        if session == None:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined.')
-            msg.exec_()
-            return
+        # if session == None:
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setText('The database file is not defined.')
+        #     msg.exec_()
+        #     return
         compIndWin = compIndicatorsWindow(self)
         compIndWin.setGeometry(200, 100, 900, 600)
 
@@ -2416,13 +2416,17 @@ class TempHistWindow(QDialog):
             self.canvas.print_png(fileName)
 
     def actionTypeChanged(self):
+        if self.dbFileLedit.text() == '':
+            self.actionTypeCombobx.setCurrentIndex(-1)
+            return
+        current_session = connectDatabase(self.dbFileLedit.text())
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
         self.plotBtn.setEnabled(True)
 
@@ -2510,70 +2514,87 @@ class SpeedPlotWindow(QDialog):
         self.canvas = FigureCanvas(self.figure)
 
         winLayout = QVBoxLayout()
-        dbLayout1 = QHBoxLayout()
-        dbLayout2 = QHBoxLayout()
+        dbLayout = QHBoxLayout()
         gridLayout = QGridLayout()
 
-        dbLayout1.addWidget(QLabel('Database file (Before):'))
-        self.dbFile1Ledit = QLineEdit()
-        dbLayout1.addWidget(self.dbFile1Ledit)
+        dbLayout.addWidget(QLabel('Database file:'), 1)
+        self.dbFileLedit = QLineEdit()
+        self.dbFileLedit.setText(self.parent().dbFilename)
+        dbLayout.addWidget(self.dbFileLedit, 8)
 
-        self.openDbFileBtn1 = QPushButton()
-        self.openDbFileBtn1.setIcon(QIcon('icons/database.png'))
-        self.openDbFileBtn1.setToolTip('Open (before) database file')
-        self.openDbFileBtn1.clicked.connect(self.opendbFile1)
-        dbLayout1.addWidget(self.openDbFileBtn1)
+        self.openDbFileBtn = QPushButton()
+        self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn.setToolTip('Open (before) database file')
+        self.openDbFileBtn.clicked.connect(self.opendbFile)
+        dbLayout.addWidget(self.openDbFileBtn, 1)
 
-        dbLayout2.addWidget(QLabel('Database file (After):'))
-        self.dbFile2Ledit = QLineEdit()
-        self.dbFile2Ledit.setText(self.parent().dbFilename)
-        dbLayout2.addWidget(self.dbFile2Ledit)
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        self.dbLabelLedit = QLineEdit()
+        dbLayout.addWidget(self.dbLabelLedit, 2)
 
-        self.openDbFileBtn2 = QPushButton()
-        self.openDbFileBtn2.setIcon(QIcon('icons/database.png'))
-        self.openDbFileBtn2.setToolTip('Open (after) database file')
-        self.openDbFileBtn2.clicked.connect(self.opendbFile2)
-        dbLayout2.addWidget(self.openDbFileBtn2)
-
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 5, Qt.AlignLeft)
-
-        gridLayout.addWidget(QLabel('Plot type:'), 0, 0, Qt.AlignRight)
-        self.plotTypeCmbx = QComboBox()
-        self.plotTypeCmbx.addItems(['Box plot', 'Histogram'])
-        self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
-        gridLayout.addWidget(self.plotTypeCmbx, 0, 1, Qt.AlignLeft)
-
-        gridLayout.addWidget(QLabel('Transport:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        gridLayout.addWidget(self.transportCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Action type:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Unit Index:'), 0, 6, 1, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Index:'), 0, 4)#, 1, 2, Qt.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 8, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5)#, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
+        self.directionCombobx = QComboBox()
+        self.directionCombobx.addItems(['-- Both --', 'Right to left', 'Left to right'])
+        self.directionCombobx.setCurrentIndex(0)
+        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
+
+        self.addInputBtn = QPushButton(QIcon('icons/addToList.png'), 'Add')
+        # self.addInputBtn.setIcon(QIcon('icons/addToList.png'))
+        self.addInputBtn.clicked.connect(self.addInBtnClick)
+        # self.addInputBtn.setEnabled(False)
+        gridLayout.addWidget(self.addInputBtn, 0, 8)
+
+        self.clearInputBtn = QPushButton('Clear list')
+        self.clearInputBtn.clicked.connect(self.clearInBtnClick)
+        # self.addInputBtn.setEnabled(False)
+        gridLayout.addWidget(self.clearInputBtn, 0, 9)
+
+        self.inputTable = QTableWidget()
+        self.inputTable.setColumnCount(6)
+        self.inputTable.horizontalHeader().setStretchLastSection(True)
+        # self.inputTable.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.columnNames = ['Label', 'Transport', 'Action type', 'Unit Idx', 'Direction', 'Database file']
+        self.inputTable.setHorizontalHeaderLabels(self.columnNames)
+        gridLayout.addWidget(self.inputTable, 1, 0, 1, 10)
+
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 4, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Plot type:'), 2, 4, Qt.AlignRight)
+        self.plotTypeCmbx = QComboBox()
+        self.plotTypeCmbx.addItems(['Box plot', 'Histogram'])
+        self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
+        gridLayout.addWidget(self.plotTypeCmbx, 2, 5, Qt.AlignLeft)
 
         self.intervalType = QLabel('Time interval:')
-        gridLayout.addWidget(self.intervalType, 1, 5, Qt.AlignRight)
+        gridLayout.addWidget(self.intervalType, 2, 6, Qt.AlignRight)
         self.intervaLe = QLineEdit('30')
         self.intervaLe.setFixedWidth(35)
-        gridLayout.addWidget(self.intervaLe, 1, 6)  # , Qt.AlignLeft)
+        gridLayout.addWidget(self.intervaLe, 2, 7, Qt.AlignLeft)
         self.intervalUnit = QLabel('(min.)')
-        gridLayout.addWidget(self.intervalUnit, 1, 7, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervalUnit, 2, 8, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotSpeed)
         self.plotBtn.setEnabled(False)
-        gridLayout.addWidget(self.plotBtn, 1, 8)
+        gridLayout.addWidget(self.plotBtn, 2, 9)
 
-        winLayout.addLayout(dbLayout1)
-        winLayout.addLayout(dbLayout2)
+        winLayout.addLayout(dbLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.canvas)
 
@@ -2595,97 +2616,75 @@ class SpeedPlotWindow(QDialog):
 
         ax = self.figure.add_subplot(111)
 
-        # plot data
-        transport = self.transportCombobx.currentText()
-        actionType = self.actionTypeCombobx.currentText()
-        unitIdx = self.unitIdxCombobx.currentText()
+        inputs = {n: [] for n in self.columnNames}
+        for j in range(self.inputTable.columnCount()):
+            for i in range(self.inputTable.rowCount()):
+                inputs[self.columnNames[j]].append(self.inputTable.item(i, j).text())
+
         interval = int(self.intervaLe.text())
+        plotType = self.plotTypeCmbx.currentText()
 
-        dbFilename1 = self.dbFile1Ledit.text()
-        dbFilename2 = self.dbFile2Ledit.text()
+        if plotType == 'Box plot':
+            err = speedBoxPlot(inputs['Database file'], inputs['Label'], inputs['Transport'],
+                               inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
+                               ax, interval, alpha=0.7)
+        elif plotType == 'Histogram':
+            err = speedHistogram(inputs['Database file'], inputs['Label'], inputs['Transport'],
+                               inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
+                               ax, interval, alpha=0.7)
 
-        if dbFilename1 == '' or dbFilename2 == '':
+        if err != None:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(err)
+            msg.exec_()
+        else:
+            # refresh canvas
+            self.canvas.draw()
+
+
+    def opendbFile(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFileLedit.setText(dbFilename)
+
+        self.actionTypeCombobx.setCurrentIndex(-1)
+
+    def addInBtnClick(self):
+        if self.dbFileLedit.text() == '':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('The database file is not defined!')
             msg.exec_()
             return
 
-        self.session1 = createDatabase(dbFilename1)
-        if self.session1 is None:
-            self.session1 = connectDatabase(dbFilename1)
+        rowPosition = self.inputTable.rowCount()
+        self.inputTable.insertRow(rowPosition)
 
-        self.session2 = createDatabase(dbFilename2)
-        if self.session2 is None:
-            self.session2 = connectDatabase(dbFilename2)
-        if self.plotTypeCmbx.currentText() == 'Box plot':
-            cls_obs = LinePassing
-            first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
-            last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
+        self.inputTable.setItem(rowPosition, 0, QTableWidgetItem(self.dbLabelLedit.text()))
+        self.inputTable.setItem(rowPosition, 1, QTableWidgetItem(self.transportCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 2, QTableWidgetItem(self.actionTypeCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 3, QTableWidgetItem(self.unitIdxCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 4, QTableWidgetItem(self.directionCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 5, QTableWidgetItem(self.dbFileLedit.text()))
 
-            first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
-            last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
+    def clearInBtnClick(self):
+        self.inputTable.setRowCount(0)
 
-            if first_obs_time1.time() >= first_obs_time2.time():
-                bins_start = first_obs_time1
-            else:
-                bins_start = first_obs_time2
-
-            if last_obs_time1.time() <= last_obs_time2.time():
-                bins_end = last_obs_time1
-            else:
-                bins_end = last_obs_time2
-
-            start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
-            end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
-
-            bins = calculateBinsEdges(start, end, interval)
-            if len(bins) < 2:
-                QMessageBox.information(self, 'Error!',
-                                        'The common observation duration is too short!')
-                return
-            times = [b.time() for b in bins]
-            err = speedBoxPlot(transport, actionType, unitIdx, times, ax, [self.session1, self.session2])
-            if err != None:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setText(err)
-                msg.exec_()
-            else:
-                # refresh canvas
-                self.canvas.draw()
-        elif self.plotTypeCmbx.currentText() == 'Histogram':
-            err = speedHistogram(transport, actionType, unitIdx, interval, ax,
-                                 [self.session1, self.session2])
-            if err != None:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setText(err)
-                msg.exec_()
-            else:
-                # refresh canvas
-                self.canvas.draw()
-
-    def opendbFile1(self):
-        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
-                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
-        if dbFilename != '':
-            self.dbFile1Ledit.setText(dbFilename)
-
-    def opendbFile2(self):
-        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
-                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
-        if dbFilename != '':
-            self.dbFile2Ledit.setText(dbFilename)
 
     def actionTypeChanged(self):
+        if self.dbFileLedit.text() == '':
+            self.actionTypeCombobx.setCurrentIndex(-1)
+            return
+        current_session = connectDatabase(self.dbFileLedit.text())
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
         self.plotBtn.setEnabled(True)
 
@@ -2975,60 +2974,6 @@ class ModeChartWindow(QDialog):
 
         ax = self.figure.subplots(2, 2, sharex=True, sharey='row')
 
-        # dbFilename1 = self.dbFileLedit.text()
-        # dbFilename2 = self.dbFile2Ledit.text()
-        #
-        # if dbFilename1 == '' or dbFilename2 == '':
-        #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
-        #     msg.setText('The database file is not defined!')
-        #     msg.exec_()
-        #     return
-        #
-        # self.session1 = createDatabase(dbFilename1)
-        # if self.session1 is None:
-        #     self.session1 = connectDatabase(dbFilename1)
-        #
-        # self.session2 = createDatabase(dbFilename2)
-        # if self.session2 is None:
-        #     self.session2 = connectDatabase(dbFilename2)
-        #
-        #
-        # cls_obs = LinePassing
-        # first_obs_time1 = self.session1.query(func.min(cls_obs.instant)).all()[0][0]
-        # last_obs_time1 = self.session1.query(func.max(cls_obs.instant)).all()[0][0]
-        #
-        # first_obs_time2 = self.session2.query(func.min(cls_obs.instant)).all()[0][0]
-        # last_obs_time2 = self.session2.query(func.max(cls_obs.instant)).all()[0][0]
-        #
-        # if first_obs_time1.time() >= first_obs_time2.time():
-        #     bins_start = first_obs_time1
-        # else:
-        #     bins_start = first_obs_time2
-        #
-        # if last_obs_time1.time() <= last_obs_time2.time():
-        #     bins_end = last_obs_time1
-        # else:
-        #     bins_end = last_obs_time2
-        #
-        # start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
-        # end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
-        #
-        # duration = end - start
-        # duration_in_s = duration.total_seconds()
-        #
-        # timeInterval = int(self.intervalLe.text())
-        # bins = calculateBinsEdges(start, end, timeInterval)
-        # if len(bins) < 2:
-        #     QMessageBox.information(self, 'Error!',
-        #             'The common observation duration is too short!')
-        #     return
-        #
-        # label1 = self.session1.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
-        # label2 = self.session2.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
-        #
-        # times = [b.time() for b in bins]
-
         inputs = {n: [] for n in self.columnNames}
         for j in range(self.inputTable.columnCount()):
             for i in range(self.inputTable.rowCount()):
@@ -3046,25 +2991,30 @@ class ModeChartWindow(QDialog):
         if dbFilename != '':
             self.dbFileLedit.setText(dbFilename)
 
+        self.actionTypeCombobx.setCurrentIndex(-1)
+
 
     def actionTypeChanged(self):
+        if self.dbFileLedit.text() == '':
+            self.actionTypeCombobx.setCurrentIndex(-1)
+            return
+        current_session = connectDatabase(self.dbFileLedit.text())
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
         self.plotBtn.setEnabled(True)
-
 
 
 class CompHistWindow(QDialog):
     def __init__(self, parent=None):
         super(CompHistWindow, self).__init__(parent)
 
-        self.setWindowTitle('Number of street users over the time')
+        self.setWindowTitle('Number of street users over time')
 
         self.figure = plt.figure(tight_layout=True)
 
@@ -3078,7 +3028,8 @@ class CompHistWindow(QDialog):
 
         dbLayout.addWidget(QLabel('Database file:'), 1)
         self.dbFileLedit = QLineEdit()
-        self.dbFileLedit.setText(self.parent().dbFilename)
+        if self.parent().dbFilename is not None:
+            self.dbFileLedit.setText(self.parent().dbFilename)
         dbLayout.addWidget(self.dbFileLedit, 8)
 
         self.openDbFileBtn = QPushButton()
@@ -3090,20 +3041,6 @@ class CompHistWindow(QDialog):
         dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
         self.dbLabelLedit = QLineEdit()
         dbLayout.addWidget(self.dbLabelLedit, 2)
-
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 6, Qt.AlignLeft)
-
-        gridLayout.addWidget(QLabel('Plot type:'), 2, 7, Qt.AlignRight)
-        self.plotTypeCmbx = QComboBox()
-        self.plotTypeCmbx.addItems(['Line plot', 'Scatter plot'])
-        # self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
-        gridLayout.addWidget(self.plotTypeCmbx, 2, 8, Qt.AlignLeft)
-
-        gridLayout.addWidget(QLabel('Interval:'), 2, 9, Qt.AlignRight)
-        self.intervaLe = QLineEdit('10')
-        self.intervaLe.setFixedWidth(35)
-        gridLayout.addWidget(self.intervaLe, 2, 10)  # , Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 2, 11, Qt.AlignLeft)
 
         gridLayout.addWidget(QLabel('Transport:'), 0, 2, Qt.AlignRight)
         self.transportCombobx = QComboBox()
@@ -3145,6 +3082,20 @@ class CompHistWindow(QDialog):
         self.columnNames = ['Label', 'Transport', 'Action type', 'Unit Idx', 'Direction', 'Database file']
         self.inputTable.setHorizontalHeaderLabels(self.columnNames)
         gridLayout.addWidget(self.inputTable, 1, 0, 1, 13)
+
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 6, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Plot type:'), 2, 7, Qt.AlignRight)
+        self.plotTypeCmbx = QComboBox()
+        self.plotTypeCmbx.addItems(['Line plot', 'Scatter plot'])
+        # self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
+        gridLayout.addWidget(self.plotTypeCmbx, 2, 8, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Interval:'), 2, 9, Qt.AlignRight)
+        self.intervaLe = QLineEdit('10')
+        self.intervaLe.setFixedWidth(35)
+        gridLayout.addWidget(self.intervaLe, 2, 10)  # , Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 2, 11, Qt.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotCompHist)
@@ -3211,10 +3162,12 @@ class CompHistWindow(QDialog):
         if dbFilename != '':
             self.dbFileLedit.setText(dbFilename)
 
+        self.actionTypeCombobx.setCurrentIndex(-1)
+
         # label1 = os.path.basename(self.parent().dbFilename).split('.')[0]
         # label2 = os.path.basename(self.dbFile2Ledit.text()).split('.')[0]
-        # label1 = self.session1.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
-        # label2 = self.session2.query(LinePassing.instant).first()[0].strftime('%a, %b %d, %Y')
+        # label1 = self.session1.query(LineCrossing.instant).first()[0].strftime('%a, %b %d, %Y')
+        # label2 = self.session2.query(LineCrossing.instant).first()[0].strftime('%a, %b %d, %Y')
 
     def addInBtnClick(self):
         if self.dbFileLedit.text() == '':
@@ -3238,13 +3191,19 @@ class CompHistWindow(QDialog):
         self.inputTable.setRowCount(0)
 
     def actionTypeChanged(self):
+        if self.dbFileLedit.text() == '':
+            self.actionTypeCombobx.setCurrentIndex(-1)
+            return
+        current_session = connectDatabase(self.dbFileLedit.text())
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
+            # idxItems.insert(0, '-- All --')
+            self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
         self.plotBtn.setEnabled(True)
 
@@ -3264,7 +3223,24 @@ class genReportWindow(QDialog):
 
 
         winLayout = QVBoxLayout()
+        dbLayout = QHBoxLayout()
         gridLayout = QGridLayout()
+
+        dbLayout.addWidget(QLabel('Database file:'), 1)
+        self.dbFileLedit = QLineEdit()
+        if self.parent().dbFilename is not None:
+            self.dbFileLedit.setText(self.parent().dbFilename)
+        dbLayout.addWidget(self.dbFileLedit, 8)
+
+        self.openDbFileBtn = QPushButton()
+        self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn.setToolTip('Open database file')
+        self.openDbFileBtn.clicked.connect(self.opendbFile)
+        dbLayout.addWidget(self.openDbFileBtn, 1)
+
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        self.dbLabelLedit = QLineEdit()
+        dbLayout.addWidget(self.dbLabelLedit, 2)
 
         gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
@@ -3283,45 +3259,45 @@ class genReportWindow(QDialog):
         self.unitIdxCombobx = QComboBox()
         gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Time interval:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
+        self.directionCombobx = QComboBox()
+        self.directionCombobx.addItems(['-- Both --', 'Right to left', 'Left to right'])
+        self.directionCombobx.setCurrentIndex(0)
+        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Time interval:'), 0, 8, Qt.AlignRight)
         self.intervalCombobx = QComboBox()
         self.intervalCombobx.addItems(['5', '10', '15', '20', '30', '60', '90', '120'])
-        gridLayout.addWidget(self.intervalCombobx, 0, 7)#, Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervalCombobx, 0, 9)#, Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 10, Qt.AlignLeft)
 
 
         self.genRepBtn = QPushButton('Generate report')
         self.genRepBtn.clicked.connect(self.genReport)
-        gridLayout.addWidget(self.genRepBtn, 0, 9)
+        gridLayout.addWidget(self.genRepBtn, 0, 11)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save report')
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 10)
+        gridLayout.addWidget(self.saveBtn, 0, 12)
 
         # winLayout.addWidget(self.toolbar)
+        winLayout.addLayout(dbLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.table)
 
         self.setLayout(winLayout)
 
     def genReport(self):
-
+        dbFileName = self.dbFileLedit.text()
         transport = self.transportCombobx.currentText()
         actionType = self.actionTypeCombobx.currentText()
         unitIdx = self.unitIdxCombobx.currentText()
+        direction = self.directionCombobx.currentText()
         interval = int(self.intervalCombobx.currentText())
 
-
-        # bins = calculateBinsEdges(start_obs_time, end_obs_time)
-        # if len(bins) < 2:
-        #     QMessageBox.information(self, 'Error!', 'The observation duration is too short!')
-        #     return
-        # else:
-        #     start_time = bins[0]
-        #     end_time = bins[-1]
-        self.indicatorsDf = generateReport(transport, actionType, unitIdx, interval, session)
+        self.indicatorsDf = generateReport(dbFileName, transport, actionType, unitIdx, direction, interval)
 
         norm_indDf = pd.DataFrame()
         for i in range(self.indicatorsDf.shape[0]):
@@ -3357,15 +3333,24 @@ class genReportWindow(QDialog):
             msg.exec_()
 
     def actionTypeChanged(self):
+        if self.dbFileLedit.text() == '':
+            self.actionTypeCombobx.setCurrentIndex(-1)
+            return
+        current_session = connectDatabase(self.dbFileLedit.text())
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
         # self.genRepBtn.setEnabled(True)
+    def opendbFile(self):
+        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
+                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
+        if dbFilename != '':
+            self.dbFileLedit.setText(dbFilename)
 
 
 class compIndicatorsWindow(QDialog):
@@ -3384,31 +3369,24 @@ class compIndicatorsWindow(QDialog):
         self.session2 = None
 
         winLayout = QVBoxLayout()
-        dbLayout1 = QHBoxLayout()
-        dbLayout2 = QHBoxLayout()
+        dbLayout = QHBoxLayout()
         gridLayout = QGridLayout()
 
-        dbLayout1.addWidget(QLabel('Database file (Before):'))
-        self.dbFile1Ledit = QLineEdit()
-        dbLayout1.addWidget(self.dbFile1Ledit)
+        dbLayout.addWidget(QLabel('Database file:'), 1)
+        self.dbFileLedit = QLineEdit()
+        if self.parent().dbFilename is not None:
+            self.dbFileLedit.setText(self.parent().dbFilename)
+        dbLayout.addWidget(self.dbFileLedit, 8)
 
-        self.openDbFileBtn1 = QPushButton()
-        self.openDbFileBtn1.setIcon(QIcon('icons/database.png'))
-        self.openDbFileBtn1.setToolTip('Open database file')
-        self.openDbFileBtn1.clicked.connect(self.opendbFile1)
-        dbLayout1.addWidget(self.openDbFileBtn1)
+        self.openDbFileBtn = QPushButton()
+        self.openDbFileBtn.setIcon(QIcon('icons/database.png'))
+        self.openDbFileBtn.setToolTip('Open database file')
+        self.openDbFileBtn.clicked.connect(self.opendbFile)
+        dbLayout.addWidget(self.openDbFileBtn, 1)
 
-
-        dbLayout2.addWidget(QLabel('Database file (After):'))
-        self.dbFile2Ledit = QLineEdit()
-        self.dbFile2Ledit.setText(self.parent().dbFilename)
-        dbLayout2.addWidget(self.dbFile2Ledit)
-
-        self.openDbFileBtn2 = QPushButton()
-        self.openDbFileBtn2.setIcon(QIcon('icons/database.png'))
-        self.openDbFileBtn2.setToolTip('Open database file')
-        self.openDbFileBtn2.clicked.connect(self.opendbFile2)
-        dbLayout2.addWidget(self.openDbFileBtn2)
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        self.dbLabelLedit = QLineEdit()
+        dbLayout.addWidget(self.dbLabelLedit, 2)
 
         gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
@@ -3427,57 +3405,74 @@ class compIndicatorsWindow(QDialog):
         self.unitIdxCombobx = QComboBox()
         gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Time interval:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
+        self.directionCombobx = QComboBox()
+        self.directionCombobx.addItems(['-- Both --', 'Right to left', 'Left to right'])
+        self.directionCombobx.setCurrentIndex(0)
+        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
+
+        self.addInputBtn = QPushButton(QIcon('icons/addToList.png'), 'Add')
+        # self.addInputBtn.setIcon(QIcon('icons/addToList.png'))
+        self.addInputBtn.clicked.connect(self.addInBtnClick)
+        # self.addInputBtn.setEnabled(False)
+        gridLayout.addWidget(self.addInputBtn, 0, 8)
+
+        self.clearInputBtn = QPushButton('Clear list')
+        self.clearInputBtn.clicked.connect(self.clearInBtnClick)
+        # self.addInputBtn.setEnabled(False)
+        gridLayout.addWidget(self.clearInputBtn, 0, 9)
+
+        self.inputTable = QTableWidget()
+        self.inputTable.setColumnCount(6)
+        self.inputTable.setMaximumHeight(80)
+        self.inputTable.horizontalHeader().setStretchLastSection(True)
+        # self.inputTable.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.columnNames = ['Label', 'Transport', 'Action type', 'Unit Idx', 'Direction', 'Database file']
+        self.inputTable.setHorizontalHeaderLabels(self.columnNames)
+        gridLayout.addWidget(self.inputTable, 1, 0, 1, 10)
+
+        gridLayout.addWidget(QLabel('Time interval:'), 2, 5, Qt.AlignRight)
         self.intervalCombobx = QComboBox()
         self.intervalCombobx.addItems(['5', '10', '15', '20', '30', '60', '90', '120'])
-        gridLayout.addWidget(self.intervalCombobx, 0, 7)  # , Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervalCombobx, 2, 6)  # , Qt.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 2, 7, Qt.AlignLeft)
 
         self.genRepBtn = QPushButton('Compare Indicators')
         self.genRepBtn.clicked.connect(self.compIndicators)
-        gridLayout.addWidget(self.genRepBtn, 0, 9)
+        gridLayout.addWidget(self.genRepBtn, 2, 8)
 
         self.saveBtn = QPushButton()
         self.saveBtn.setIcon(QIcon('icons/save.png'))
         self.saveBtn.setToolTip('Save results to clipboard')
         self.saveBtn.setFixedWidth(75)
         self.saveBtn.clicked.connect(self.saveReport)
-        gridLayout.addWidget(self.saveBtn, 0, 10)
+        gridLayout.addWidget(self.saveBtn, 2, 9)
 
-        # winLayout.addWidget(self.toolbar)
-        winLayout.addLayout(dbLayout1)
-        winLayout.addLayout(dbLayout2)
+        winLayout.addLayout(dbLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.table)
 
         self.setLayout(winLayout)
 
     def compIndicators(self):
-        dbFilename1 = self.dbFile1Ledit.text()
-        dbFilename2 = self.dbFile2Ledit.text()
-
-        if dbFilename1 == '' or dbFilename2 == '':
+        if self.inputTable.rowCount() != 2:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
-            msg.setText('The database file is not defined!')
+            msg.setText('Two input items are required!')
             msg.exec_()
             return
 
-        self.session1 = createDatabase(dbFilename1)
-        if self.session1 is None:
-            self.session1 = connectDatabase(dbFilename1)
+        inputs = {n: [] for n in self.columnNames}
+        for j in range(self.inputTable.columnCount()):
+            for i in range(self.inputTable.rowCount()):
+                inputs[self.columnNames[j]].append(self.inputTable.item(i, j).text())
 
-        self.session2 = createDatabase(dbFilename2)
-        if self.session2 is None:
-            self.session2 = connectDatabase(dbFilename2)
-
-        transport = self.transportCombobx.currentText()
-        actionType = self.actionTypeCombobx.currentText()
-        unitIdx = self.unitIdxCombobx.currentText()
         interval = int(self.intervalCombobx.currentText())
 
-        self.indicatorsDf = compareIndicators(transport, actionType, unitIdx, interval,
-                                              self.session1, self.session2)
+        self.indicatorsDf = compareIndicators(inputs['Database file'], inputs['Label'],
+                                              inputs['Transport'], inputs['Action type'],
+                                              inputs['Unit Idx'], inputs['Direction'], interval)
+
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
@@ -3490,26 +3485,54 @@ class compIndicatorsWindow(QDialog):
             msg.setText('The table is copied to the clipboard.')
             msg.exec_()
 
-    def opendbFile1(self):
+    def opendbFile(self):
         dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
                                                     QDir.homePath(), "Sqlite files (*.sqlite)")
         if dbFilename != '':
-            self.dbFile1Ledit.setText(dbFilename)
+            self.dbFileLedit.setText(dbFilename)
 
-    def opendbFile2(self):
-        dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
-                                                    QDir.homePath(), "Sqlite files (*.sqlite)")
-        if dbFilename != '':
-            self.dbFile2Ledit.setText(dbFilename)
+        self.actionTypeCombobx.setCurrentIndex(-1)
+
+    def addInBtnClick(self):
+        if self.dbFileLedit.text() == '':
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('The database file is not defined!')
+            msg.exec_()
+            return
+
+        rowPosition = self.inputTable.rowCount()
+        if rowPosition < 2:
+            self.inputTable.insertRow(rowPosition)
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('Only two items is accepted!')
+            msg.exec_()
+            return
+
+        self.inputTable.setItem(rowPosition, 0, QTableWidgetItem(self.dbLabelLedit.text()))
+        self.inputTable.setItem(rowPosition, 1, QTableWidgetItem(self.transportCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 2, QTableWidgetItem(self.actionTypeCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 3, QTableWidgetItem(self.unitIdxCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 4, QTableWidgetItem(self.directionCombobx.currentText()))
+        self.inputTable.setItem(rowPosition, 5, QTableWidgetItem(self.dbFileLedit.text()))
+
+    def clearInBtnClick(self):
+        self.inputTable.setRowCount(0)
 
     def actionTypeChanged(self):
+        if self.dbFileLedit.text() == '':
+            self.actionTypeCombobx.setCurrentIndex(-1)
+            return
+        current_session = connectDatabase(self.dbFileLedit.text())
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Line.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in session.query(Zone.idx).all()])
+            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
 class plotTrajWindow(QDialog):
     def __init__(self, parent=None):

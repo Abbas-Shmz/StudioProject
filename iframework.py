@@ -206,8 +206,8 @@ class AbstractPassing:
             print('Warning: passing person and group or both None')
 
 
-class LinePassing(AbstractPassing, Base):
-    __tablename__ = 'linepassings'
+class LineCrossing(AbstractPassing, Base):
+    __tablename__ = 'linecrossings'
     idx = Column(Integer, primary_key=True)
     lineIdx = Column(Integer, ForeignKey('lines.idx'))
     groupIdx = Column(Integer, ForeignKey('groups.idx'))
@@ -316,8 +316,8 @@ if __name__ == '__main__':  # demo code
     line = Line('line1', 0., 0., 0., 10.)
     zone = Zone('zone1', [0., 0., 1., 1.], [0., 1., 1., 0.])
     destination = Zone('destination1', [10., 10., 11., 11.], [10., 11., 11., 10.])
-    counts = [LinePassing(line, datetime(2020, 7, 2, 23, 20 + i), person=Person(20 + i, 'female', disability=True),
-                          transport='walking') for i in range(5)]
+    counts = [LineCrossing(line, datetime(2020, 7, 2, 23, 20 + i), person=Person(20 + i, 'female', disability=True),
+                           transport='walking') for i in range(5)]
     group1 = Group([Person(13 + i, 'female', False, False, True, False) for i in range(3)])
     groupMode1 = Mode.initGroup('walking', group1)
     activities = [Activity('walking', datetime(2020, 7, 2, 23, 0), datetime(2020, 7, 2, 23, 10), zone,
@@ -325,16 +325,16 @@ if __name__ == '__main__':  # demo code
                   Activity('eating', datetime(2020, 7, 2, 23, 10), datetime(2020, 7, 2, 23, 12), zone,
                            person=Person(40, 'male', True, False, True, False)),
                   Activity('playing', datetime(2020, 7, 2, 22, 0), datetime(2020, 7, 2, 23, 0), zone, group=group1)]
-    counts.append(LinePassing(line, datetime(2020, 7, 2, 23, 5), group=group1))
-    counts.append(LinePassing(line, datetime(2020, 7, 2, 23, 7), person=Person(23, 'unknown'), transport='cardriver',
-                              vehicle=Vehicle('car')))
-    counts.append(LinePassing(line, datetime(2020, 7, 2, 23, 9), person=Person('teen', 'unknown'), transport='scooter',
-                              vehicle=Vehicle('scooter')))
-    counts.append(LinePassing(line, datetime(2020, 7, 2, 23, 11), person=Person(12, 'female'), transport='bike'))
-    counts.append(LinePassing(line, datetime(2020, 7, 2, 23, 13), person=Person(),
-                              transport='cardriver'))  # example of counting cars without knowing the driver and passenger's attributes
-    counts.append(LinePassing(line, datetime(2020, 7, 2, 23, 15), group=Group([Person(34 + i) for i in range(3)]),
-                              transport='carpassenger'))
+    counts.append(LineCrossing(line, datetime(2020, 7, 2, 23, 5), group=group1))
+    counts.append(LineCrossing(line, datetime(2020, 7, 2, 23, 7), person=Person(23, 'unknown'), transport='cardriver',
+                               vehicle=Vehicle('car')))
+    counts.append(LineCrossing(line, datetime(2020, 7, 2, 23, 9), person=Person('teen', 'unknown'), transport='scooter',
+                               vehicle=Vehicle('scooter')))
+    counts.append(LineCrossing(line, datetime(2020, 7, 2, 23, 11), person=Person(12, 'female'), transport='bike'))
+    counts.append(LineCrossing(line, datetime(2020, 7, 2, 23, 13), person=Person(),
+                               transport='cardriver'))  # example of counting cars without knowing the driver and passenger's attributes
+    counts.append(LineCrossing(line, datetime(2020, 7, 2, 23, 15), group=Group([Person(34 + i) for i in range(3)]),
+                               transport='carpassenger'))
 
     counts.append(
         ZoneCrossing(zone, datetime(2020, 7, 7, 9, 5), True, person=Person(33, 'male', False, False, True, False)))

@@ -24,7 +24,7 @@ from trafficintelligence import storage, moving
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
 from trafficintelligence.storage import ProcessParameters
 import iframework
-from iframework import connectDatabase, LinePassing, ZoneCrossing, Person, Mode, GroupBelonging,\
+from iframework import connectDatabase, LineCrossing, ZoneCrossing, Person, Mode, GroupBelonging,\
     Vehicle, Line, Zone, Group
 
 noDataSign = 'x'
@@ -63,24 +63,21 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         session = connectDatabase(dbFiles[i])
         sessions.append(session)
         if 'line' in actionTypes[i].split(' '):
-            cls_obs = LinePassing
+            cls_obs = LineCrossing
         elif 'zone' in actionTypes[i].split(' '):
             cls_obs = ZoneCrossing
 
         first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
         last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
 
-        first_obs_times.append(first_obs_time)
-        last_obs_times.append(last_obs_time)
+        first_obs_times.append(first_obs_time.time())
+        last_obs_times.append(last_obs_time.time())
 
     bins_start = max(first_obs_times)
     bins_end = min(last_obs_times)
 
-    start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
-    end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
-
-    duration = end - start
-    duration_in_s = duration.total_seconds()
+    start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
+    end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
 
     bins = calculateBinsEdges(start, end, interval)
 
@@ -93,12 +90,18 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     time_lists = []
     for i in range(inputNo):
         if 'line' in actionTypes[i].split(' '):
-            q = sessions[i].query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdxs[i]). \
-                join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
+            q = sessions[i].query(LineCrossing.instant)
+
+            # if unitIdxs[i] != '-- All --':
+            #     q = q.filter(LineCrossing.lineIdx == unitIdxs[i])
+
             if directions[i] == 'Right to left':
-                q = q.filter(LinePassing.rightToLeft == True)
+                q = q.filter(LineCrossing.rightToLeft == True)
             elif directions[i] == 'Left to right':
-                q = q.filter(LinePassing.rightToLeft == False)
+                q = q.filter(LineCrossing.rightToLeft == False)
+
+            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
+
         elif 'zone' in actionTypes[i].split(' '):
             q = sessions[i].query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdxs[i]). \
                 join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
@@ -106,6 +109,7 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
                 q = q.filter(ZoneCrossing.entering == True)
             elif 'exiting' in actionTypes[i].split(' '):
                 q = q.filter(ZoneCrossing.entering == False)
+
         q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
             .filter(Mode.transport == transports[i])
 
@@ -205,7 +209,7 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         # print((locator()))
 
         if inputNo == 1:
-            xLabel = 'Time ({})'.format(time_list[0].strftime('%A, %b %d, %Y'))
+            xLabel = 'Time ({})'.format(bins_start.strftime('%A, %b %d, %Y'))
         else:
             xLabel = 'Time'
 
@@ -354,45 +358,53 @@ def stackedHist(user, attr, ax, session, bins=20):
 
 
 # ==============================================================
-def speedHistogram(transport, actionType, unitIdx, interval, ax, sessions,
-                 alpha=0.4, colors=['skyblue', 'salmon'], ec='k',
-                 labels=['before', 'after'], rwidth=0.9):
-    q1 = sessions[0].query(LinePassing.speed).filter(LinePassing.lineIdx == unitIdx). \
-        join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx) \
-        .join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
-        .filter(Mode.transport == transport)
+def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
+                 ax=None, interval=20, alpha=1, colors=plotColors, ec='k', rwidth=0.9):
+    inputNo = len(dbFiles)
+    speed_lists = []
+    # sessions = []
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
 
-    speed_list1 = [i[0] for i in q1.all()]
+        q = session.query(LineCrossing.speed).filter(LineCrossing.lineIdx == unitIdxs[i]). \
+            join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+            .join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+            .filter(Mode.transport == transports[i])
+        if directions[i] == 'Right to left':
+            q = q.filter(LineCrossing.rightToLeft == True)
+        elif directions[i] == 'Left to right':
+            q = q.filter(LineCrossing.rightToLeft == False)
 
-    q2 = sessions[1].query(LinePassing.speed).filter(LinePassing.lineIdx == unitIdx). \
-        join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx) \
-        .join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
-        .filter(Mode.transport == transport)
+        speed_lists.append([i[0] for i in q.all()])
 
-    speed_list2 = [i[0] for i in q2.all()]
+    for i, speedList in enumerate(speed_lists):
+        speed_lists[i] = [v for v in speedList if v is not None]
 
     # bins_start = int(np.floor(min([min(speed_list1), min(speed_list2)])))
-    bins_end = np.ceil(max([max(speed_list1), max(speed_list2)]))
+    bins_end = np.ceil(max([max(speed_list) for speed_list in speed_lists if speed_list != []]))
     bins_end = int(((bins_end // 10) + 1) * 10)
 
     bins = [b for b in range(0, bins_end, interval)]
 
-    ax.hist(speed_list1, alpha=alpha, color=colors[0], ec=ec, label=labels[0],
-            rwidth=rwidth, bins=bins)
-    ax.hist(speed_list2, alpha=alpha, color=colors[1], ec=ec, label=labels[1],
-            rwidth=rwidth, bins=bins)
+    if ax == None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    for i in range(inputNo):
+        ax.hist(speed_lists[i], alpha=alpha, color=colors[i], ec=ec, label=labels[i],
+                rwidth=rwidth, bins=bins)
 
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=7)
     ax.set_xlabel('Speed (km/h)', fontsize=8)
     ax.legend(fontsize=5)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    userTitle = transport
-    if transport == 'cardriver':
+    userTitle = transports[0]
+    if transports[0] == 'cardriver':
         userTitle = 'car'
-    elif transport == 'walking':
+    elif transports[0] == 'walking':
         userTitle = 'pedestrian'
-    ax.set_title('Speed histogram of {}s {} #{}'.format(userTitle, actionType, unitIdx), fontsize=8)
+    ax.set_title('Speed histogram of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     ax.text(0.03, 0.93, str('StudioProject'),
@@ -403,30 +415,70 @@ def speedHistogram(transport, actionType, unitIdx, interval, ax, sessions,
 
 
 
-def speedBoxPlot(transport, actionType, unitIdx, times, ax, sessions):
+def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
+                 ax=None, interval=20, alpha=1, colors=plotColors):
 
-    date1 = getObsStartEnd(sessions[0])[0].date()
-    date2 = getObsStartEnd(sessions[1])[0].date()
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+
+    for i in range(inputNo):
+        if 'line' in actionTypes[i].split(' '):
+            cls_obs = LineCrossing
+        elif 'zone' in actionTypes[i].split(' '):
+            cls_obs = ZoneCrossing
+
+        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_times.append(first_obs_time.time())
+        last_obs_times.append(last_obs_time.time())
+
+    bins_start = max(first_obs_times)
+    bins_end = min(last_obs_times)
+
+    start = datetime.datetime.combine(datetime.datetime(2000,1,1), bins_start)
+    end = datetime.datetime.combine(datetime.datetime(2000,1,1), bins_end)
+
+    bin_edges = calculateBinsEdges(start, end, interval)
+
+    if len(bin_edges) < 3:
+        err = 'The observation duration is not enough for the selected interval!'
+        return err
+
+    times = [b.time() for b in bin_edges]
+
     bins = []
-    bins.append([datetime.datetime.combine(date1, t) for t in times])
-    bins.append([datetime.datetime.combine(date2, t) for t in times])
+    for i in range(inputNo):
+        date1 = getObsStartEnd(sessions[i])[0].date()
+        bins.append([datetime.datetime.combine(date1, t) for t in times])
 
     grouped_speeds = []
     for j, session in enumerate(sessions):
         time_list = []
-        if 'line' in actionType.split(' '):
-            q = session.query(LinePassing.instant, LinePassing.speed).filter(LinePassing.lineIdx == unitIdx). \
-                join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
-        elif 'zone' in actionType.split(' '):
+        if 'line' in actionTypes[j].split(' '):
+            q = session.query(LineCrossing.instant, LineCrossing.speed).\
+                filter(LineCrossing.lineIdx == unitIdxs[j]). \
+                join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
+            if directions[j] == 'Right to left':
+                q = q.filter(LineCrossing.rightToLeft == True)
+            elif directions[j] == 'Left to right':
+                q = q.filter(LineCrossing.rightToLeft == False)
+        elif 'zone' in actionTypes[j].split(' '):
             return 'Under developement!'
         q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
-            .filter(Mode.transport == transport)
+            .filter(Mode.transport == transports[j])
 
         time_list = [i[0] for i in q.all()]
         speed_list = [i[1] for i in q.all()]
 
         if time_list == []:
-            return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
+            return 'No {} is observed {} #{}!'.format(transports[0], actionTypes[0], unitIdxs[0])
 
         time_list_i8 = np.array([np.datetime64(t) for t in time_list]).view('i8')
         bins_i8 = np.array([np.datetime64(b) for b in bins[j]]).view('i8')
@@ -437,13 +489,11 @@ def speedBoxPlot(transport, actionType, unitIdx, times, ax, sessions):
         i = 0
         for ind in inds:
             if 0 < ind < len(bins[j]):
-                grouped_speed[ind - 1].append(speed_list[i])
+                if speed_list[i] is not None:
+                    grouped_speed[ind - 1].append(speed_list[i])
             i += 1
         grouped_speeds.append(grouped_speed)
-
-    grouped_speed1 = grouped_speeds[0]
-    grouped_speed2 = grouped_speeds[1]
-
+    
     ticks = []
     for i in range(len(bins[0]) - 1):
         t = (bins[0][i] + (bins[0][i + 1] - bins[0][i]) / 2).time()
@@ -456,16 +506,18 @@ def speedBoxPlot(transport, actionType, unitIdx, times, ax, sessions):
         plt.setp(bp['medians'], color=color)
         plt.setp(bp['means'], color=color)
 
-    bpl = ax.boxplot(grouped_speed1, positions=np.array(range(len(grouped_speed1))) * 2.0 - 0.4,
-                     sym='', widths=0.6, showmeans=False, patch_artist=False)
-    bpr = ax.boxplot(grouped_speed2, positions=np.array(range(len(grouped_speed2))) * 2.0 + 0.4,
-                     sym='', widths=0.6, showmeans=False, patch_artist=False)
-    set_box_color(bpl, 'deepskyblue')
-    set_box_color(bpr, 'salmon')
+    if ax == None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
 
-    # draw temporary red and blue lines and use them to create a legend
-    ax.plot([], c='deepskyblue', label='before')
-    ax.plot([], c='salmon', label='after')
+    for i in range(inputNo):
+        bp = ax.boxplot(grouped_speeds[i],
+                        positions=np.array(range(len(grouped_speeds[i]))) * 2.0 - (-1)**i * 0.4 * (inputNo -1),
+                        sym='', widths=0.6, showmeans=False, patch_artist=False)
+        set_box_color(bp, colors[i])
+        # draw temporary red and blue lines and use them to create a legend
+        ax.plot([], c=colors[i], label=labels[i])
+
     ax.legend(fontsize=5)
 
     # ----------------------
@@ -479,101 +531,17 @@ def speedBoxPlot(transport, actionType, unitIdx, times, ax, sessions):
     ax.set_xticklabels(ticks)
     ax.set_xlim(-1, len(ticks) * 2)
 
-    # ax.set_ylim(0, 80)
-
-
-
-    # speed_avg = []
-    # speed_std = []
-    # for bin in grouped_speed:
-    #     if bin != []:
-    #         speed_avg.append(np.mean(bin))
-    #         speed_std.append(np.std(bin))
-    #     else:
-    #         speed_avg.append(0)
-    #         speed_std.append(0)
-    # x = []
-    # for i in range(len(bins) - 1):
-    #     x.append(bins[i] + (bins[i+1] - bins[i])/2)
-    # ax.bar(x, speed_avg,
-    #        yerr=speed_std,
-    #        align='center',
-    #        width=(1/(24*60))*binsMinutes*0.8,
-    #        alpha=alpha,
-    #        # ecolor='grey',
-    #        edgecolor='k',
-    #        color='skyblue',
-    #        capsize=2)
-
-        # grouped_speed_list = []
-        # for bin in grouped_speed:
-        #     for i in bin:
-        #         grouped_speed_list.append(i)
-
-        # ax.axhline(y=np.mean(grouped_speed_list), color='skyblue', linestyle='-', lw=1.5)
-
-        # (n, edges, patches) = ax.hist(time_list, bins=bins, color=color, ec=ec, rwidth=rwidth,
-        #                               alpha=alpha, label=label, histtype=histtype)
-    # else:
-    #     time_lists = []
-    #     for s in session:
-    #         time_list = []
-    #         if 'line' in actionType.split(' '):
-    #             q = s.query(LinePassing.instant).filter(LinePassing.lineIdx == unitIdx). \
-    #                 join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
-    #         elif 'zone' in actionType.split(' '):
-    #             q = s.query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdx). \
-    #                 join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
-    #             if 'entering' in actionType.split(' '):
-    #                 q = q.filter(ZoneCrossing.entering == True)
-    #             elif 'exiting' in actionType.split(' '):
-    #                 q = q.filter(ZoneCrossing.entering == False)
-    #         q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
-    #             .filter(Mode.transport == transport)
-    #
-    #         time_list = [i[0] for i in q.all()]
-    #         time_lists.append(time_list)
-    #
-    #     if time_lists[0] == [] and time_lists[1] == []:
-    #         return 'No {} is observed {} #{}!'.format(transport, actionType, unitIdx)
-    #
-    #     i = 0
-    #     for t in time_lists[0]:
-    #         time_lists[0][i] = datetime.datetime(2000,1,1,t.hour, t.minute, t.second)
-    #         i += 1
-    #
-    #     i = 0
-    #     for t in time_lists[1]:
-    #         time_lists[1][i] = datetime.datetime(2000, 1, 1, t.hour, t.minute, t.second)
-    #         i += 1
-    #
-    #     (n, edges, patches) = ax.hist(time_lists, bins=bins, color=color, ec=ec,
-    #                                   rwidth=rwidth, alpha=alpha, label=label, histtype=histtype)
-
-    # ax.set_xlim([bins[0], bins[-1]])
-    # locator = mdates.AutoDateLocator()
-    # ax.xaxis.set_major_locator(locator)
-    #
-    # ax.xaxis.set_minor_locator(mdates.HourLocator())
-    # ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    #
-    # if not isinstance(session, list):
-    #     xLabel = 'Time ({})'.format(time_list[0].strftime('%A, %b %d, %Y'))
-    # else:
-    #     xLabel = 'Time'
-    #
-    # # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=7)
     ax.set_xlabel('Time', fontsize=8)
     ax.set_ylabel('Speed (km/h)', fontsize=8)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    userTitle = transport
-    if transport == 'cardriver':
+    userTitle = transports[0]
+    if transports[0] == 'cardriver':
         userTitle = 'car'
-    elif transport == 'walking':
+    elif transports[0] == 'walking':
         userTitle = 'pedestrian'
-    ax.set_title('Speed of {}s {} #{}'.format(userTitle, actionType, unitIdx), fontsize=8)
+    ax.set_title('Speed of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     ax.text(0.03, 0.93, str('StudioProject'),
@@ -727,7 +695,11 @@ def pieChart(transport, attr, sTime, eTime, ax, session):
     plt.setp(autotexts, size=12, weight="bold")
 
 # =====================================================================
-def generateReport(transport, actionType, unitIdx, interval, session, start_time=None, end_time=None):
+def generateReport(dbFileName, transport, actionType, unitIdx, direction, interval,
+                   start_time=None, end_time=None):
+
+    session = connectDatabase(dbFileName)
+
     if start_time == None and end_time == None:
         start_obs_time, end_obs_time = getObsStartEnd(session)
 
@@ -753,15 +725,19 @@ def generateReport(transport, actionType, unitIdx, interval, session, start_time
         # q = session.query(Person).join(Mode, Mode.personIdx == Person.idx) \
         #     .filter(Mode.transport == transport) \
         #     .join(GroupBelonging, GroupBelonging.personIdx == Person.idx) \
-        #     .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
-        #     .filter(LinePassing.instant >= start_obs_time) \
-        #     .filter(LinePassing.instant < end_obs_time) \
+        #     .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
+        #     .filter(LineCrossing.instant >= start_obs_time) \
+        #     .filter(LineCrossing.instant < end_obs_time) \
 
-        q = session.query(LinePassing.idx) \
-            .filter(LinePassing.instant >= start_obs_time) \
-            .filter(LinePassing.instant < end_obs_time) \
-            .filter(LinePassing.lineIdx == unitIdx) \
-            .join(GroupBelonging, GroupBelonging.groupIdx == LinePassing.groupIdx)
+        q = session.query(LineCrossing.idx) \
+            .filter(LineCrossing.instant >= start_obs_time) \
+            .filter(LineCrossing.instant < end_obs_time) \
+            .filter(LineCrossing.lineIdx == unitIdx)
+        if direction == 'Right to left':
+            q = q.filter(LineCrossing.rightToLeft == True)
+        elif direction == 'Left to right':
+            q = q.filter(LineCrossing.rightToLeft == False)
+        q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
     elif 'zone' in actionType.split(' '):
         q = session.query(ZoneCrossing.idx) \
             .filter(ZoneCrossing.instant >= start_obs_time) \
@@ -802,8 +778,8 @@ def generateReport(transport, actionType, unitIdx, interval, session, start_time
             duration_in_s = duration.total_seconds()
             duration_hours = duration_in_s / 3600
 
-            q_all_peaks = q.filter(LinePassing.instant >= lowerBound)\
-                           .filter(LinePassing.instant < upperBound)
+            q_all_peaks = q.filter(LineCrossing.instant >= lowerBound)\
+                           .filter(LineCrossing.instant < upperBound)
 
             no_all_peak = q_all_peaks.count()
 
@@ -863,7 +839,7 @@ def generateReport(transport, actionType, unitIdx, interval, session, start_time
                     indDf.loc[ind, p] = '{}'.format(flow_all_peak)
 
 
-    elif transport in ['cardriver', 'bike', 'scooter', 'skating']:
+    elif transport in ['cardriver', 'cycling', 'other']:
         if 'line' in actionType.split(' '):
             indicators = ['No. of all vehicles passing through',   # 0
                           'Flow of passing vehicles (veh/h)'   # 1
@@ -885,8 +861,8 @@ def generateReport(transport, actionType, unitIdx, interval, session, start_time
             duration_in_s = duration.total_seconds()
             duration_hours = duration_in_s / 3600
 
-            q_all_peaks = q.filter(LinePassing.instant >= lowerBound) \
-                           .filter(LinePassing.instant < upperBound)
+            q_all_peaks = q.filter(LineCrossing.instant >= lowerBound) \
+                           .filter(LineCrossing.instant < upperBound)
 
             no_all_peak = q_all_peaks.count()
 
@@ -934,7 +910,7 @@ def generateReport(transport, actionType, unitIdx, interval, session, start_time
                 #     indDf.loc[ind, p] = '{}'.format(round(no_depart_vehs / duration_hours, 1))
 
 
-    elif transport == 'Bike':
+    elif transport == 'Cycling':
         indicators = ['No. of all cyclists',    # 0
                       'No. of cyclists riding on sidewalk',     # 1
                       'No. of cyclists riding against traffic', # 2
@@ -1138,7 +1114,10 @@ def generateReport(transport, actionType, unitIdx, interval, session, start_time
     return indDf
 
 
-def compareIndicators(transport, actionType, unitIdx, interval, session1, session2):
+def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, directions, interval):
+
+    session1 = connectDatabase(dbFiles[0])
+    session2 = connectDatabase(dbFiles[1])
     first_obs_time1, last_obs_time1 = getObsStartEnd(session1)
     first_obs_time2, last_obs_time2 = getObsStartEnd(session2)
 
@@ -1152,8 +1131,10 @@ def compareIndicators(transport, actionType, unitIdx, interval, session1, sessio
     else:
         end_time = last_obs_time2.time()
 
-    indDf1 = generateReport(transport, actionType, unitIdx, interval, session1, start_time, end_time)
-    indDf2 = generateReport(transport, actionType, unitIdx, interval, session2, start_time, end_time)
+    indDf1 = generateReport(dbFiles[0], transports[0], actionTypes[0], unitIdxs[0], directions[0],
+                            interval, start_time, end_time)
+    indDf2 = generateReport(dbFiles[1], transports[1], actionTypes[1], unitIdxs[1], directions[1],
+                            interval, start_time, end_time)
 
     indDf = pd.DataFrame()
     # indDf = indDf1.iloc[0:3, :].copy()
@@ -1324,7 +1305,7 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
                 elif userType == 9:
                     vehicle = Vehicle(category='skate')
                     modes_list.append(Mode(transport='skating', person=person, vehicle=vehicle))
-                linePass_list.append(LinePassing(line=line, instant=instant, person=person, speed=speed))
+                linePass_list.append(LineCrossing(line=line, instant=instant, person=person, speed=speed))
 
     session.add_all(linePass_list + modes_list)
     session.commit()
@@ -1374,7 +1355,7 @@ def creatStreetusers(userType, lines, instants, speeds, groupSize):
         line = lines[i]
         instant = instants[i]
         speed = speeds[i]
-        linePass_list.append(LinePassing(line=line, instant=instant, group=group, speed=speed))
+        linePass_list.append(LineCrossing(line=line, instant=instant, group=group, speed=speed))
 
     return [group] + linePass_list + modes_list
 
@@ -1388,18 +1369,18 @@ def modeShareCompChart(dbFiles, labels, interval, axs=None):
         session = connectDatabase(dbFiles[i])
         sessions.append(session)
 
-        cls_obs = LinePassing
+        cls_obs = LineCrossing
         first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
         last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
 
-        first_obs_times.append(first_obs_time)
-        last_obs_times.append(last_obs_time)
+        first_obs_times.append(first_obs_time.time())
+        last_obs_times.append(last_obs_time.time())
 
     bins_start = max(first_obs_times)
     bins_end = min(last_obs_times)
 
-    start = datetime.datetime(2000, 1, 1, bins_start.hour, bins_start.minute, bins_start.second)
-    end = datetime.datetime(2000, 1, 1, bins_end.hour, bins_end.minute, bins_end.second)
+    start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
+    end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
 
     duration = end - start
     duration_in_s = duration.total_seconds()
@@ -1562,9 +1543,9 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
         field_ = getattr(Mode, fieldName)
         q = session.query(field_, func.count(func.distinct(Mode.idx))) \
             .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
-            .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
-            .filter(LinePassing.instant >= startTime) \
-            .filter(LinePassing.instant < endTime) \
+            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
+            .filter(LineCrossing.instant >= startTime) \
+            .filter(LineCrossing.instant < endTime) \
             .group_by(field_)
     elif transport == 'walking':
         field_ = getattr(Person, fieldName)
@@ -1572,9 +1553,9 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
             .join(Mode, Person.idx == Mode.personIdx) \
             .filter(Mode.transport == transport) \
             .join(GroupBelonging, GroupBelonging.personIdx == Person.idx) \
-            .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
-            .filter(LinePassing.instant >= startTime) \
-            .filter(LinePassing.instant < endTime) \
+            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
+            .filter(LineCrossing.instant >= startTime) \
+            .filter(LineCrossing.instant < endTime) \
             .group_by(field_)
     elif transport == 'cardriver':
         field_ = getattr(Vehicle, fieldName)
@@ -1582,9 +1563,9 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
             .join(Mode, Vehicle.idx == Mode.vehicleIdx) \
             .filter(Mode.transport == transport) \
             .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
-            .join(LinePassing, LinePassing.groupIdx == GroupBelonging.groupIdx) \
-            .filter(LinePassing.instant >= startTime) \
-            .filter(LinePassing.instant < endTime) \
+            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
+            .filter(LineCrossing.instant >= startTime) \
+            .filter(LineCrossing.instant < endTime) \
             .group_by(field_)
 
     labels = [i[0].name if not isinstance(i[0], str) else i[0] for i in q.all()]
@@ -1669,8 +1650,8 @@ def ceil_time(time, m):
     return time
 
 def getObsStartEnd(session):
-    first_linePass_time = session.query(func.min(LinePassing.instant)).first()[0]
-    last_linePass_time = session.query(func.max(LinePassing.instant)).first()[0]
+    first_linePass_time = session.query(func.min(LineCrossing.instant)).first()[0]
+    last_linePass_time = session.query(func.max(LineCrossing.instant)).first()[0]
 
     first_zonePass_time = session.query(func.min(ZoneCrossing.instant)).first()[0]
     last_zonePass_time = session.query(func.max(ZoneCrossing.instant)).first()[0]
