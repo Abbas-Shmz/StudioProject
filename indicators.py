@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator
 from sqlalchemy import func
+import sqlite3
 from configparser import ConfigParser
 
 from hachoir.parser import createParser
@@ -25,13 +26,13 @@ from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
 from trafficintelligence.storage import ProcessParameters
 import iframework
 from iframework import connectDatabase, LineCrossing, ZoneCrossing, Person, Mode, GroupBelonging,\
-    Vehicle, Line, Zone, Group
+    Vehicle, Line, Zone, Group, Activity
 
 noDataSign = 'x'
 userTypeNames = ['unknown', 'car', 'pedestrian', 'motorcycle', 'bicycle', 'bus', 'truck', 'automated',
-                 'scooter', 'skate']
+                 'scooter', 'skate', 'Activity']
 userTypeColors = ['gray',   'blue', 'orange',    'violet',       'green',  'yellow', 'black', 'cyan',
-                  'red',  'brown']
+                  'red',  'brown', 'salmon']
 plotColors = ['deepskyblue', 'salmon', 'green', 'violet', 'orange', 'yellow', 'black', 'cyan', 'brown', 'gray']
 
 config_object = ConfigParser()
@@ -90,17 +91,22 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     time_lists = []
     for i in range(inputNo):
         if 'line' in actionTypes[i].split(' '):
-            q = sessions[i].query(LineCrossing.instant)
+            if unitIdxs[i] == 'all_lines':
+                q = sessions[i].query(func.min(LineCrossing.instant))
+            else:
+                q = sessions[i].query(LineCrossing.instant).filter(LineCrossing.lineIdx == unitIdxs[i])
 
-            # if unitIdxs[i] != '-- All --':
-            #     q = q.filter(LineCrossing.lineIdx == unitIdxs[i])
+            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+                .join(Person, Person.idx == GroupBelonging.personIdx) \
+                .join(Mode, Mode.personIdx == Person.idx) \
+                .filter(Mode.transport == transports[i])
 
             if directions[i] == 'Right to left':
                 q = q.filter(LineCrossing.rightToLeft == True)
             elif directions[i] == 'Left to right':
                 q = q.filter(LineCrossing.rightToLeft == False)
 
-            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
+            # q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
 
         elif 'zone' in actionTypes[i].split(' '):
             q = sessions[i].query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdxs[i]). \
@@ -110,8 +116,10 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
             elif 'exiting' in actionTypes[i].split(' '):
                 q = q.filter(ZoneCrossing.entering == False)
 
-        q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
-            .filter(Mode.transport == transports[i])
+        # q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+        #     .filter(Mode.transport == transports[i])\
+        if unitIdxs[i] == 'all_lines':
+            q = q.group_by(Person.idx)
 
         time_lists.append([i[0] for i in q.all()])
 
@@ -366,19 +374,27 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
     for i in range(inputNo):
         session = connectDatabase(dbFiles[i])
 
-        q = session.query(LineCrossing.speed).filter(LineCrossing.lineIdx == unitIdxs[i]). \
-            join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
-            .join(Mode, Mode.personIdx == GroupBelonging.personIdx) \
+        if unitIdxs[i] == 'all_lines':
+            q = session.query(func.sum(LineCrossing.speed), func.count(LineCrossing.speed))
+        else:
+            q = session.query(LineCrossing.speed).filter(LineCrossing.lineIdx == unitIdxs[i])
+
+        q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+            .join(Person, Person.idx == GroupBelonging.personIdx) \
+            .join(Mode, Mode.personIdx == Person.idx) \
             .filter(Mode.transport == transports[i])
+
         if directions[i] == 'Right to left':
             q = q.filter(LineCrossing.rightToLeft == True)
         elif directions[i] == 'Left to right':
             q = q.filter(LineCrossing.rightToLeft == False)
 
-        speed_lists.append([i[0] for i in q.all()])
+        if unitIdxs[i] == 'all_lines':
+            q = q.group_by(Person.idx)
+            speed_lists.append([i[0]/i[1] for i in q.all() if i[0] is not None])
+        else:
+            speed_lists.append([i[0] for i in q.all() if i[0] is not None])
 
-    for i, speedList in enumerate(speed_lists):
-        speed_lists[i] = [v for v in speedList if v is not None]
 
     # bins_start = int(np.floor(min([min(speed_list1), min(speed_list2)])))
     bins_end = np.ceil(max([max(speed_list) for speed_list in speed_lists if speed_list != []]))
@@ -462,20 +478,40 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     for j, session in enumerate(sessions):
         time_list = []
         if 'line' in actionTypes[j].split(' '):
-            q = session.query(LineCrossing.instant, LineCrossing.speed).\
-                filter(LineCrossing.lineIdx == unitIdxs[j]). \
-                join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
+            if unitIdxs[j] == 'all_lines':
+                q = session.query(func.min(LineCrossing.instant), func.sum(LineCrossing.speed),
+                                  func.count(LineCrossing.speed))
+            else:
+                q = session.query(LineCrossing.instant, LineCrossing.speed)\
+                           .filter(LineCrossing.lineIdx == unitIdxs[j])
+
+            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+                .join(Person, Person.idx == GroupBelonging.personIdx) \
+                .join(Mode, Mode.personIdx == Person.idx) \
+                .filter(Mode.transport == transports[j])
+
+            # q = session.query(LineCrossing.instant, LineCrossing.speed).\
+            #     filter(LineCrossing.lineIdx == unitIdxs[j]). \
+            #     join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
             if directions[j] == 'Right to left':
                 q = q.filter(LineCrossing.rightToLeft == True)
             elif directions[j] == 'Left to right':
                 q = q.filter(LineCrossing.rightToLeft == False)
         elif 'zone' in actionTypes[j].split(' '):
             return 'Under developement!'
-        q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
-            .filter(Mode.transport == transports[j])
+        # q = q.join(Mode, Mode.personIdx == GroupBelonging.personIdx)\
+        #     .filter(Mode.transport == transports[j])
 
-        time_list = [i[0] for i in q.all()]
-        speed_list = [i[1] for i in q.all()]
+        if unitIdxs[j] == 'all_lines':
+            q = q.group_by(Person.idx)
+            time_list = [i[0] for i in q.all()]
+            speed_list = [i[1]/i[2] if i[1] is not None else None for i in q.all()]
+        else:
+            time_list = [i[0] for i in q.all()]
+            speed_list = [i[1] for i in q.all()]
+
+        # time_list = [i[0] for i in q.all()]
+        # speed_list = [i[1] for i in q.all()]
 
         if time_list == []:
             return 'No {} is observed {} #{}!'.format(transports[0], actionTypes[0], unitIdxs[0])
@@ -534,6 +570,195 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=7)
     ax.set_xlabel('Time', fontsize=8)
+    ax.set_ylabel('Speed (km/h)', fontsize=8)
+    # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    userTitle = transports[0]
+    if transports[0] == 'cardriver':
+        userTitle = 'car'
+    elif transports[0] == 'walking':
+        userTitle = 'pedestrian'
+    ax.set_title('Speed of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
+    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+
+    ax.text(0.03, 0.93, str('StudioProject'),
+            fontsize=9, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
+
+
+# ==============================================================
+def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions, metadataFile,
+                 ax=None, interval=0.5, alpha=1, colors=plotColors):
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+
+    for i in range(inputNo):
+        if 'line' in actionTypes[i].split(' '):
+            cls_obs = LineCrossing
+        elif 'zone' in actionTypes[i].split(' '):
+            cls_obs = ZoneCrossing
+
+        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_times.append(first_obs_time.time())
+        last_obs_times.append(last_obs_time.time())
+
+    bins_start = max(first_obs_times)
+    bins_end = min(last_obs_times)
+
+    # start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
+    # end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
+    # bin_edges = calculateBinsEdges(start, end, interval)
+    # if len(bin_edges) < 3:
+    #     err = 'The observation duration is not enough for the selected interval!'
+    #     return err
+    # times = [b.time() for b in bin_edges]
+
+    times = [bins_start, bins_end]
+
+    bins = []
+    for i in range(inputNo):
+        date1 = getObsStartEnd(sessions[i])[0].date()
+        bins.append([datetime.datetime.combine(date1, t) for t in times])
+
+    all_x_arrays = []
+    all_speed_arrays = []
+    for j, session in enumerate(sessions):
+        time_list = []
+        if 'line' in actionTypes[j].split(' '):
+            if unitIdxs[j] == 'all_lines':
+                q = session.query(func.min(LineCrossing.instant), Group.trajectoryDB, Group.trajectoryIdx)
+            else:
+                q = session.query(LineCrossing.instant, Group.trajectoryDB, Group.trajectoryIdx) \
+                    .filter(LineCrossing.lineIdx == unitIdxs[j])
+
+            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+                .join(Group, Group.idx == GroupBelonging.groupIdx) \
+                .join(Person, Person.idx == GroupBelonging.personIdx) \
+                .join(Mode, Mode.personIdx == Person.idx) \
+                .filter(Mode.transport == transports[j]) \
+                .filter(LineCrossing.instant >= bins[j][0]) \
+                .filter(LineCrossing.instant < bins[j][1])
+
+            if directions[j] == 'Right to left':
+                q = q.filter(LineCrossing.rightToLeft == True)
+            elif directions[j] == 'Left to right':
+                q = q.filter(LineCrossing.rightToLeft == False)
+        elif 'zone' in actionTypes[j].split(' '):
+            return 'Under developement!'
+
+        if unitIdxs[j] == 'all_lines':
+            q = q.group_by(Person.idx)
+            traj_DB_list = [i[1] for i in q.all()]
+            traj_Idx_list = [i[2] for i in q.all()]
+        else:
+            traj_DB_list = [i[1] for i in q.all()]
+            traj_Idx_list = [i[2] for i in q.all()]
+
+
+        if traj_DB_list == []:
+            return 'No {} is observed {} #{}!'.format(transports[0], actionTypes[0], unitIdxs[0])
+
+        traj_DB_Idxs = {}
+        for i in range(len(traj_DB_list)):
+            if traj_DB_list[i] != None:
+                if traj_DB_list[i] in traj_DB_Idxs.keys():
+                    traj_DB_Idxs[traj_DB_list[i]].append(traj_Idx_list[i])
+                else:
+                    traj_DB_Idxs[traj_DB_list[i]] = [traj_Idx_list[i]]
+
+        x_arrays = []
+        speed_arrays = []
+        for db_Idx in traj_DB_Idxs.keys():
+            con = sqlite3.connect(metadataFile)
+            cur = con.cursor()
+            cur.execute('SELECT databaseFilename, cameraViewIdx FROM video_sequences WHERE idx=?', (db_Idx,))
+            row = cur.fetchall()
+            date_dbName = row[0][0]
+            cam_view_id = row[0][1]
+            cur.execute('SELECT siteIdx, cameraTypeIdx FROM camera_views WHERE idx=?', (cam_view_id,))
+            row = cur.fetchall()
+            site_idx = row[0][0]
+            cam_type_idx = row[0][1]
+            cur.execute('SELECT name FROM sites WHERE idx=?', (site_idx,))
+            row = cur.fetchall()
+            site_name = row[0][0]
+            cur.execute('SELECT frameRate FROM camera_types WHERE idx=?', (cam_type_idx,))
+            row = cur.fetchall()
+            frameRate = row[0][0]
+
+            mdbPath = Path(metadataFile).parent
+            trjDBFile = mdbPath / site_name / date_dbName
+            objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
+            for trj_idx in traj_DB_Idxs[db_Idx]:
+                for traj in objects:
+                    if str(traj.getNum()) == trj_idx:
+                        x_arrays.append(traj.positions.asArray()[0])
+                        speed_arrays.append(np.round(traj.getSpeeds()* frameRate * 3.6, 1))
+        all_x_arrays.append(x_arrays)
+        all_speed_arrays.append(speed_arrays)
+
+    x_mins = []
+    x_maxs = []
+    for i, x_arrs in enumerate(all_x_arrays):
+        x_mins.append(np.min([np.min(x_arr) for x_arr in x_arrs]))
+        x_maxs.append(np.max([np.max(x_arr) for x_arr in x_arrs]))
+
+    x_min = np.max(x_mins)
+    x_max = np.min(x_maxs)
+
+    bins = np.arange(90, 140, interval).tolist()
+
+    grouped_speeds = []
+    for i, x_arrs in enumerate(all_x_arrays):
+        grouped_speed = []
+
+        for _ in range(len(bins) - 1):
+            grouped_speed.append(np.array([]))
+
+        for j, x_arr in enumerate(x_arrs):
+            inds = np.digitize(x_arr, bins)
+
+            for k, ind in enumerate(inds):
+                if 0 < ind < len(bins):
+                    grouped_speed[ind - 1] = np.append(grouped_speed[ind - 1], all_speed_arrays[i][j][k])
+
+        grouped_speeds.append(grouped_speed)
+
+    x = []
+    for i in range(len(bins) - 1):
+        x.append(bins[i] + (interval / 2))
+
+    if ax == None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    for i, grouped_speed in enumerate(grouped_speeds):
+        speed = np.array([np.mean(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]) for speeds in grouped_speed])
+        std_speed = np.array([np.std(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]) for speeds in grouped_speed])
+
+        ax.fill_between(x, speed - std_speed, speed + std_speed,
+                        color=colors[i], ec=colors[i], alpha=0.2, label='Std. of {}'.format(labels[i]))
+        ax.plot(x, speed, c=colors[i], label=labels[i])
+
+
+    ax.legend(fontsize=5)
+
+    # ax.set_xticks(range(0, len(ticks) * 2, 2))
+    # ax.set_xticklabels(ticks)
+    # ax.set_xlim(-1, len(ticks) * 2)
+
+    ax.tick_params(axis='x', labelsize=8, rotation=0)
+    ax.tick_params(axis='y', labelsize=7)
+    ax.set_xlabel('Location', fontsize=8)
     ax.set_ylabel('Speed (km/h)', fontsize=8)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     userTitle = transports[0]
@@ -712,9 +937,6 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
 
     entP_peakHours = getPeakHours(start_obs_time, end_obs_time, interval)
 
-    # entP_peakHours = {'Entire period': [start_obs_time.time(), end_obs_time.time()]}
-    # entP_peakHours.update(peakHours)
-
     indDf = pd.DataFrame(columns=list(entP_peakHours.keys()))#, index=['Start time', 'End time', 'Duration'])
 
     duration = end_obs_time - start_obs_time
@@ -722,30 +944,32 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
     duration_hours = duration_in_s / 3600
 
     if 'line' in actionType.split(' '):
-        # q = session.query(Person).join(Mode, Mode.personIdx == Person.idx) \
-        #     .filter(Mode.transport == transport) \
-        #     .join(GroupBelonging, GroupBelonging.personIdx == Person.idx) \
-        #     .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
-        #     .filter(LineCrossing.instant >= start_obs_time) \
-        #     .filter(LineCrossing.instant < end_obs_time) \
+        if unitIdx == 'all_lines':
+            q = session.query(LineCrossing.groupIdx, func.sum(LineCrossing.speed), func.count(LineCrossing.speed))
+        else:
+            q = session.query(LineCrossing.groupIdx, LineCrossing.speed) \
+                .filter(LineCrossing.lineIdx == unitIdx)
 
-        q = session.query(LineCrossing.idx) \
+        q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+            .join(Person, Person.idx == GroupBelonging.personIdx) \
+            .join(Mode, Mode.personIdx == Person.idx) \
+            .filter(Mode.transport == transport) \
             .filter(LineCrossing.instant >= start_obs_time) \
-            .filter(LineCrossing.instant < end_obs_time) \
-            .filter(LineCrossing.lineIdx == unitIdx)
+            .filter(LineCrossing.instant < end_obs_time)
+
         if direction == 'Right to left':
             q = q.filter(LineCrossing.rightToLeft == True)
         elif direction == 'Left to right':
             q = q.filter(LineCrossing.rightToLeft == False)
-        q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx)
+
     elif 'zone' in actionType.split(' '):
         q = session.query(ZoneCrossing.idx) \
             .filter(ZoneCrossing.instant >= start_obs_time) \
             .filter(ZoneCrossing.instant < end_obs_time) \
             .join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
-    q = q.join(Person, Person.idx == GroupBelonging.personIdx) \
-         .join(Mode, Mode.personIdx == Person.idx) \
-         .filter(Mode.transport == transport)
+
+    if unitIdx == 'all_lines':
+        q = q.group_by(Person.idx)
 
     if transport == 'walking':
 
@@ -782,11 +1006,6 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                            .filter(LineCrossing.instant < upperBound)
 
             no_all_peak = q_all_peaks.count()
-
-            # indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-            # indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-            # indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
-            #                                         int(duration_in_s / 60) % 60)
 
             for ind in indicators:
                 if p == indDf.columns[0]:
@@ -838,11 +1057,37 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                     flow_all_peak = round(no_all_peak / duration_hours, 1)
                     indDf.loc[ind, p] = '{}'.format(flow_all_peak)
 
+                elif 7 < i < 13:
+                    rec_list = q_all_peaks.all()
+                    if rec_list != []:
+                        groups_dict = {i[0]: rec_list.count(i) for i in rec_list}
+                        sizes_list = list(groups_dict.values())
+                        groups_count = {i: sizes_list.count(i) for i in sizes_list}
+                        if i == 8:
+                            indDf.loc[ind, p] = '{}'.format(len(sizes_list))
+                        elif i == 9 and 1 in groups_count:
+                            indDf.loc[ind, p] = '{}'.format(groups_count[1])
+                        elif i == 10 and 2 in groups_count:
+                            indDf.loc[ind, p] = '{}'.format(groups_count[2])
+                        elif i == 11 and 3 in groups_count:
+                            indDf.loc[ind, p] = '{}'.format(groups_count[3])
+                        elif i == 12 and 4 in groups_count:
+                            indDf.loc[ind, p] = '{}'.format(groups_count[4])
+                        else:
+                            indDf.loc[ind, p] = '{}'.format(0)
+                    else:
+                        indDf.loc[ind, p] = '{}'.format(0)
 
-    elif transport in ['cardriver', 'cycling', 'other']:
+
+
+    elif transport == 'cardriver':
         if 'line' in actionType.split(' '):
             indicators = ['No. of all vehicles passing through',   # 0
-                          'Flow of passing vehicles (veh/h)'   # 1
+                          'Flow of passing vehicles (veh/h)', # 1
+                          'Speed average (km/h)',    # 2
+                          'Speed standard deviation (km/h)',  # 3
+                          'Speed median (km/h)',  # 4
+                          'Speed 85th percentile (km/h)'  # 5
                           ]
 
         no_all_vehs = q.count()
@@ -866,11 +1111,6 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
 
             no_all_peak = q_all_peaks.count()
 
-            # indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-            # indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-            # indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600),
-            #                                         int(duration_in_s / 60) % 60)
-
             for ind in indicators:
 
                 if p == indDf.columns[0]:
@@ -886,45 +1126,42 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                         pct = round((no_all_peak / noAll) * 100, 1) if noAll != 0 else 0
                         indDf.loc[ind, p] = '{} ({}%)'.format(no_all_peak, pct)
 
-                # elif i == 2:
-                #     no_arriv_vehs = q.join(Site_ODs, Vehicle_obs.destinationId == Site_ODs.id) \
-                #                      .filter(Site_ODs.odType == 'on_street_parking_lot').count()
-                #     pct = round((no_arriv_vehs / noAll) * 100, 1) if noAll != 0 else 0
-                #
-                #     indDf.loc[ind, p] = '{} ({}%)'.format(no_arriv_vehs, pct)
-                #
-                # elif i == 3:
-                #     no_depart_vehs = q.join(Site_ODs, Vehicle_obs.originId == Site_ODs.id) \
-                #                       .filter(Site_ODs.odType == 'on_street_parking_lot').count()
-                #     pct = round((no_depart_vehs / noAll) * 100, 1) if noAll != 0 else 0
-                #
-                #     indDf.loc[ind, p] = '{} ({}%)'.format(no_depart_vehs, pct)
-
                 elif i == 1:
                     indDf.loc[ind, p] = '{}'.format(round(no_all_peak / duration_hours, 1))
 
-                # elif i == 5:
-                #     indDf.loc[ind, p] = '{}'.format(round(no_arriv_vehs / duration_hours, 1))
-                #
-                # elif i == 6:
-                #     indDf.loc[ind, p] = '{}'.format(round(no_depart_vehs / duration_hours, 1))
+                elif 1 < i < 6:
+                    rec_list = q_all_peaks.all()
+                    if rec_list != []:
+                        if unitIdx == 'all_lines':
+                            speed_list = [i[1]/i[2] for i in rec_list if i[1] != None]
+                        else:
+                            speed_list = [i[1] for i in rec_list if i[1] != None]
+                        if i == 2:
+                            stat_val = round(np.mean(speed_list), 1)
+                        elif i == 3:
+                            stat_val = round(np.std(speed_list), 1)
+                        elif i == 4:
+                            stat_val = round(np.median(speed_list), 1)
+                        elif i == 5:
+                            stat_val = round(np.percentile(speed_list, 85), 1)
+                    else:
+                        stat_val = 0
+                    indDf.loc[ind, p] = '{}'.format(stat_val)
 
 
-    elif transport == 'Cycling':
-        indicators = ['No. of all cyclists',    # 0
-                      'No. of cyclists riding on sidewalk',     # 1
-                      'No. of cyclists riding against traffic', # 2
-                      'Flow of all bikes (bik/h)'  # 3
-                      ]
-
-        q = session.query(Bike.id).join(Bike_obs, Bike.id == Bike_obs.bikeId) \
-                   .filter(Bike_obs.instant >= start_obs_time) \
-                   .filter(Bike_obs.instant < end_obs_time)
+    elif transport == 'cycling':
+        if 'line' in actionType.split(' '):
+            indicators = ['No. of all cyclists',    # 0
+                          'No. of cyclists riding on sidewalk',     # 1
+                          'No. of cyclists riding against traffic', # 2
+                          'Flow of all bikes (bik/h)',  # 3
+                          'No. of female cyclists'  #4
+                          ]
 
         no_all_biks = q.count()
 
-        q_swk = session.query(Site_ODs.id).filter(Site_ODs.odType == 'sidewalk')
-        swk_ids = [int(i[0]) for i in q_swk.all()]
+        if no_all_biks == 0:
+            return indDf
 
         for p in entP_peakHours.keys():
             if entP_peakHours[p] is None:
@@ -937,15 +1174,13 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
             duration_in_s = duration.total_seconds()
             duration_hours = duration_in_s / 3600
 
-            q_all_peaks = session.query(Bike_obs.originId, Bike_obs.destinationId)\
-                                 .filter(Bike_obs.instant >= lowerBound) \
-                                 .filter(Bike_obs.instant < upperBound)
+            q_all_peaks = q.filter(LineCrossing.instant >= lowerBound) \
+                           .filter(LineCrossing.instant < upperBound)
 
-            indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-            indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-            indDf.iloc[2].loc[p] = '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+            no_all_peak = q_all_peaks.count()
 
             for ind in indicators:
+
                 if p == indDf.columns[0]:
                     noAll = no_all_biks
                 elif p != indDf.columns[0] and ind in list(indDf.index):
@@ -953,34 +1188,37 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
 
                 i = indicators.index(ind)
                 if i == 0:
-                    no_all_peak = q_all_peaks.count()
                     if p == indDf.columns[0]:
-                        cell = ['{}', no_all_biks, None]
+                        indDf.loc[ind, p] = '{}'.format(no_all_biks)
                     else:
                         pct = round((no_all_peak / noAll) * 100, 1) if noAll != 0 else 0
-                        cell = ['{} ({}%)', no_all_peak, pct]
-                    indDf.loc[ind, p] = cell[0].format(cell[1], cell[2])
+                        indDf.loc[ind, p] = '{} ({}%)'.format(no_all_peak, pct)
 
                 elif i == 1:
-                    no_sdwk_peak = 0
-                    for rec in q_all_peaks.all():
-                        if int(rec[0]) in swk_ids or int(rec[1]) in swk_ids:
-                            no_sdwk_peak += 1
+                    q_lineType_peak = q_all_peaks.join(Line, Line.idx == LineCrossing.lineIdx).\
+                        filter(Line.type == 'sidewalk')
+                    no_sdwk_peak = q_lineType_peak.count()
                     pct = round((no_sdwk_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_sdwk_peak, pct)
 
-                elif i ==2:
-                    q_against = q_all_peaks.join(Site_ODs, Bike_obs.originId == Site_ODs.id) \
-                        .filter(Site_ODs.direction == 'end_point')
-
-                    no_agst_peak = q_against.count()
-                    pct = round((no_agst_peak / noAll) * 100, 1) if noAll != 0 else 0
-                    indDf.loc[ind, p] = '{} ({}%)'.format(no_agst_peak, pct)
+                # elif i ==2:
+                #     q_against = q_all_peaks.join(Site_ODs, Bike_obs.originId == Site_ODs.id) \
+                #         .filter(Site_ODs.direction == 'end_point')
+                #
+                #     no_agst_peak = q_against.count()
+                #     pct = round((no_agst_peak / noAll) * 100, 1) if noAll != 0 else 0
+                #     indDf.loc[ind, p] = '{} ({}%)'.format(no_agst_peak, pct)
 
                 elif i == 3:
                     no_all_peak = q_all_peaks.count()
                     flow_all_peak = round(no_all_peak / duration_hours, 1)
                     indDf.loc[ind, p] = '{}'.format(flow_all_peak)
+
+                elif i == 4:
+                    q_femaleCyclist_peak = q_all_peaks.filter(Person.gender == 'female')
+                    no_femCylist_peak = q_femaleCyclist_peak.count()
+                    pct = round((no_femCylist_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_femCylist_peak, pct)
 
 
     elif transport == 'Activity':
@@ -988,7 +1226,7 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                       'End time',    # 1
                       'Duration'    # 2
                       ]
-        q = session.query(Activity.activityType) \
+        q = session.query(Activity.activity) \
                    .filter(Activity.startTime >= start_obs_time)\
                    .filter(Activity.startTime < end_obs_time).distinct()
 
@@ -997,102 +1235,105 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
             act_type = rec[0].name
             activity_dict[act_type] = {'count': 0, 'actTotalTime': 0}
 
-        entP_peakHours = {indDf.columns[0]:[start_obs_time.time(), end_obs_time.time()]}
-        entP_peakHours.update(peakHours)
-
         for p in entP_peakHours.keys():
 
-            if not entP_peakHours[p] is None:
+            if entP_peakHours[p] is None:
+                continue
 
-                lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
-                upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
+            lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
+            upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
 
-                duration = upperBound - lowerBound
-                duration_in_s = duration.total_seconds()
-                duration_hours = duration_in_s / 3600
+            duration = upperBound - lowerBound
+            duration_in_s = duration.total_seconds()
+            duration_hours = duration_in_s / 3600
 
-                indDf.iloc[0].loc[p] = '{}'.format(entP_peakHours[p][0].strftime('%I:%M %p'))
-                indDf.iloc[1].loc[p] = '{}'.format(entP_peakHours[p][1].strftime('%I:%M %p'))
-                indDf.iloc[2].loc[p] = \
-                    '{}h {}m'.format(int(duration_in_s / 3600), int(duration_in_s / 60) % 60)
+            q = session.query(Activity.activity, Activity.startTime, Activity.endTime) \
+                .join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx) \
+                .join(Person, Person.idx == GroupBelonging.personIdx) \
+                       .filter(Activity.startTime >= lowerBound) \
+                       .filter(Activity.startTime < upperBound)
 
-                q = session.query(Activity.activityType, Activity.startTime, Activity.endTime) \
-                           .filter(Activity.startTime >= lowerBound) \
-                           .filter(Activity.startTime < upperBound)
+            for key in activity_dict.keys():
+                activity_dict[key]['count'] = 0
+                activity_dict[key]['actTotalTime'] = 0
 
-                for key in activity_dict.keys():
-                    activity_dict[key]['count'] = 0
-                    activity_dict[key]['actTotalTime'] = 0
+            for act in q.all():
+                act_type = act[0].name
+                activity_dict[act_type]['count'] += 1
+                activity_dict[act_type]['actTotalTime'] += (act[2] - act[1]).total_seconds()
 
-                for act in q.all():
-                    act_type = act[0].name
-                    activity_dict[act_type]['count'] += 1
-                    activity_dict[act_type]['actTotalTime'] += (act[2] - act[1]).total_seconds()
+            total_acts = 0
+            total_time = 0
+            for val in activity_dict.values():
+                total_acts += val['count']
+                total_time += val['actTotalTime']
 
-                total_acts = 0
-                total_time = 0
-                for val in activity_dict.values():
-                    total_acts += val['count']
-                    total_time += val['actTotalTime']
+            all_activity_dict = {'all activities': {'count': total_acts, 'actTotalTime':total_time}}
+            all_activity_dict.update(activity_dict)
 
-                all_activity_dict = {'all activities': {'count': total_acts, 'actTotalTime':total_time}}
-                all_activity_dict.update(activity_dict)
+            # q_join_person = q.join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx)\
+            #     .join(Person, Person.idx == GroupBelonging.personIdx)
+            no_female_act = q.filter(Person.gender == 'female').count()
+            no_male_act = q.filter(Person.gender == 'male').count()
+            no_chld_act = q.filter(Person.age == 'child').count()
+            no_eldry_act = q.filter(Person.age == 'senior').count()
 
-                q_join_person = q.join(Person, Activity.personId == Person.id)
-                no_female_act = q_join_person.filter(Person.gender == 'female').count()
-                no_male_act = q_join_person.filter(Person.gender == 'male').count()
-                no_chld_act = q_join_person.filter(Person.age == 'child').count()
-                no_eldry_act = q_join_person.filter(Person.age == 'senior').count()
+            if p == indDf.columns[0]:
+                indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
+                                                        round((no_female_act / total_acts)*100, 1))
+                indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
+                                                        round((no_male_act / total_acts)*100, 1))
+                indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
+                                                        round((no_chld_act / total_acts) * 100, 1))
+                indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
+                                                        round((no_eldry_act / total_acts) * 100, 1))
+            else:
+                noAll = int(indDf.loc['No. of females doing activity'].iloc[0].split(' ')[0])
+                indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
+                         round((no_female_act / noAll) * 100, 1) if noAll != 0 else 0)
 
-                for act in all_activity_dict.keys():
-                    act_count = all_activity_dict[act]['count']
-                    act_totalTime_min = round(all_activity_dict[act]['actTotalTime'] / 60, 1)
+                noAll = int(indDf.loc['No. of males doing activity'].iloc[0].split(' ')[0])
+                indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
+                         round((no_male_act / noAll) * 100,1) if noAll != 0 else 0)
 
-                    if act == 'all activities' and p == indDf.columns[0]:
-                        indDf.loc['No. of {}'.format(act), p] = '{}'.format(act_count)
-                    elif act == 'all activities' and p != indDf.columns[0]:
-                        indDf.loc['No. of {}'.format(act), p] = '{} ({}%)'.format(act_count,
-                                               round((act_count / int(indDf.loc['No. of {}'
-                                               .format(act)].iloc[0].split(' ')[0]))*100, 1))
-                    elif act != 'all activities' and p == indDf.columns[0]:
-                        indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
-                                                                round((act_count / total_acts)*100, 1))
-                    elif act != 'all activities' and p != indDf.columns[0]:
-                        indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
-                                               round((act_count / int(indDf.loc['No. of people {}'
-                                               .format(act)].iloc[0].split(' ')[0]))*100, 1))
+                noAll = int(indDf.loc['No. of children doing activity'].iloc[0].split(' ')[0])
+                indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
+                         round((no_chld_act / noAll) * 100,1) if noAll != 0 else 0)
+
+                noAll = int(indDf.loc['No. of elderly people doing activity'].iloc[0].split(' ')[0])
+                indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
+                         round((no_eldry_act / noAll) * 100,1) if noAll != 0 else 0)
+
+            for act in all_activity_dict.keys():
+                act_count = all_activity_dict[act]['count']
+                act_totalTime_min = round(all_activity_dict[act]['actTotalTime'] / 60, 1)
+
+                if act == 'all activities' and p == indDf.columns[0]:
+                    indDf.loc['No. of {}'.format(act), p] = '{}'.format(act_count)
+                elif act == 'all activities' and p != indDf.columns[0]:
+                    indDf.loc['No. of {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                           round((act_count / int(indDf.loc['No. of {}'
+                                           .format(act)].iloc[0].split(' ')[0]))*100, 1))
+                elif act != 'all activities' and p == indDf.columns[0]:
+                    indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                                            round((act_count / total_acts)*100, 1))
+                elif act != 'all activities' and p != indDf.columns[0]:
+                    indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                           round((act_count / int(indDf.loc['No. of people {}'
+                                           .format(act)].iloc[0].split(' ')[0]))*100, 1))
+                if act_totalTime_min > 0:
                     indDf.loc['Total time of {} (min.)'.format(act), p] = \
-                        '{}'.format(act_totalTime_min if act_totalTime_min > 0 else 'NA')
+                        '{}'.format(act_totalTime_min)# if act_totalTime_min > 0 else 'NA')
                     indDf.loc['Avg. time of {} (min.)'.format(act), p] = \
-                      '{}'.format(round(act_totalTime_min / total_acts, 1) if act_totalTime_min > 0 else 'NA')
-                    indDf.loc['Rate of {} (act/h)'.format(act), p] = \
-                        '{}'.format(round(act_count / duration_hours, 1))
+                      '{}'.format(round(act_totalTime_min / total_acts, 1))# if act_totalTime_min > 0 else 'NA')
+                elif act_totalTime_min == 0 and 'Total time of {} (min.)'.format(act) in indDf.index:
+                    indDf.loc['Total time of {} (min.)'.format(act), p] = '{}'.format(0)
+                    indDf.loc['Avg. time of {} (min.)'.format(act), p] = '{}'.format(0)
 
-                if p == 'Entire period':
-                    indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
-                                                            round((no_female_act / total_acts)*100, 1))
-                    indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
-                                                            round((no_male_act / total_acts)*100, 1))
-                    indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
-                                                            round((no_chld_act / total_acts) * 100, 1))
-                    indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
-                                                            round((no_eldry_act / total_acts) * 100, 1))
-                else:
-                    noAll = int(indDf.loc['No. of females doing activity'].iloc[0].split(' ')[0])
-                    indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
-                             round((no_female_act / noAll) * 100, 1) if noAll != 0 else 0)
+                indDf.loc['Rate of {} (act/h)'.format(act), p] = \
+                    '{}'.format(round(act_count / duration_hours, 1))
 
-                    noAll = int(indDf.loc['No. of males doing activity'].iloc[0].split(' ')[0])
-                    indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
-                             round((no_male_act / noAll) * 100,1) if noAll != 0 else 0)
 
-                    noAll = int(indDf.loc['No. of children doing activity'].iloc[0].split(' ')[0])
-                    indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
-                             round((no_chld_act / noAll) * 100,1) if noAll != 0 else 0)
-
-                    noAll = int(indDf.loc['No. of elderly people doing activity'].iloc[0].split(' ')[0])
-                    indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
-                             round((no_eldry_act / noAll) * 100,1) if noAll != 0 else 0)
 
 
     indDf[indDf.isnull().values] = noDataSign

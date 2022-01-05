@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
     plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
-    modeShareCompChart, speedHistogram
+    modeShareCompChart, speedHistogram, speedOverSpacePlot
 import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -445,12 +445,12 @@ class ObsToolbox(QMainWindow):
         traj_tab_gridLayout.addWidget(QLabel('Site:'), 0, 0)  # , Qt.AlignRight)
         self.siteNameCombobx = QComboBox()
         # self.siteNameCombobx.setMinimumWidth(120)
-        self.siteNameCombobx.currentTextChanged.connect(self.siteChanged)
+        self.siteNameCombobx.currentIndexChanged.connect(self.siteChanged)
         traj_tab_gridLayout.addWidget(self.siteNameCombobx, 0, 1)  # , Qt.AlignLeft)
 
         traj_tab_gridLayout.addWidget(QLabel('Cam. view:'), 0, 2)  # , Qt.AlignRight)
         self.camViewCombobx = QComboBox()
-        self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
+        self.camViewCombobx.currentIndexChanged.connect(self.viewChanged)
         traj_tab_gridLayout.addWidget(self.camViewCombobx, 0, 3)  # , Qt.AlignLeft)
 
         traj_tab_gridLayout.addWidget(QLabel('Traj DB:'), 1, 0)  # , Qt.AlignRight)
@@ -698,8 +698,8 @@ class ObsToolbox(QMainWindow):
                                     self.intrinsicCameraMatrix, self.distortionCoefficients, np.linalg.inv(homography))
 
                     self.parent().gView.scene().addEllipse(img_inters_pnts[0][0], img_inters_pnts[1][0],
-                                                           self.parent().gView.labelSize,
-                                                           self.parent().gView.labelSize,
+                                                           int(self.parent().gView.labelSize/5),
+                                                           int(self.parent().gView.labelSize/5),
                                                            QPen(QColor(255, 0, 0)),
                                                            QBrush(QColor(255, 0, 0)))
 
@@ -839,15 +839,6 @@ class ObsToolbox(QMainWindow):
         if self.traj_line == None:
             return
 
-        # msg = QMessageBox()
-        # rep = msg.question(self, 'Load trajectory',
-        #                    'Are you sure to LOAD all trajectories to database?', msg.Yes | msg.No)
-        # if rep == msg.No:
-        #     return
-
-        # streetUserObjects = []
-        # no_users = 0
-        # for trj_idx in range(len(self.traj_line)):
         self.loadTrjBtn.setEnabled(False)
         self.userTypeCb.setEnabled(False)
         self.groupSizeCb.setEnabled(False)
@@ -866,11 +857,15 @@ class ObsToolbox(QMainWindow):
             for i in range(groupSize):
                 self.user_newRecBtn_click()
                 person_idx = int(self.group_list_wdgt.currentItem().text())
-                self.mode_grpBox.setChecked(True)
-                mode = self.groupPersons[person_idx][1]
-                if userType != 2:
-                    self.veh_grpBox.setChecked(True)
-                    veh = self.groupPersons[person_idx][2]
+                if userType == 10:
+                    self.act_newRecBtn_click()
+                    self.act_saveBtn_click()
+                else:
+                    self.mode_grpBox.setChecked(True)
+                    mode = self.groupPersons[person_idx][1]
+                    if userType != 2:
+                        self.veh_grpBox.setChecked(True)
+                        veh = self.groupPersons[person_idx][2]
 
                 if userType == 1 or userType == 7:
                     mode.transport = 'cardriver'
@@ -900,23 +895,24 @@ class ObsToolbox(QMainWindow):
             # self.group_list_wdgt.setCurrentRow(0)
             self.user_saveBtn_click()
 
-            for i in range(len(lines)):
-                self.linepass_newRecBtn_click()
-                linepass_idx = int(self.linepass_list_wdgt.currentItem().text())
-                linepass = self.groups[group_idx][1][linepass_idx]
-                line = lines[i]
-                instant = self.traj_line[trj_idx][2][2][i]
-                speed = self.traj_line[trj_idx][2][3][i]
-                rightToleft = self.traj_line[trj_idx][2][7][i]
+            if userType != 10:
+                for i in range(len(lines)):
+                    self.linepass_newRecBtn_click()
+                    linepass_idx = int(self.linepass_list_wdgt.currentItem().text())
+                    linepass = self.groups[group_idx][1][linepass_idx]
+                    line = lines[i]
+                    instant = self.traj_line[trj_idx][2][2][i]
+                    speed = self.traj_line[trj_idx][2][3][i]
+                    rightToleft = self.traj_line[trj_idx][2][7][i]
 
-                linepass.line = line
-                linepass.instant = instant
-                linepass.speed = speed
-                linepass.rightToLeft = rightToleft
-            # self.set_widget_values(self.linepass_grpBox, linepass)
-            # self.linepass_list_wdgt.setCurrentRow(-1)
-            # self.linepass_list_wdgt.setCurrentRow(0)
-            self.linepass_saveBtn_click()
+                    linepass.line = line
+                    linepass.instant = instant
+                    linepass.speed = speed
+                    linepass.rightToLeft = rightToleft
+                # self.set_widget_values(self.linepass_grpBox, linepass)
+                # self.linepass_list_wdgt.setCurrentRow(-1)
+                # self.linepass_list_wdgt.setCurrentRow(0)
+                self.linepass_saveBtn_click()
         self.group_idx_cmbBox.setCurrentIndex(-1)
         self.group_idx_cmbBox.setCurrentText(str(group_idx))
         self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
@@ -982,12 +978,12 @@ class ObsToolbox(QMainWindow):
         self.traj_line[current_idx][2][5] = int(self.groupSizeCb.currentText())
 
     def openMdbFile(self):
-        mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",
-                                                     QDir.homePath(), "Sqlite files (*.sqlite)")
-        if mdbFilename == '':
-            return
-
-        self.mdbFileLedit.setText(mdbFilename)
+        if self.sender() == self.openMdbFileBtn:
+            mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",
+                                                         QDir.homePath(), "Sqlite files (*.sqlite)")
+            if mdbFilename == '':
+                return
+            self.mdbFileLedit.setText(mdbFilename)
 
         con = sqlite3.connect(self.mdbFileLedit.text())
         self.cur = con.cursor()
@@ -2424,7 +2420,9 @@ class TempHistWindow(QDialog):
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
+            idxItems.insert(0, 'all_lines')
+            self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
@@ -2550,7 +2548,7 @@ class SpeedPlotWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
         self.directionCombobx = QComboBox()
-        self.directionCombobx.addItems(['-- Both --', 'Right to left', 'Left to right'])
+        self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
         gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
 
@@ -2577,7 +2575,7 @@ class SpeedPlotWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Plot type:'), 2, 4, Qt.AlignRight)
         self.plotTypeCmbx = QComboBox()
-        self.plotTypeCmbx.addItems(['Box plot', 'Histogram'])
+        self.plotTypeCmbx.addItems(['Box plot', 'Histogram', 'Over space'])
         self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
         gridLayout.addWidget(self.plotTypeCmbx, 2, 5, Qt.AlignLeft)
 
@@ -2609,6 +2607,10 @@ class SpeedPlotWindow(QDialog):
             self.intervalType.setText('Speed interval')
             self.intervaLe.setText('5')
             self.intervalUnit.setText('(km/h)')
+        elif self.plotTypeCmbx.currentText() == 'Over space':
+            self.intervalType.setText('Length interval')
+            self.intervaLe.setText('0.5')
+            self.intervalUnit.setText('(meter)')
 
     def plotSpeed(self):
         self.figure.clear()
@@ -2621,8 +2623,13 @@ class SpeedPlotWindow(QDialog):
             for i in range(self.inputTable.rowCount()):
                 inputs[self.columnNames[j]].append(self.inputTable.item(i, j).text())
 
-        interval = int(self.intervaLe.text())
         plotType = self.plotTypeCmbx.currentText()
+
+        if plotType != 'Over space':
+            interval = int(self.intervaLe.text())
+        else:
+            interval = float(self.intervaLe.text())
+
 
         if plotType == 'Box plot':
             err = speedBoxPlot(inputs['Database file'], inputs['Label'], inputs['Transport'],
@@ -2632,6 +2639,11 @@ class SpeedPlotWindow(QDialog):
             err = speedHistogram(inputs['Database file'], inputs['Label'], inputs['Transport'],
                                inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
                                ax, interval, alpha=0.7)
+        elif plotType == 'Over space':
+            metadataFile = self.parent().mdbFileLedit.text()
+            err = speedOverSpacePlot(inputs['Database file'], inputs['Label'], inputs['Transport'],
+                               inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
+                               metadataFile, ax, interval, alpha=0.7)
 
         if err != None:
             msg = QMessageBox()
@@ -2682,7 +2694,9 @@ class SpeedPlotWindow(QDialog):
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
+            idxItems.insert(0, 'all_lines')
+            self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
@@ -3003,7 +3017,9 @@ class ModeChartWindow(QDialog):
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
+            idxItems.insert(0, 'all_lines')
+            self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
@@ -3060,7 +3076,7 @@ class CompHistWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Direction:'), 0, 8, Qt.AlignRight)
         self.directionCombobx = QComboBox()
-        self.directionCombobx.addItems(['-- Both --', 'Right to left', 'Left to right'])
+        self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
         gridLayout.addWidget(self.directionCombobx, 0, 9, Qt.AlignLeft)
 
@@ -3200,7 +3216,7 @@ class CompHistWindow(QDialog):
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
             idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
-            # idxItems.insert(0, '-- All --')
+            idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
@@ -3244,7 +3260,7 @@ class genReportWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
-        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums + ['Activity'])
         # self.siteNameCombobx.currentTextChanged.connect(self.genReport)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
@@ -3261,7 +3277,7 @@ class genReportWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
         self.directionCombobx = QComboBox()
-        self.directionCombobx.addItems(['-- Both --', 'Right to left', 'Left to right'])
+        self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
         gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
 
@@ -3270,7 +3286,6 @@ class genReportWindow(QDialog):
         self.intervalCombobx.addItems(['5', '10', '15', '20', '30', '60', '90', '120'])
         gridLayout.addWidget(self.intervalCombobx, 0, 9)#, Qt.AlignLeft)
         gridLayout.addWidget(QLabel('(min.)'), 0, 10, Qt.AlignLeft)
-
 
         self.genRepBtn = QPushButton('Generate report')
         self.genRepBtn.clicked.connect(self.genReport)
@@ -3282,7 +3297,6 @@ class genReportWindow(QDialog):
         self.saveBtn.clicked.connect(self.saveReport)
         gridLayout.addWidget(self.saveBtn, 0, 12)
 
-        # winLayout.addWidget(self.toolbar)
         winLayout.addLayout(dbLayout)
         winLayout.addLayout(gridLayout)
         winLayout.addWidget(self.table)
@@ -3341,7 +3355,9 @@ class genReportWindow(QDialog):
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
+            idxItems.insert(0, 'all_lines')
+            self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 
@@ -3390,7 +3406,7 @@ class compIndicatorsWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
         self.transportCombobx = QComboBox()
-        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums + ['Activity'])
         # self.siteNameCombobx.currentTextChanged.connect(self.compIndicators)
         gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
 
@@ -3407,7 +3423,7 @@ class compIndicatorsWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
         self.directionCombobx = QComboBox()
-        self.directionCombobx.addItems(['-- Both --', 'Right to left', 'Left to right'])
+        self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
         gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
 
@@ -3530,7 +3546,9 @@ class compIndicatorsWindow(QDialog):
 
         self.unitIdxCombobx.clear()
         if 'line' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Line.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
+            idxItems.insert(0, 'all_lines')
+            self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
             self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
 

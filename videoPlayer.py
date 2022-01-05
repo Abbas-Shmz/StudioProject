@@ -163,7 +163,7 @@ class GraphicView(QGraphicsView):
             self.parent().parent().obsTb.init_input_widgets(self.parent().parent().obsTb.zone_grpBox)
 
             self.gPolyItem = None
-        else:
+        elif len(self.items()) > 0:
             self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
 
     def wheelEvent(self, event):
@@ -547,19 +547,21 @@ class VideoWindow(QMainWindow):
                 self.openVideoFile()
                 self.mediaPlayer.setPosition(int(item['sliderValue']))
 
-            # elif key[0] == 'graphics':
-            #     item = key[1]
-            #     print(item['fileName'])
-            #     if item['fileName'] != None:
-            #         self.graphicsFile = item['fileName']
-            #         self.loadGraphics()
-
             elif key[0] == 'database':
                 item = key[1]
                 print(item['fileName'])
                 if item['fileName'] != None:
                     self.obsTb.dbFilename = item['fileName']
                     self.obsTb.opendbFile()
+
+            elif key[0] == 'trajectory':
+                item = key[1]
+                if item['metadata'] != None:
+                    self.obsTb.mdbFileLedit.setText(item['metadata'])
+                    self.obsTb.openMdbFile()
+                    self.obsTb.siteNameCombobx.setCurrentIndex(int(item['site']))
+                    self.obsTb.camViewCombobx.setCurrentIndex(int(item['cam_view']))
+                    self.obsTb.trjDbCombobx.setCurrentIndex(int(item['traj_db']))
 
             elif key[0] == 'window':
                 item = key[1]
@@ -605,12 +607,15 @@ class VideoWindow(QMainWindow):
         xmlWriter.writeTextElement("sliderValue", str(self.mediaPlayer.position()))
         xmlWriter.writeEndElement()
 
-        # xmlWriter.writeStartElement('graphics')
-        # xmlWriter.writeTextElement("fileName", self.graphicsFile)
-        # xmlWriter.writeEndElement()
-
         xmlWriter.writeStartElement('database')
         xmlWriter.writeTextElement("fileName", self.obsTb.dbFilename)
+        xmlWriter.writeEndElement()
+
+        xmlWriter.writeStartElement('trajectory')
+        xmlWriter.writeTextElement("metadata", self.obsTb.mdbFileLedit.text())
+        xmlWriter.writeTextElement("site", str(self.obsTb.siteNameCombobx.currentIndex()))
+        xmlWriter.writeTextElement("cam_view", str(self.obsTb.camViewCombobx.currentIndex()))
+        xmlWriter.writeTextElement("traj_db", str(self.obsTb.trjDbCombobx.currentIndex()))
         xmlWriter.writeEndElement()
 
         xmlWriter.writeStartElement('window')
