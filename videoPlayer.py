@@ -53,7 +53,7 @@ class GraphicView(QGraphicsView):
             p1 = self.mapToScene(event.x(), event.y())
             self.gLineItem = self.scene().addLine(QLineF(p1, p1))
             r, g, b = np.random.choice(range(256), size=3)
-            self.gLineItem.setPen(QPen(QColor(r, g, b), self.labelSize/6))
+            self.gLineItem.setPen(QPen(QColor(255, 0, 0), self.labelSize/6))
             # self.gLineItem.setOpacity(0.25)
 
         elif event.buttons() == Qt.LeftButton and (self.parent().parent().maskGenAction.isChecked() \
@@ -122,6 +122,7 @@ class GraphicView(QGraphicsView):
 
             itmGroup = self.parent().parent().generate_itemGroup([x1, x2], [y1, y2], str(line.idx), None)
             self.scene().addItem(itmGroup)
+            self.scene().removeItem(self.gLineItem)
 
             new_item = QListWidgetItem(str(line.idx))
             self.parent().parent().obsTb.line_list_wdgt.addItem(new_item)
@@ -156,6 +157,7 @@ class GraphicView(QGraphicsView):
 
             itmGroup = self.parent().parent().generate_itemGroup(xs, ys, str(zone.idx), None)
             self.scene().addItem(itmGroup)
+            self.scene().removeItem(self.gPolyItem)
 
             new_item = QListWidgetItem(str(zone.idx))
             self.parent().parent().obsTb.zone_list_wdgt.addItem(new_item)
@@ -191,6 +193,7 @@ class VideoWindow(QMainWindow):
         self.setStatusBar(self.statusBar)
         self.gScene = QGraphicsScene(self)
         self.gView = GraphicView(self.gScene, self)
+        self.gView.viewport().setAttribute(Qt.WA_AcceptTouchEvents, False)
         # self.gView.setBackgroundBrush(QBrush(Qt.black))
 
         self.videoStartDatetime = None
@@ -706,27 +709,44 @@ class VideoWindow(QMainWindow):
 
         pointBbx = QRectF()
         pointBbx.setSize(QSizeF(self.gView.labelSize, self.gView.labelSize))
-        pointBbx.moveCenter(QPointF(np.mean(xs), np.mean(ys)))
 
         textLabel = QGraphicsTextItem(label)
 
         if len(xs) == 1:
+            pointBbx.moveCenter(QPointF(xs[0], ys[0]))
+            textLabel.setPos(xs[0] - (textLabel.boundingRect().width() / 2),
+                             ys[0] - (textLabel.boundingRect().height() / 2))
+
             pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = Qt.white
             textColor = Qt.black
             tooltip = 'P{}:{}'
         elif len(xs) == 2:
+            pointBbx.moveCenter(QPointF(xs[1], ys[1]))
+            textLabel.setPos(xs[1] - (textLabel.boundingRect().width() / 2),
+                             ys[1] - (textLabel.boundingRect().height() / 2))
+
             r, g, b = np.random.choice(range(256), size=3)
             line_item = QGraphicsLineItem(xs[0], ys[0], xs[1], ys[1])
-            line_item.setPen(QPen(QColor(r, g, b), self.gView.labelSize / 6))
+            line_item.setPen(QPen(QColor(r, g, b, 128), self.gView.labelSize / 6))
             gItemGroup.addToGroup(line_item)
 
+            # line_end = QGraphicsEllipseItem(xs[1], ys[1],
+            #                                 int(self.gView.labelSize/3), int(self.gView.labelSize/3))
+            # line_end.setPen(QPen(QColor(r, g, b), 0.5))
+            # line_end.setBrush(QBrush(QColor(r, g, b)))
+            # gItemGroup.addToGroup(line_end)
+
             pointShape = QGraphicsEllipseItem(pointBbx)
-            shapeColor = Qt.black
-            textColor = Qt.white
+            shapeColor = QColor(r, g, b, 128)
+            textColor = Qt.black
             tooltip = 'L{}:{}'
             # textLabel.setRotation(np.arctan((ys[1] - ys[0])/(xs[1] - xs[0]))*(180/3.14))
         else:
+            pointBbx.moveCenter(QPointF(np.mean(xs), np.mean(ys)))
+            textLabel.setPos(np.mean(xs) - (textLabel.boundingRect().width() / 2),
+                             np.mean(ys) - (textLabel.boundingRect().height() / 2))
+
             points = [QPointF(x, y) for x, y in zip(xs, ys)]
             polygon = QPolygonF(points)
             r, g, b = np.random.choice(range(256), size=3)
@@ -752,8 +772,6 @@ class VideoWindow(QMainWindow):
 
         textLabel.setFont(labelFont)
         textLabel.setDefaultTextColor(textColor)
-        textLabel.setPos(np.mean(xs) - (textLabel.boundingRect().width() / 2),
-                         np.mean(ys) - (textLabel.boundingRect().height() / 2))
 
         gItemGroup.addToGroup(textLabel)
         return gItemGroup

@@ -733,17 +733,29 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
 
         grouped_speeds.append(grouped_speed)
 
-    x = []
-    for i in range(len(bins) - 1):
-        x.append(bins[i] + (interval / 2))
 
     if ax == None:
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
     for i, grouped_speed in enumerate(grouped_speeds):
-        speed = np.array([np.mean(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]) for speeds in grouped_speed])
-        std_speed = np.array([np.std(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]) for speeds in grouped_speed])
+        x = []
+        for n in range(len(bins) - 1):
+            x.append(bins[n] + (interval / 2))
+        speed = np.array([])
+        std_speed = np.array([])
+        for j, speeds in enumerate(grouped_speed):
+            if speeds != np.array([]):
+                speed = np.append(speed,
+                                  np.mean(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]))
+                std_speed = np.append(std_speed,
+                                      np.std(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]))
+            else:
+                x[j] = None
+        x = [n for n in x if n is not None]
+        # [abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]
+        # speed = np.array([np.mean(speeds) for speeds in grouped_speed if speeds != np.array([])])
+        # std_speed = np.array([np.std(speeds) for speeds in grouped_speed if speeds != np.array([])])
 
         ax.fill_between(x, speed - std_speed, speed + std_speed,
                         color=colors[i], ec=colors[i], alpha=0.2, label='Std. of {}'.format(labels[i]))
@@ -774,6 +786,237 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
             ha='left', va='bottom',
             transform=ax.transAxes,
             weight="bold", alpha=.5)
+
+# ==============================================================
+def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions, metadataFile,
+                 ax=None, interval_space=0.5, interval_time=10, colors=plotColors):
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+
+    for i in range(inputNo):
+        if 'line' in actionTypes[i].split(' '):
+            cls_obs = LineCrossing
+        elif 'zone' in actionTypes[i].split(' '):
+            cls_obs = ZoneCrossing
+
+        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_times.append(first_obs_time.time())
+        last_obs_times.append(last_obs_time.time())
+
+    bins_start = max(first_obs_times)
+    bins_end = min(last_obs_times)
+
+    start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
+    end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
+    time_bin_edges = calculateBinsEdges(start, end, interval_time)
+    if len(time_bin_edges) < 3:
+        err = 'The observation duration is not enough for the selected interval!'
+        return err
+    times = [b.time() for b in time_bin_edges]
+
+    time_bins = []
+    for i in range(inputNo):
+        date1 = getObsStartEnd(sessions[i])[0].date()
+        time_bins.append([datetime.datetime.combine(date1, t) for t in times])
+
+    all_x_arrays = []
+    all_speed_arrays = []
+    all_trj_time_inds = []
+    for j, session in enumerate(sessions):
+        if 'line' in actionTypes[j].split(' '):
+            if unitIdxs[j] == 'all_lines':
+                q = session.query(func.min(LineCrossing.instant), Group.trajectoryDB, Group.trajectoryIdx)
+            else:
+                q = session.query(LineCrossing.instant, Group.trajectoryDB, Group.trajectoryIdx) \
+                    .filter(LineCrossing.lineIdx == unitIdxs[j])
+
+            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+                .join(Group, Group.idx == GroupBelonging.groupIdx) \
+                .join(Person, Person.idx == GroupBelonging.personIdx) \
+                .join(Mode, Mode.personIdx == Person.idx) \
+                .filter(Mode.transport == transports[j]) #\
+                # .filter(LineCrossing.instant >= time_bins[j][0]) \
+                # .filter(LineCrossing.instant < time_bins[j][-1])
+
+            if directions[j] == 'Right to left':
+                q = q.filter(LineCrossing.rightToLeft == True)
+            elif directions[j] == 'Left to right':
+                q = q.filter(LineCrossing.rightToLeft == False)
+        elif 'zone' in actionTypes[j].split(' '):
+            return 'Under developement!'
+
+        if unitIdxs[j] == 'all_lines':
+            q = q.group_by(Person.idx)
+            cross_inst_list = [i[0] for i in q.all()]
+            traj_DB_list = [i[1] for i in q.all()]
+            traj_Idx_list = [i[2] for i in q.all()]
+        else:
+            cross_inst_list = [i[0] for i in q.all()]
+            traj_DB_list = [i[1] for i in q.all()]
+            traj_Idx_list = [i[2] for i in q.all()]
+
+        if traj_DB_list == []:
+            return 'No {} is observed {} #{}!'.format(transports[0], actionTypes[0], unitIdxs[0])
+
+        cross_inst_list_i8 = np.array([np.datetime64(t) for t in cross_inst_list]).view('i8')
+        time_bins_i8 = np.array([np.datetime64(b) for b in time_bins[j]]).view('i8')
+        time_inds = np.digitize(cross_inst_list_i8, time_bins_i8)
+
+        # grouped_speed = []
+        # for i in range(len(bins[j]) - 1):
+        #     grouped_speed.append([])
+        # i = 0
+        # for ind in inds:
+        #     if 0 < ind < len(bins[j]):
+        #         if speed_list[i] is not None:
+        #             grouped_speed[ind - 1].append(speed_list[i])
+        #     i += 1
+        # grouped_speeds.append(grouped_speed)
+
+        traj_DB_Idxs = {}
+        for i in range(len(traj_DB_list)):
+            if traj_DB_list[i] != None:
+                if traj_DB_list[i] in traj_DB_Idxs.keys():
+                    traj_DB_Idxs[traj_DB_list[i]].append([traj_Idx_list[i], time_inds[i]])
+                else:
+                    traj_DB_Idxs[traj_DB_list[i]] = [[traj_Idx_list[i], time_inds[i]]]
+
+        x_arrays = []
+        speed_arrays = []
+        trj_time_inds = []
+        for db_Idx in traj_DB_Idxs.keys():
+            con = sqlite3.connect(metadataFile)
+            cur = con.cursor()
+            cur.execute('SELECT databaseFilename, cameraViewIdx FROM video_sequences WHERE idx=?', (db_Idx,))
+            row = cur.fetchall()
+            date_dbName = row[0][0]
+            cam_view_id = row[0][1]
+            cur.execute('SELECT siteIdx, cameraTypeIdx FROM camera_views WHERE idx=?', (cam_view_id,))
+            row = cur.fetchall()
+            site_idx = row[0][0]
+            cam_type_idx = row[0][1]
+            cur.execute('SELECT name FROM sites WHERE idx=?', (site_idx,))
+            row = cur.fetchall()
+            site_name = row[0][0]
+            cur.execute('SELECT frameRate FROM camera_types WHERE idx=?', (cam_type_idx,))
+            row = cur.fetchall()
+            frameRate = row[0][0]
+
+            mdbPath = Path(metadataFile).parent
+            trjDBFile = mdbPath / site_name / date_dbName
+            objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
+            for trj_idx_ind in traj_DB_Idxs[db_Idx]:
+                for traj in objects:
+                    if str(traj.getNum()) == trj_idx_ind[0]:
+                        x_arrays.append(traj.positions.asArray()[0])
+                        speed_arrays.append(np.round(traj.getSpeeds()* frameRate * 3.6, 1))
+                        trj_time_inds.append(trj_idx_ind[1])
+        all_x_arrays.append(x_arrays)
+        all_speed_arrays.append(speed_arrays)
+        all_trj_time_inds.append(trj_time_inds)
+
+    x_mins = []
+    x_maxs = []
+    for i, x_arrs in enumerate(all_x_arrays):
+        x_mins.append(np.min([np.min(x_arr) for x_arr in x_arrs]))
+        x_maxs.append(np.max([np.max(x_arr) for x_arr in x_arrs]))
+
+    x_min = np.max(x_mins)
+    x_max = np.min(x_maxs)
+    space_bins = np.arange(x_min, x_max, interval_space).tolist()
+
+    grouped_speeds = []
+    for i, x_arrs in enumerate(all_x_arrays):
+        grouped_speed = []
+
+        for r in range(len(time_bins[i]) - 1):
+            grouped_speed.append([])
+            for c in range(len(space_bins) - 1):
+                grouped_speed[r].append(np.array([]))
+
+        for j, x_arr in enumerate(x_arrs):
+            space_inds = np.digitize(x_arr, space_bins)
+
+            for k, ind in enumerate(space_inds):
+                if 0 < ind < len(space_bins):
+                    if 0 < all_trj_time_inds[i][j] < len(time_bins[i]):
+                        grouped_speed[-all_trj_time_inds[i][j]][ind - 1] = \
+                            np.append(grouped_speed[-all_trj_time_inds[i][j]][ind - 1],
+                                                     all_speed_arrays[i][j][k])
+
+        grouped_speeds.append(grouped_speed)
+
+
+    if ax == None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    to_timestamp = np.vectorize(lambda x: x.timestamp())
+
+    for i, grouped_speed in enumerate(grouped_speeds):
+
+        x = []
+        for n in range(len(space_bins) - 1):
+            x.append(space_bins[n] + (interval_space / 2))
+
+        t = []
+        bins_stamps = to_timestamp(time_bins[i])
+        for k in range(len(time_bins[i]) - 1):
+            mid_point = bins_stamps[k] + (bins_stamps[k + 1] - bins_stamps[k]) / 2
+            t.append(datetime.datetime.fromtimestamp(mid_point))
+
+        speed = []
+        for m in range(len(grouped_speed)):
+            speed.append([])
+            for n in range(len(grouped_speed[0])):
+                speed[m].append(np.nan)
+
+        for r, speeds_list in enumerate(grouped_speed):
+            for c, speeds in enumerate(speeds_list):
+                if speeds != np.array([]):
+                    speed[r][c] = round(
+                        np.mean(speeds),2)#[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]), 2)
+
+        t_lims = mdates.date2num([t[0], t[-1]])
+        im = ax.imshow(speed, extent=[x[0], x[-1], t_lims[0], t_lims[-1]], origin='lower',
+           cmap='RdYlBu_r', aspect='auto') #np.array(speed, dtype=float))
+
+        ax.yaxis_date()
+        # locator = mdates.AutoDateLocator()
+        # ax.xaxis.set_major_locator(locator)
+        date_format = mdates.DateFormatter('%H:%M')
+
+        ax.yaxis.set_major_formatter(date_format)
+        cbar = plt.colorbar(im)
+        cbar.ax.tick_params(labelsize=8)
+
+    ax.tick_params(axis='x', labelsize=8, rotation=0)
+    ax.tick_params(axis='y', labelsize=8)
+    ax.set_xlabel('Location (m.)', fontsize=8)
+    ax.set_ylabel('Time of day', fontsize=8)
+    # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    userTitle = transports[0]
+    if transports[0] == 'cardriver':
+        userTitle = 'car'
+    elif transports[0] == 'walking':
+        userTitle = 'pedestrian'
+    ax.set_title('Speed of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
+    # ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+
+    ax.text(0.03, 0.93, str('StudioProject'),
+            fontsize=9, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
+
 
 
 # ==============================================================

@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
                              QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel, QGraphicsItemGroup,
+                             QGraphicsLineItem, QGraphicsEllipseItem,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
                              QAbstractItemView, QTableView, QListWidget, QListWidgetItem)
 from PyQt5.QtGui import QColor, QIcon, QFont, QCursor, QPen, QBrush
@@ -29,7 +30,7 @@ import matplotlib.pyplot as plt
 from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
     plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
-    modeShareCompChart, speedHistogram, speedOverSpacePlot
+    modeShareCompChart, speedHistogram, speedOverSpacePlot, speedSpaceTimePlot
 import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -53,7 +54,7 @@ class ObsToolbox(QMainWindow):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.groupPersons = {} # {person_idx: [person, mode, vehicle]}
-        self.groups = {}  # {group_idx: [group, {linepassings}, {ZoneCrossings}, {Activities}]}
+        self.groups = {}  # {group_idx: [group, {lineCrossings}, {ZoneCrossings}, {Activities}]}
         self.IsChangedManually = True
         self.traj_line = None
         # self.session_trjDb = None
@@ -489,24 +490,31 @@ class ObsToolbox(QMainWindow):
         # self.loadTrjBtn.setEnabled(False)
         traj_tab_editLayout.addWidget(self.loadTrjBtn, 0, 5)
 
-        traj_tab_editLayout.addWidget(QLabel('Line idx:'), 1, 0)
+        traj_tab_editLayout.addWidget(QLabel('Action:'), 1, 0)
+        self.actionTypeCmb = QComboBox()
+        # self.actionTypeCmb.addItems(actionTypeList)
+        # self.actionTypeCmb.setCurrentIndex(-1)
+        self.actionTypeCmb.currentTextChanged.connect(self.trjActionTypeChanged)
+        traj_tab_editLayout.addWidget(self.actionTypeCmb, 1, 1, 1, 2)
+
+        traj_tab_editLayout.addWidget(QLabel('Units:'), 1, 3)
         self.refLineLe = QLineEdit('--')
         # self.refLineLe.setFixedWidth(50)
         self.refLineLe.setReadOnly(True)
-        traj_tab_editLayout.addWidget(self.refLineLe, 1, 1, 1, 2)
+        traj_tab_editLayout.addWidget(self.refLineLe, 1, 4, 1, 2)
 
-        traj_tab_editLayout.addWidget(QLabel('Speed:'), 1, 3)#, 1, 2)
-        self.userSpeedLe = QLineEdit('--')
-        # self.refLineLe.setFixedWidth(50)
-        self.userSpeedLe.setReadOnly(True)
-        traj_tab_editLayout.addWidget(self.userSpeedLe, 1, 4, 1, 2)
+        # traj_tab_editLayout.addWidget(QLabel('Speed:'), 1, 3)#, 1, 2)
+        # self.userSpeedLe = QLineEdit('--')
+        # # self.refLineLe.setFixedWidth(50)
+        # self.userSpeedLe.setReadOnly(True)
+        # traj_tab_editLayout.addWidget(self.userSpeedLe, 1, 4, 1, 2)
 
         # self.delTrjBtn = QPushButton('Delete')
         # self.delTrjBtn.clicked.connect(self.delTrajectory)
         # self.delTrjBtn.setEnabled(False)
         # traj_tab_editLayout.addWidget(self.delTrjBtn, 1, 5)
 
-        traj_tab_editLayout.addWidget(QLabel('User type:'), 2, 0)
+        traj_tab_editLayout.addWidget(QLabel('User:'), 2, 0)
         self.userTypeCb = QComboBox()
         self.userTypeCb.addItems(userTypeNames)
         self.userTypeCb.currentIndexChanged.connect(self.userTypeChanged)
@@ -611,8 +619,21 @@ class ObsToolbox(QMainWindow):
         self.traj_line = plotTrajectory(self.trjDBFile, self.intrinsicCameraMatrix, self.distortionCoefficients,
                                        self.homoFile, self.ax, session)
         for tl in self.traj_line.values():
-            tl.append([-1, [], [], [], [], 1, None, []])
-            #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs], groupSize, groupIdx, [rightTols]]
+            tl.append([-1, [], [], [], [], 1, None, [], [], [], [], []])
+            #[
+            # userType,               0
+            # [line],                 1
+            # [lineCrossingInstants], 2
+            # [lineCrossingSpeeds],   3
+            # [lineCrossingSecs],     4
+            # groupSize,              5
+            # groupIdx,               6
+            # [lineCrossingRightTols] 7
+            # [zone],                 8
+            # [zoneCrossingInstants], 9
+            # [zoneCrossingSecs],     10
+            # [zoneEntering]          11
+            # ]
         self.noTrjLabel.setText('/' + str(list(self.traj_line.keys())[-1]))
         self.trjIdxLe.setText('-1')
         self.userTypeCb.setCurrentIndex(-1)
@@ -626,8 +647,9 @@ class ObsToolbox(QMainWindow):
         if traj_ids == []:
             return
         q_line = session.query(Line)
-        if q_line.all() == []:
-            QMessageBox.information(self, 'Warning!', 'At least one screenline is required!')
+        q_zone = session.query(Zone)
+        if q_line.all() == [] and q_zone.all() == []:
+            QMessageBox.information(self, 'Warning!', 'At least one screenline or zone is required!')
             return
 
         current_idx = self.trjIdxLe.text()
@@ -658,6 +680,13 @@ class ObsToolbox(QMainWindow):
         self.userTypeCb.setCurrentIndex(next_traj.userType)
         self.groupSizeCb.setCurrentIndex(next_traj.nObjects - 1)
         self.canvas.draw()
+
+        gView = self.parent().gView
+        for item in gView.scene().items():
+            if isinstance(item, QGraphicsEllipseItem) and item.toolTip() == 'Intersection':
+                gView.scene().removeItem(item)
+
+        self.actionTypeCmb.clear()
 
         if self.traj_line[next_idx][2][0] == -1:
             self.traj_line[next_idx][2][0] = next_traj.userType
@@ -697,29 +726,82 @@ class ObsToolbox(QMainWindow):
                     img_inters_pnts = worldToImageProject(np.array([[intersections[0].x], [intersections[0].y]]),
                                     self.intrinsicCameraMatrix, self.distortionCoefficients, np.linalg.inv(homography))
 
-                    self.parent().gView.scene().addEllipse(img_inters_pnts[0][0], img_inters_pnts[1][0],
-                                                           int(self.parent().gView.labelSize/5),
-                                                           int(self.parent().gView.labelSize/5),
-                                                           QPen(QColor(255, 0, 0)),
-                                                           QBrush(QColor(255, 0, 0)))
+                    intrs_mark = QGraphicsEllipseItem(img_inters_pnts[0][0], img_inters_pnts[1][0],
+                                             int(gView.labelSize/3), int(gView.labelSize/3))
+                    intrs_mark.setPen(QPen(QColor(0, 255, 0), 0.5))
+                    intrs_mark.setBrush(QBrush(QColor(255, 0, 0)))
+                    intrs_mark.setToolTip('Intersection')
+                    gView.scene().addItem(intrs_mark)
 
-            if self.traj_line[next_idx][2][1] == []:
-                secs = (next_traj.getLastInstant() / self.frameRate)
-                # self.traj_line[next_idx][2][1].append('None')
-                self.traj_line[next_idx][2][4].append(secs)
+            firstInst = next_traj.getFirstInstant()
+            lastInst = next_traj.getLastInstant()
+            firstPos = next_traj.getPositionAtInstant(firstInst)
+            lastPos = next_traj.getPositionAtInstant(lastInst)
+            firstSpeed = next_traj.getVelocityAtInstant(firstInst).norm2() * self.frameRate * 3.6
+            lastSpeed = next_traj.getVelocityAtInstant(lastInst).norm2() * self.frameRate * 3.6
+            for zone in q_zone.all():
+                polygon = None
+                for p in zone.points:
+                    prj_point = imageToWorldProject(np.array([[p.x], [p.y]]),
+                                                    self.intrinsicCameraMatrix,
+                                                    self.distortionCoefficients, homography)
+                    if polygon is None:
+                        polygon = np.array([prj_point[0][0], prj_point[1][0]])
+                    else:
+                        polygon = np.vstack([polygon, np.array([prj_point[0][0], prj_point[1][0]])])
 
-        self.parent().mediaPlayer.setPosition(round(self.traj_line[next_idx][2][4][0]*1000))
+                if firstPos.inPolygon(polygon) and not lastPos.inPolygon(polygon) and firstSpeed < 5:
+                    secs = firstInst / self.frameRate
+                    instant = self.video_start + datetime.timedelta(seconds=round(secs))
+                    entering = False
 
-        if self.traj_line[next_idx][2][1] == []:
-            self.refLineLe.setText('None')
-            self.userSpeedLe.setText('--')
-            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
-            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+                    self.traj_line[next_idx][2][8].append(zone)
+                    self.traj_line[next_idx][2][9].append(instant)
+                    self.traj_line[next_idx][2][10].append(secs)
+                    self.traj_line[next_idx][2][11].append(entering)
+
+                elif not firstPos.inPolygon(polygon) and lastPos.inPolygon(polygon) and lastSpeed < 5:
+                    secs = lastInst / self.frameRate
+                    instant = self.video_start + datetime.timedelta(seconds=round(secs))
+                    entering = True
+
+                    self.traj_line[next_idx][2][8].append(zone)
+                    self.traj_line[next_idx][2][9].append(instant)
+                    self.traj_line[next_idx][2][10].append(secs)
+                    self.traj_line[next_idx][2][11].append(entering)
+
+        if self.traj_line[next_idx][2][4] != [] and self.traj_line[next_idx][2][10] == []:
+            secs = self.traj_line[next_idx][2][4][0]
+        elif self.traj_line[next_idx][2][4] == [] and self.traj_line[next_idx][2][10] == []:
+            secs = next_traj.getLastInstant() / self.frameRate
         else:
-            self.refLineLe.setText(str([rl.idx for rl in self.traj_line[next_idx][2][1]]))
-            self.userSpeedLe.setText(str(self.traj_line[next_idx][2][3]))
+            if self.traj_line[next_idx][2][11][0]:
+                secs = next_traj.getLastInstant() / self.frameRate
+            else:
+                secs = next_traj.getFirstInstant() / self.frameRate
+
+        self.parent().mediaPlayer.setPosition(round(secs*1000))
+
+        if self.traj_line[next_idx][2][1] == [] and self.traj_line[next_idx][2][8] == []:
+            self.refLineLe.setText('None')
+            # self.userSpeedLe.setText('--')
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+            # self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+
+        if self.traj_line[next_idx][2][1] != []:
+            self.actionTypeCmb.addItem(actionTypeList[0])
+            self.actionTypeCmb.setCurrentText(actionTypeList[0])
             self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
-            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+
+        if self.traj_line[next_idx][2][8] != []:
+            for e in list(set(self.traj_line[next_idx][2][11])):
+                if e:
+                    self.actionTypeCmb.addItem(actionTypeList[1])
+                    self.actionTypeCmb.setCurrentText(actionTypeList[1])
+                else:
+                    self.actionTypeCmb.addItem(actionTypeList[2])
+                    self.actionTypeCmb.setCurrentText(actionTypeList[2])
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
 
         if self.traj_line[next_idx][2][6] == -1:
@@ -727,6 +809,20 @@ class ObsToolbox(QMainWindow):
         elif self.traj_line[next_idx][2][6] > -1:
             self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
+
+    def trjActionTypeChanged(self):
+        next_idx = self.trjIdxLe.text()
+        if self.actionTypeCmb.currentText() == actionTypeList[0]:
+            self.refLineLe.setText(str([rl.idx for rl in self.traj_line[next_idx][2][1]]))
+        elif self.actionTypeCmb.currentText() == actionTypeList[1]:
+            self.refLineLe.setText(str([self.traj_line[next_idx][2][8][i].idx
+                                        for i, e in enumerate(self.traj_line[next_idx][2][11])
+                                        if e ]))
+        elif self.actionTypeCmb.currentText() == actionTypeList[2]:
+            self.refLineLe.setText(str([self.traj_line[next_idx][2][8][i].idx
+                                        for i, e in enumerate(self.traj_line[next_idx][2][11])
+                                        if not e ]))
+        self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
     def prevTrajectory(self):
         if self.traj_line == None:
@@ -739,6 +835,13 @@ class ObsToolbox(QMainWindow):
         if current_idx == '-1':
             return
 
+        gView = self.parent().gView
+        for item in gView.scene().items():
+            if isinstance(item, QGraphicsEllipseItem) and item.toolTip() == 'Intersection':
+                gView.scene().removeItem(item)
+
+        self.actionTypeCmb.clear()
+
         if traj_ids.index(current_idx) == 0:
             for line in [tl[1] for tl in self.traj_line.values()]:
                 line.set_visible(True)
@@ -746,8 +849,8 @@ class ObsToolbox(QMainWindow):
             self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
             self.refLineLe.setText('--')
             self.refLineLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
-            self.userSpeedLe.setText('--')
-            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
+            # self.userSpeedLe.setText('--')
+            # self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(255, 255, 255); }")
             self.canvas.draw()
             return
 
@@ -773,43 +876,36 @@ class ObsToolbox(QMainWindow):
         self.groupSizeCb.setCurrentIndex(self.traj_line[prev_idx][2][5] - 1)
         self.canvas.draw()
 
-        # homography = np.loadtxt(self.homoFile, delimiter=' ')
-        # q_line = session.query(Line)
-        # if q_line.all() != []:
-        #     for line in q_line.all():
-        #         points = np.array([[line.points[0].x, line.points[1].x],
-        #                            [line.points[0].y, line.points[1].y]])
-        #         prj_points = imageToWorldProject(points, self.intrinsicCameraMatrix, self.distortionCoefficients,
-        #                                          homography)
-        #         p1 = moving.Point(prj_points[0][0], prj_points[1][0])
-        #         p2 = moving.Point(prj_points[0][1], prj_points[1][1])
-        #
-        #         instants_list, intersections, rightToLefts  = prev_traj.getInstantsCrossingLine(p1, p2, True)
-        #         if len(instants_list) > 0:
-        #             mil_secs = int((instants_list[0] / self.frameRate) * 1000)
-        #             self.refLineLe.setText(str(line.idx))
-        #             break
-        #     if len(instants_list) == 0:
-        #         mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
-        #         self.refLineLe.setText('None')
-        # else:
-        #     mil_secs = int((prev_traj.getFirstInstant() / self.frameRate) * 1000)
-        #     self.refLineLe.setText('None')
-        #
-        # self.parent().mediaPlayer.setPosition(mil_secs)
-
-        self.parent().mediaPlayer.setPosition(round(self.traj_line[prev_idx][2][4][0] * 1000))
-
-        if self.traj_line[prev_idx][2][1] == []:
-            self.refLineLe.setText('None')
-            self.userSpeedLe.setText('--')
-            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
-            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+        if self.traj_line[prev_idx][2][4] != [] and self.traj_line[prev_idx][2][10] == []:
+            secs = self.traj_line[prev_idx][2][4][0]
+        elif self.traj_line[prev_idx][2][4] == [] and self.traj_line[prev_idx][2][10] == []:
+            secs = prev_traj.getLastInstant() / self.frameRate
         else:
-            self.refLineLe.setText(str([rl.idx for rl in self.traj_line[prev_idx][2][1]]))
-            self.userSpeedLe.setText(str(self.traj_line[prev_idx][2][3]))
+            if self.traj_line[prev_idx][2][11][0]:
+                secs = prev_traj.getLastInstant() / self.frameRate
+            else:
+                secs = prev_traj.getFirstInstant() / self.frameRate
+
+        self.parent().mediaPlayer.setPosition(round(secs * 1000))
+
+        if self.traj_line[prev_idx][2][1] == [] and self.traj_line[prev_idx][2][8] == []:
+            self.refLineLe.setText('None')
+            # self.userSpeedLe.setText('--')
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+            # self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
+
+        if self.traj_line[prev_idx][2][8] != []:
+            for e in list(set(self.traj_line[prev_idx][2][11])):
+                if e:
+                    self.actionTypeCmb.addItem(actionTypeList[1])
+                else:
+                    self.actionTypeCmb.addItem(actionTypeList[2])
             self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
-            self.userSpeedLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+
+        if self.traj_line[prev_idx][2][1] != []:
+            self.actionTypeCmb.addItem(actionTypeList[0])
+            self.refLineLe.setText(str([rl.idx for rl in self.traj_line[prev_idx][2][1]]))
+            self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
         if prev_idx != '-1':
             if self.traj_line[prev_idx][2][6] == -1:
@@ -845,7 +941,7 @@ class ObsToolbox(QMainWindow):
 
         trj_idx = self.trjIdxLe.text()
         userType = self.traj_line[trj_idx][2][0]
-        lines = self.traj_line[trj_idx][2][1]
+
         if userType != -1 and userType != 0:# and lines != []:
             self.user_newGroup_click()
             group_idx = int(self.group_idx_cmbBox.currentText())
@@ -896,23 +992,42 @@ class ObsToolbox(QMainWindow):
             self.user_saveBtn_click()
 
             if userType != 10:
-                for i in range(len(lines)):
-                    self.linepass_newRecBtn_click()
-                    linepass_idx = int(self.linepass_list_wdgt.currentItem().text())
-                    linepass = self.groups[group_idx][1][linepass_idx]
-                    line = lines[i]
-                    instant = self.traj_line[trj_idx][2][2][i]
-                    speed = self.traj_line[trj_idx][2][3][i]
-                    rightToleft = self.traj_line[trj_idx][2][7][i]
+                if self.actionTypeCmb.currentText() == actionTypeList[0]:
+                    lines = self.traj_line[trj_idx][2][1]
+                    for i in range(len(lines)):
+                        self.linepass_newRecBtn_click()
+                        linepass_idx = int(self.linepass_list_wdgt.currentItem().text())
+                        linepass = self.groups[group_idx][1][linepass_idx]
+                        line = lines[i]
+                        instant = self.traj_line[trj_idx][2][2][i]
+                        speed = self.traj_line[trj_idx][2][3][i]
+                        rightToleft = self.traj_line[trj_idx][2][7][i]
 
-                    linepass.line = line
-                    linepass.instant = instant
-                    linepass.speed = speed
-                    linepass.rightToLeft = rightToleft
-                # self.set_widget_values(self.linepass_grpBox, linepass)
-                # self.linepass_list_wdgt.setCurrentRow(-1)
-                # self.linepass_list_wdgt.setCurrentRow(0)
-                self.linepass_saveBtn_click()
+                        linepass.line = line
+                        linepass.instant = instant
+                        linepass.speed = speed
+                        linepass.rightToLeft = rightToleft
+                    # self.set_widget_values(self.linepass_grpBox, linepass)
+                    # self.linepass_list_wdgt.setCurrentRow(-1)
+                    # self.linepass_list_wdgt.setCurrentRow(0)
+                    self.linepass_saveBtn_click()
+                elif self.actionTypeCmb.currentText() in [actionTypeList[1], actionTypeList[2]]:
+                    zones = self.traj_line[trj_idx][2][8]
+                    for i in range(len(zones)):
+                        self.zonepass_newRecBtn_click()
+                        zonepass_idx = int(self.zonepass_list_wdgt.currentItem().text())
+                        zonepass = self.groups[group_idx][2][zonepass_idx]
+                        zone = zones[i]
+                        instant = self.traj_line[trj_idx][2][9][i]
+                        entering = self.traj_line[trj_idx][2][11][i]
+
+                        zonepass.zone = zone
+                        zonepass.instant = instant
+                        zonepass.entering = entering
+                    # self.set_widget_values(self.linepass_grpBox, linepass)
+                    # self.linepass_list_wdgt.setCurrentRow(-1)
+                    # self.linepass_list_wdgt.setCurrentRow(0)
+                    self.zonepass_saveBtn_click()
         self.group_idx_cmbBox.setCurrentIndex(-1)
         self.group_idx_cmbBox.setCurrentText(str(group_idx))
         self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
@@ -1058,7 +1173,7 @@ class ObsToolbox(QMainWindow):
         session.add(group)
         session.flush()
 
-        self.groups[group.idx] = [group, {}, {}, {}]  #[group, {linePassings}, {ZoneCrossings}, {Activities}]
+        self.groups[group.idx] = [group, {}, {}, {}]  #[group, {lineCrossings}, {ZoneCrossings}, {Activities}]
         self.group_idx_cmbBox.insertItem(0, str(group.idx))
         self.group_idx_cmbBox.setCurrentText(str(group.idx))
 
@@ -1569,6 +1684,8 @@ class ObsToolbox(QMainWindow):
             if isinstance(gitem, QGraphicsItemGroup):
                 if gitem.toolTip().split(':')[0] == 'L' + current_item.text():
                     self.parent().gView.scene().removeItem(gitem)
+                    break
+
 
     def line_saveBtn_click(self):
         btn_label = self.line_saveButton.text()
@@ -2575,7 +2692,7 @@ class SpeedPlotWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Plot type:'), 2, 4, Qt.AlignRight)
         self.plotTypeCmbx = QComboBox()
-        self.plotTypeCmbx.addItems(['Box plot', 'Histogram', 'Over space'])
+        self.plotTypeCmbx.addItems(['Box plot', 'Histogram', 'Over space', 'Space-time'])
         self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
         gridLayout.addWidget(self.plotTypeCmbx, 2, 5, Qt.AlignLeft)
 
@@ -2611,6 +2728,10 @@ class SpeedPlotWindow(QDialog):
             self.intervalType.setText('Length interval')
             self.intervaLe.setText('0.5')
             self.intervalUnit.setText('(meter)')
+        elif self.plotTypeCmbx.currentText() == 'Space-time':
+            self.intervalType.setText('Intervals')
+            self.intervaLe.setText('0.5,10')
+            self.intervalUnit.setText('(m.),(min.)')
 
     def plotSpeed(self):
         self.figure.clear()
@@ -2625,8 +2746,11 @@ class SpeedPlotWindow(QDialog):
 
         plotType = self.plotTypeCmbx.currentText()
 
-        if plotType != 'Over space':
+        if plotType != 'Over space' and plotType != 'Space-time':
             interval = int(self.intervaLe.text())
+        elif plotType == 'Space-time':
+            interval_space = float(self.intervaLe.text().split(',')[0])
+            interval_time = int(self.intervaLe.text().split(',')[1])
         else:
             interval = float(self.intervaLe.text())
 
@@ -2644,6 +2768,11 @@ class SpeedPlotWindow(QDialog):
             err = speedOverSpacePlot(inputs['Database file'], inputs['Label'], inputs['Transport'],
                                inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
                                metadataFile, ax, interval, alpha=0.7)
+        elif plotType == 'Space-time':
+            metadataFile = self.parent().mdbFileLedit.text()
+            err = speedSpaceTimePlot(inputs['Database file'], inputs['Label'], inputs['Transport'],
+                               inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
+                               metadataFile, ax, interval_space, interval_time)
 
         if err != None:
             msg = QMessageBox()
