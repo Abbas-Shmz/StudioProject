@@ -1,18 +1,18 @@
 
 # ===========================================================================================
 
-from PyQt5.QtCore import (QDir, Qt, QUrl, QPointF, QLineF, QSize, QFile, QIODevice, QXmlStreamReader,
+from PyQt6.QtCore import (QDir, Qt, QUrl, QPointF, QLineF, QSize, QFile, QIODevice, QXmlStreamReader,
                           QXmlStreamWriter, QRectF, QSizeF)
-from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
-from PyQt5.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
-from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
+from PyQt6.QtMultimedia import QMediaPlayer
+from PyQt6.QtMultimediaWidgets import QVideoWidget, QGraphicsVideoItem
+from PyQt6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
         QPushButton, QSizePolicy, QSlider, QStyle, QVBoxLayout, QWidget, QGraphicsView, QGraphicsScene,
         QGraphicsLineItem, QGraphicsTextItem, QGraphicsEllipseItem, QGridLayout, QComboBox,
-        QOpenGLWidget, QMessageBox, QActionGroup, QGraphicsRectItem, QGraphicsPolygonItem, QListWidgetItem)
-from PyQt5.QtWidgets import (QMainWindow, QAction, qApp, QStatusBar, QDialog,
+        QMessageBox, QGraphicsRectItem, QGraphicsPolygonItem, QListWidgetItem)
+from PyQt6.QtWidgets import (QMainWindow, QStatusBar, QDialog,
                              QLineEdit, QGraphicsItem, QGraphicsItemGroup)
-from PyQt5.QtGui import QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor, QPolygonF
-from PyQt5.QtOpenGL import QGLWidget
+from PyQt6.QtGui import (QIcon, QBrush, QResizeEvent, QCursor, QPen, QFont, QColor, QPolygonF,
+                         QActionGroup, QAction)
 
 import xml.etree.ElementTree as ET
 import numpy as np
@@ -40,26 +40,26 @@ class GraphicView(QGraphicsView):
         self.unsavedZones = []
         self.unsavedPoints = []
         self.labelSize = 10
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        # self.setViewport(QOpenGLWidget())
+        # self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
         # self.setMouseTracking(True)
 
     def mousePressEvent(self, event):
-        if event.buttons() == Qt.LeftButton and (self.parent().parent().drawLineAction.isChecked() \
+        if event.buttons() == Qt.MouseButton.LeftButton and (self.parent().parent().drawLineAction.isChecked() \
                  or self.parent().parent().obsTb.line_newRecButton.isChecked()) and self.gLineItem == None:
 
             self.setMouseTracking(True)
-            p1 = self.mapToScene(event.x(), event.y())
+            p1 = self.mapToScene(int(event.position().x()), int(event.position().y()))
             self.gLineItem = self.scene().addLine(QLineF(p1, p1))
             r, g, b = np.random.choice(range(256), size=3)
-            self.gLineItem.setPen(QPen(QColor(255, 0, 0), self.labelSize/6))
+            self.gLineItem.setPen(QPen(QColor(0, 0, 0), self.labelSize/7))
             # self.gLineItem.setOpacity(0.25)
 
-        elif event.buttons() == Qt.LeftButton and (self.parent().parent().maskGenAction.isChecked() \
+        elif event.buttons() == Qt.MouseButton.LeftButton and (self.parent().parent().maskGenAction.isChecked() \
                 or self.parent().parent().obsTb.zone_newRecButton.isChecked()):
             self.setMouseTracking(True)
-            p_clicked = self.mapToScene(event.x(), event.y())
+            p_clicked = self.mapToScene(int(event.position().x()), int(event.position().y()))
             if self.gPolyItem == None:
                 self.currentPoly = QPolygonF([p_clicked])
                 self.gPolyItem = self.scene().addPolygon(self.currentPoly)
@@ -70,34 +70,34 @@ class GraphicView(QGraphicsView):
                 self.currentPoly.append(p_clicked)
                 self.gPolyItem.setPolygon(self.currentPoly)
 
-        elif event.buttons() == Qt.LeftButton and self.parent().parent().drawPointAction.isChecked():
+        elif event.buttons() == Qt.MouseButton.LeftButton and self.parent().parent().drawPointAction.isChecked():
 
             p = self.mapToScene(event.x(), event.y())
             pointBbx = QRectF()
             pointBbx.setSize(QSizeF(self.labelSize, self.labelSize))
             pointBbx.moveCenter(p)
-            gPointItem = self.scene().addEllipse(pointBbx, QPen(Qt.white, 0.5), QBrush(Qt.black))
+            gPointItem = self.scene().addEllipse(pointBbx, QPen(Qt.GlobalColor.white, 0.5), QBrush(Qt.GlobalColor.black))
             self.unsavedPoints.append(gPointItem)
             self.scene().parent().drawPointAction.setChecked(False)
             self.unsetCursor()
 
-        elif event.buttons() == Qt.RightButton:
+        elif event.buttons() == Qt.MouseButton.LeftButton: #RightButton:
             self.parent().parent().play()
 
     def mouseMoveEvent(self, event):
         if self.gLineItem != None and (self.parent().parent().drawLineAction.isChecked() \
                 or self.parent().parent().obsTb.line_newRecButton.isChecked()):
-            p2 = self.mapToScene(event.x(), event.y())
+            p2 = self.mapToScene(int(event.position().x()), int(event.position().y()))
             self.gLineItem.setLine(QLineF(self.gLineItem.line().p1(), p2))
 
         elif self.gPolyItem != None and (self.parent().parent().maskGenAction.isChecked() \
                 or self.parent().parent().obsTb.zone_newRecButton.isChecked()):
-            p_floating = self.mapToScene(event.x(), event.y())
+            p_floating = self.mapToScene(int(event.position().x()), int(event.position().y()))
             self.gPolyItem.setPolygon(QPolygonF(list(self.currentPoly) + [p_floating]))
 
     def resizeEvent(self, event):
         if len(self.items()) > 0:
-            self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
+            self.fitInView(self.items()[-1], Qt.AspectRatioMode.KeepAspectRatio)
 
     def showEvent(self, event):
         if len(self.items()) > 0:
@@ -165,22 +165,23 @@ class GraphicView(QGraphicsView):
             self.parent().parent().obsTb.init_input_widgets(self.parent().parent().obsTb.zone_grpBox)
 
             self.gPolyItem = None
-        elif len(self.items()) > 0:
-            self.fitInView(self.items()[-1], Qt.KeepAspectRatio)
+        # elif len(self.items()) > 0:
+        #     self.fitInView(self.items()[-1], Qt.AspectRatioMode.KeepAspectRatio)
 
-    def wheelEvent(self, event):
-        factor = 1.1
-        if event.angleDelta().y() < 0:
-            factor = 0.9
-        view_pos = event.pos()
-        scene_pos = self.mapToScene(view_pos)
-        self.centerOn(scene_pos)
-        self.scale(factor, factor)
-        delta = self.mapToScene(view_pos) - self.mapToScene(self.viewport().rect().center())
-        self.centerOn(scene_pos - delta)
+    # def wheelEvent(self, event):
+    #     factor = 1.1
+    #     if event.angleDelta().y() < 0:
+    #         factor = 0.9
+    #     # scene_pos = event.scenePosition()
+    #     scene_pos = self.mapToScene(int(event.position().x()), int(event.position().y()))
+    #     self.centerOn(scene_pos)
+    #     self.scale(factor, factor)
+    #     # delta = self.mapToScene(view_pos) - self.mapToScene(self.viewport().rect().center())
+    #     delta = scene_pos - self.mapToScene(self.viewport().rect().center())
+    #     self.centerOn(scene_pos - delta)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Space:
+        if event.key() == Qt.Key.Key_Space:
             self.parent().parent().play()
 
 
@@ -193,7 +194,7 @@ class VideoWindow(QMainWindow):
         self.setStatusBar(self.statusBar)
         self.gScene = QGraphicsScene(self)
         self.gView = GraphicView(self.gScene, self)
-        self.gView.viewport().setAttribute(Qt.WA_AcceptTouchEvents, False)
+        self.gView.viewport().setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, False)
         # self.gView.setBackgroundBrush(QBrush(Qt.black))
 
         self.videoStartDatetime = None
@@ -211,18 +212,18 @@ class VideoWindow(QMainWindow):
         # self.gScene.addItem(self.videoItem)
         # self.videoItem.mouseMoveEvent = self.gView.mouseMoveEvent
 
-        self.mediaPlayer = QMediaPlayer(self, QMediaPlayer.VideoSurface)
+        self.mediaPlayer = QMediaPlayer(self)
         # self.mediaPlayer.setVideoOutput(self.videoItem)
-        self.mediaPlayer.stateChanged.connect(self.mediaStateChanged)
+        self.mediaPlayer.playbackStateChanged.connect(self.mediaStateChanged)
         self.mediaPlayer.positionChanged.connect(self.positionChanged)
         self.mediaPlayer.durationChanged.connect(self.durationChanged)
-        self.mediaPlayer.error.connect(self.handleError)
-        self.mediaPlayer.setMuted(True)
-        self.mediaPlayer.setNotifyInterval(100)
+        self.mediaPlayer.errorOccurred.connect(self.handleError)
+        # self.mediaPlayer.setMuted(True)
+        # self.mediaPlayer.setNotifyInterval(100)
 
         self.playButton = QPushButton()
         self.playButton.setEnabled(False)
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.clicked.connect(self.play)
 
         self.changePlayRateBtn = QPushButton('1x')
@@ -230,7 +231,7 @@ class VideoWindow(QMainWindow):
         # self.incrPlayRateBtn.setEnabled(False)
         self.changePlayRateBtn.clicked.connect(self.changePlayRate)
 
-        self.positionSlider = QSlider(Qt.Horizontal)
+        self.positionSlider = QSlider(Qt.Orientation.Horizontal)
         self.positionSlider.setRange(0, 0)
         self.positionSlider.sliderMoved.connect(self.setPosition)
 
@@ -307,7 +308,7 @@ class VideoWindow(QMainWindow):
         exitAction = QAction(QIcon('icons/close.png'), 'Exit', self)
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
-        exitAction.triggered.connect(qApp.quit)  # self.exitCall
+        exitAction.triggered.connect(self.exitCall)  # self.exitCall
 
         # Create menu bar and add action
         # menuBar = self.menuBar()
@@ -390,13 +391,13 @@ class VideoWindow(QMainWindow):
             self.gView.setSceneRect(0, 0, width, height)
 
             self.videoItem = QGraphicsVideoItem()
-            self.videoItem.setAspectRatioMode(Qt.KeepAspectRatio)
+            self.videoItem.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
             self.gScene.addItem(self.videoItem)
             self.videoItem.mouseMoveEvent = self.gView.mouseMoveEvent
             self.videoItem.setSize(QSizeF(width, height))
 
             self.mediaPlayer.setVideoOutput(self.videoItem)
-            self.mediaPlayer.setMedia(QMediaContent(QUrl.fromLocalFile(self.videoFile)))
+            self.mediaPlayer.setSource(QUrl.fromLocalFile(self.videoFile))
 
             self.gView.labelSize = width/50
 
@@ -405,14 +406,14 @@ class VideoWindow(QMainWindow):
             self.mediaPlayer.pause()
 
     def exitCall(self):
-        sys.exit(app.exec_())
-        self.mediaPlayer.pause()
+        # sys.exit(app.exec())
+        # self.mediaPlayer.pause()
         self.close()
 
     def play(self):
         # self.gView.fitInView(self.videoItem, Qt.KeepAspectRatio)
 
-        if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
+        if self.mediaPlayer.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.mediaPlayer.pause()
 
         else:
@@ -430,12 +431,12 @@ class VideoWindow(QMainWindow):
             self.statusBar.showMessage('Play back rate = {}x'.format(1), 2000)
 
     def mediaStateChanged(self, state):
-        if self.mediaPlayer.state() == QMediaPlayer.PlayingState:
+        if self.mediaPlayer.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.playButton.setIcon(
-                self.style().standardIcon(QStyle.SP_MediaPause))
+                self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
         else:
             self.playButton.setIcon(
-                self.style().standardIcon(QStyle.SP_MediaPlay))
+                self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
     def positionChanged(self, position):
         self.positionSlider.setValue(position)
@@ -470,14 +471,14 @@ class VideoWindow(QMainWindow):
         #     self.labelingAction.setChecked(False)
         # else:
         #     self.drawLineAction.setChecked(False)
-        cursor = QCursor(Qt.CrossCursor)
+        cursor = QCursor(Qt.CursorShape.CrossCursor)
         self.gView.setCursor(cursor)
 
     def generateMask(self):
         if not self.sender().isChecked():
             self.gView.unsetCursor()
             return
-        cursor = QCursor(Qt.CrossCursor)
+        cursor = QCursor(Qt.CursorShape.CrossCursor)
         self.gView.setCursor(cursor)
 
         # dbfilename = self.obsTb.dbFilename
@@ -596,7 +597,7 @@ class VideoWindow(QMainWindow):
 
 
         file = QFile(self.projectFile)
-        if (not file.open(QIODevice.WriteOnly | QIODevice.Text)):
+        if (not file.open(QIODevice.OpenModeFlag.WriteOnly | QIODevice.OpenModeFlag.Text)):
             return
 
         xmlWriter = QXmlStreamWriter(file)
@@ -637,8 +638,9 @@ class VideoWindow(QMainWindow):
 
         self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
                                              os.path.basename(self.projectFile)))
-        self.obsTb.setWindowTitle('{} - {}'.format(os.path.basename(self.obsTb.dbFilename),
-                                             os.path.basename(self.projectFile)))
+        if self.obsTb.dbFilename != None:
+            self.obsTb.setWindowTitle('{} - {}'.format(os.path.basename(self.obsTb.dbFilename),
+                                                 os.path.basename(self.projectFile)))
 
     def saveGraphics(self):
         dbfilename = self.obsTb.dbFilename
@@ -718,8 +720,8 @@ class VideoWindow(QMainWindow):
                              ys[0] - (textLabel.boundingRect().height() / 2))
 
             pointShape = QGraphicsEllipseItem(pointBbx)
-            shapeColor = Qt.white
-            textColor = Qt.black
+            shapeColor = Qt.GlobalColor.white
+            textColor = Qt.GlobalColor.black
             tooltip = 'P{}:{}'
         elif len(xs) == 2:
             pointBbx.moveCenter(QPointF(xs[1], ys[1]))
@@ -739,7 +741,7 @@ class VideoWindow(QMainWindow):
 
             pointShape = QGraphicsEllipseItem(pointBbx)
             shapeColor = QColor(r, g, b, 128)
-            textColor = Qt.black
+            textColor = Qt.GlobalColor.black
             tooltip = 'L{}:{}'
             # textLabel.setRotation(np.arctan((ys[1] - ys[0])/(xs[1] - xs[0]))*(180/3.14))
         else:
@@ -756,11 +758,11 @@ class VideoWindow(QMainWindow):
             gItemGroup.addToGroup(zone_item)
 
             pointShape = QGraphicsRectItem(pointBbx)
-            shapeColor = Qt.darkBlue
-            textColor = Qt.white
+            shapeColor = Qt.GlobalColor.darkBlue
+            textColor = Qt.GlobalColor.white
             tooltip = 'Z{}:{}'
 
-        pointShape.setPen(QPen(Qt.white, 0.5))
+        pointShape.setPen(QPen(Qt.GlobalColor.white, 0.5))
         pointShape.setBrush(QBrush(shapeColor))
         # self.gView.scene().addEllipse(pointBbx, QPen(Qt.white, 0.5), QBrush(Qt.black))
         gItemGroup.setToolTip(tooltip.format(label, type))
@@ -782,11 +784,11 @@ class VideoWindow(QMainWindow):
             self.session = connectDatabase(dbfilename)
         else:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            # msg.setIcon(QMessageBox.Icon.Information)
             msg.setText('The database file is not defined.')
             msg.setInformativeText('In order to set the database file, open the Observation Toolbox')
-            msg.setIcon(QMessageBox.Critical)
-            msg.exec_()
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.exec()
             return
 
         for gitem in self.gView.scene().items():
@@ -859,4 +861,4 @@ if __name__ == '__main__':
     player = VideoWindow()
     player.resize(640, 480)
     player.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

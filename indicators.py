@@ -13,6 +13,7 @@ import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator
 from sqlalchemy import func
 import sqlite3
+import ast
 from configparser import ConfigParser
 
 from hachoir.parser import createParser
@@ -216,10 +217,10 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
         # print((locator()))
 
-        if inputNo == 1:
-            xLabel = 'Time ({})'.format(bins_start.strftime('%A, %b %d, %Y'))
-        else:
-            xLabel = 'Time'
+        # if inputNo == 1:
+        #     xLabel = 'Time ({})'.format(bins_start.strftime('%A, %b %d, %Y'))
+        # else:
+        xLabel = 'Time of day'
 
         # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
         ax.tick_params(axis='x', labelsize=8, rotation=0)
@@ -234,7 +235,7 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
 
         ax.set_ylabel('No. of {}s'.format(tm), fontsize=8)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.set_title('Temporal distribution of {}s {} #{}'.format(tm, actionTypes[0], unitIdxs[0]),
+        ax.set_title('Number of {}s {} #{} over time'.format(tm, actionTypes[0], unitIdxs[0]),
                      fontsize=8)
         ax.legend(loc='upper right', fontsize=6)
 
@@ -599,20 +600,20 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         session = connectDatabase(dbFiles[i])
         sessions.append(session)
 
-    for i in range(inputNo):
-        if 'line' in actionTypes[i].split(' '):
-            cls_obs = LineCrossing
-        elif 'zone' in actionTypes[i].split(' '):
-            cls_obs = ZoneCrossing
-
-        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
-        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
-
-        first_obs_times.append(first_obs_time.time())
-        last_obs_times.append(last_obs_time.time())
-
-    bins_start = max(first_obs_times)
-    bins_end = min(last_obs_times)
+    # for i in range(inputNo):
+    #     if 'line' in actionTypes[i].split(' '):
+    #         cls_obs = LineCrossing
+    #     elif 'zone' in actionTypes[i].split(' '):
+    #         cls_obs = ZoneCrossing
+    #
+    #     first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+    #     last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+    #
+    #     first_obs_times.append(first_obs_time.time())
+    #     last_obs_times.append(last_obs_time.time())
+    #
+    # bins_start = max(first_obs_times)
+    # bins_end = min(last_obs_times)
 
     # start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
     # end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
@@ -622,12 +623,12 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
     #     return err
     # times = [b.time() for b in bin_edges]
 
-    times = [bins_start, bins_end]
+    # times = [bins_start, bins_end]
 
-    bins = []
-    for i in range(inputNo):
-        date1 = getObsStartEnd(sessions[i])[0].date()
-        bins.append([datetime.datetime.combine(date1, t) for t in times])
+    # bins = []
+    # for i in range(inputNo):
+    #     date1 = getObsStartEnd(sessions[i])[0].date()
+    #     bins.append([datetime.datetime.combine(date1, t) for t in times])
 
     all_x_arrays = []
     all_speed_arrays = []
@@ -644,9 +645,12 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
                 .join(Group, Group.idx == GroupBelonging.groupIdx) \
                 .join(Person, Person.idx == GroupBelonging.personIdx) \
                 .join(Mode, Mode.personIdx == Person.idx) \
+                .join(Vehicle, Vehicle.idx == Mode.vehicleIdx) \
                 .filter(Mode.transport == transports[j]) \
-                .filter(LineCrossing.instant >= bins[j][0]) \
-                .filter(LineCrossing.instant < bins[j][1])
+                .filter(Vehicle.category == 'car') #\
+                # .filter(LineCrossing.instant >= bins[j][0]) \
+                # .filter(LineCrossing.instant < bins[j][1])
+
 
             if directions[j] == 'Right to left':
                 q = q.filter(LineCrossing.rightToLeft == True)
@@ -675,27 +679,41 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
                 else:
                     traj_DB_Idxs[traj_DB_list[i]] = [traj_Idx_list[i]]
 
+        db_Idx_0 = list(traj_DB_Idxs.keys())[0]
+        con = sqlite3.connect(metadataFile)
+        cur = con.cursor()
+        cur.execute('SELECT cameraViewIdx FROM video_sequences WHERE idx=?', (db_Idx_0,))
+        row = cur.fetchall()
+        cam_view_id = row[0][0]
+        cur.execute('SELECT siteIdx, cameraTypeIdx, homographyFilename FROM camera_views WHERE idx=?',
+                    (cam_view_id,))
+        row = cur.fetchall()
+        site_idx = row[0][0]
+        cam_type_idx = row[0][1]
+        homoFile = row[0][2]
+        cur.execute('SELECT name FROM sites WHERE idx=?', (site_idx,))
+        row = cur.fetchall()
+        site_name = row[0][0]
+        cur.execute(
+            'SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr, frameRate FROM camera_types WHERE idx=?',
+            (cam_type_idx,))
+        row = cur.fetchall()
+        intrinsicCameraMatrix = np.array(ast.literal_eval(row[0][0]))
+        distortionCoefficients = np.array(ast.literal_eval(row[0][1]))
+        frameRate = row[0][2]
+
+        mdbPath = Path(metadataFile).parent
+        site_folder = mdbPath / site_name
+        homographyFile = site_folder / homoFile
+        homography = np.loadtxt(homographyFile, delimiter=' ')
+
         x_arrays = []
         speed_arrays = []
         for db_Idx in traj_DB_Idxs.keys():
-            con = sqlite3.connect(metadataFile)
-            cur = con.cursor()
-            cur.execute('SELECT databaseFilename, cameraViewIdx FROM video_sequences WHERE idx=?', (db_Idx,))
+            cur.execute('SELECT databaseFilename FROM video_sequences WHERE idx=?', (db_Idx,))
             row = cur.fetchall()
             date_dbName = row[0][0]
-            cam_view_id = row[0][1]
-            cur.execute('SELECT siteIdx, cameraTypeIdx FROM camera_views WHERE idx=?', (cam_view_id,))
-            row = cur.fetchall()
-            site_idx = row[0][0]
-            cam_type_idx = row[0][1]
-            cur.execute('SELECT name FROM sites WHERE idx=?', (site_idx,))
-            row = cur.fetchall()
-            site_name = row[0][0]
-            cur.execute('SELECT frameRate FROM camera_types WHERE idx=?', (cam_type_idx,))
-            row = cur.fetchall()
-            frameRate = row[0][0]
 
-            mdbPath = Path(metadataFile).parent
             trjDBFile = mdbPath / site_name / date_dbName
             objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
             for trj_idx in traj_DB_Idxs[db_Idx]:
@@ -703,6 +721,8 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
                     if str(traj.getNum()) == trj_idx:
                         x_arrays.append(traj.positions.asArray()[0])
                         speed_arrays.append(np.round(traj.getSpeeds()* frameRate * 3.6, 1))
+                            # np.array([np.round(v[0]* frameRate * 3.6, 1) for v in traj.getVelocities()]))
+                        break
         all_x_arrays.append(x_arrays)
         all_speed_arrays.append(speed_arrays)
 
@@ -712,24 +732,41 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         x_mins.append(np.min([np.min(x_arr) for x_arr in x_arrs]))
         x_maxs.append(np.max([np.max(x_arr) for x_arr in x_arrs]))
 
-    x_min = np.max(x_mins)
-    x_max = np.min(x_maxs)
-
-    bins = np.arange(90, 140, interval).tolist()
+    x_min = 80 #np.max(x_mins)
+    x_max = 131 #np.min(x_maxs)
+    bins = np.arange(x_min, x_max, interval).tolist()
 
     grouped_speeds = []
     for i, x_arrs in enumerate(all_x_arrays):
-        grouped_speed = []
+        grouped_speed = None
 
-        for _ in range(len(bins) - 1):
-            grouped_speed.append(np.array([]))
+        # for _ in range(len(bins) - 1):
+        #     grouped_speed.append(np.array([]))
 
         for j, x_arr in enumerate(x_arrs):
+
+            x_arr_grouped_speed = []
+            for _ in range(len(bins) - 1):
+                x_arr_grouped_speed.append(np.array([]))
+
             inds = np.digitize(x_arr, bins)
 
             for k, ind in enumerate(inds):
                 if 0 < ind < len(bins):
-                    grouped_speed[ind - 1] = np.append(grouped_speed[ind - 1], all_speed_arrays[i][j][k])
+                    x_arr_grouped_speed[ind - 1] = np.append(x_arr_grouped_speed[ind - 1],
+                                                             all_speed_arrays[i][j][k])
+
+            avg_speed_bins = []
+            for m in range(len(bins) - 1):
+                if x_arr_grouped_speed[m].shape[0] != 0:
+                    avg_speed_bins.append(np.mean(x_arr_grouped_speed[m]))
+                else:
+                    avg_speed_bins.append(np.nan)
+
+            if grouped_speed is None:
+                grouped_speed = np.array([avg_speed_bins])
+            else:
+                grouped_speed = np.vstack([grouped_speed, avg_speed_bins])
 
         grouped_speeds.append(grouped_speed)
 
@@ -738,21 +775,23 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
+    x = []
+    for n in range(len(bins) - 1):
+        x.append(bins[n] + (interval / 2))
+
     for i, grouped_speed in enumerate(grouped_speeds):
-        x = []
-        for n in range(len(bins) - 1):
-            x.append(bins[n] + (interval / 2))
-        speed = np.array([])
-        std_speed = np.array([])
-        for j, speeds in enumerate(grouped_speed):
-            if speeds != np.array([]):
-                speed = np.append(speed,
-                                  np.mean(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]))
-                std_speed = np.append(std_speed,
-                                      np.std(speeds[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]))
-            else:
-                x[j] = None
-        x = [n for n in x if n is not None]
+
+        speed = np.nanmean(grouped_speed, axis=0)
+        std_speed = np.nanstd(grouped_speed, axis=0)
+
+        # for j, speeds in enumerate(grouped_speed):
+        #     if speeds != np.array([]):
+        #         # [abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]
+        #         speed = np.append(speed, np.mean(speeds))
+        #         std_speed = np.append(std_speed, np.std(speeds))
+        #     else:
+        #         x[j] = None
+        # x = [n for n in x if n is not None]
         # [abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]
         # speed = np.array([np.mean(speeds) for speeds in grouped_speed if speeds != np.array([])])
         # std_speed = np.array([np.std(speeds) for speeds in grouped_speed if speeds != np.array([])])
@@ -760,6 +799,23 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         ax.fill_between(x, speed - std_speed, speed + std_speed,
                         color=colors[i], ec=colors[i], alpha=0.2, label='Std. of {}'.format(labels[i]))
         ax.plot(x, speed, c=colors[i], label=labels[i])
+
+    q_line = sessions[0].query(Line)
+    if unitIdxs[0] == 'all_lines':
+        for line in q_line.all():
+            if line.type.name == 'roadbed':
+                x_list = [p.x for p in line.points]
+                y_list = [p.y for p in line.points]
+                points = np.array([x_list, y_list], dtype=np.float64)
+                prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
+                ax.axvline(np.average(prj_points[0]), lw=1, alpha=0.5)
+    else:
+        line = q_line.filter(Line.idx == unitIdxs[0]).first()
+        x_list = [p.x for p in line.points]
+        y_list = [p.y for p in line.points]
+        points = np.array([x_list, y_list], dtype=np.float64)
+        prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
+        ax.axvline(np.average(prj_points[0]), lw=1, alpha=0.5)
 
 
     ax.legend(fontsize=5)
@@ -770,7 +826,7 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
 
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=7)
-    ax.set_xlabel('Location', fontsize=8)
+    ax.set_xlabel('Location (m.)', fontsize=8)
     ax.set_ylabel('Speed (km/h)', fontsize=8)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     userTitle = transports[0]
@@ -842,7 +898,9 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
                 .join(Group, Group.idx == GroupBelonging.groupIdx) \
                 .join(Person, Person.idx == GroupBelonging.personIdx) \
                 .join(Mode, Mode.personIdx == Person.idx) \
-                .filter(Mode.transport == transports[j]) #\
+                .join(Vehicle, Vehicle.idx == Mode.vehicleIdx) \
+                .filter(Mode.transport == transports[j]) \
+                .filter(Vehicle.category == 'car') #\
                 # .filter(LineCrossing.instant >= time_bins[j][0]) \
                 # .filter(LineCrossing.instant < time_bins[j][-1])
 
@@ -892,25 +950,40 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         x_arrays = []
         speed_arrays = []
         trj_time_inds = []
+
+        db_Idx_0 = list(traj_DB_Idxs.keys())[0]
+        con = sqlite3.connect(metadataFile)
+        cur = con.cursor()
+        cur.execute('SELECT cameraViewIdx FROM video_sequences WHERE idx=?', (db_Idx_0,))
+        row = cur.fetchall()
+        cam_view_id = row[0][0]
+        cur.execute('SELECT siteIdx, cameraTypeIdx, homographyFilename FROM camera_views WHERE idx=?',
+                    (cam_view_id,))
+        row = cur.fetchall()
+        site_idx = row[0][0]
+        cam_type_idx = row[0][1]
+        homoFile = row[0][2]
+        cur.execute('SELECT name FROM sites WHERE idx=?', (site_idx,))
+        row = cur.fetchall()
+        site_name = row[0][0]
+        cur.execute(
+            'SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr, frameRate FROM camera_types WHERE idx=?',
+            (cam_type_idx,))
+        row = cur.fetchall()
+        intrinsicCameraMatrix = np.array(ast.literal_eval(row[0][0]))
+        distortionCoefficients = np.array(ast.literal_eval(row[0][1]))
+        frameRate = row[0][2]
+
+        mdbPath = Path(metadataFile).parent
+        site_folder = mdbPath / site_name
+        homographyFile = site_folder / homoFile
+        homography = np.loadtxt(homographyFile, delimiter=' ')
+
         for db_Idx in traj_DB_Idxs.keys():
-            con = sqlite3.connect(metadataFile)
-            cur = con.cursor()
-            cur.execute('SELECT databaseFilename, cameraViewIdx FROM video_sequences WHERE idx=?', (db_Idx,))
+            cur.execute('SELECT databaseFilename FROM video_sequences WHERE idx=?', (db_Idx,))
             row = cur.fetchall()
             date_dbName = row[0][0]
-            cam_view_id = row[0][1]
-            cur.execute('SELECT siteIdx, cameraTypeIdx FROM camera_views WHERE idx=?', (cam_view_id,))
-            row = cur.fetchall()
-            site_idx = row[0][0]
-            cam_type_idx = row[0][1]
-            cur.execute('SELECT name FROM sites WHERE idx=?', (site_idx,))
-            row = cur.fetchall()
-            site_name = row[0][0]
-            cur.execute('SELECT frameRate FROM camera_types WHERE idx=?', (cam_type_idx,))
-            row = cur.fetchall()
-            frameRate = row[0][0]
 
-            mdbPath = Path(metadataFile).parent
             trjDBFile = mdbPath / site_name / date_dbName
             objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
             for trj_idx_ind in traj_DB_Idxs[db_Idx]:
@@ -922,36 +995,60 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         all_x_arrays.append(x_arrays)
         all_speed_arrays.append(speed_arrays)
         all_trj_time_inds.append(trj_time_inds)
-
+    # print('time bins: ', time_bins)
+    # print(all_trj_time_inds)
     x_mins = []
     x_maxs = []
     for i, x_arrs in enumerate(all_x_arrays):
         x_mins.append(np.min([np.min(x_arr) for x_arr in x_arrs]))
         x_maxs.append(np.max([np.max(x_arr) for x_arr in x_arrs]))
 
-    x_min = np.max(x_mins)
-    x_max = np.min(x_maxs)
+    x_min = 80 #np.max(x_mins)
+    x_max = 131 #np.min(x_maxs)
     space_bins = np.arange(x_min, x_max, interval_space).tolist()
 
     grouped_speeds = []
     for i, x_arrs in enumerate(all_x_arrays):
-        grouped_speed = []
 
+        grouped_speed = []
         for r in range(len(time_bins[i]) - 1):
-            grouped_speed.append([])
-            for c in range(len(space_bins) - 1):
-                grouped_speed[r].append(np.array([]))
+            grouped_speed.append(None)   #.append([])
+            # for c in range(len(space_bins) - 1):
+            #     grouped_speed[r].append(np.array([]))
 
         for j, x_arr in enumerate(x_arrs):
+
+            x_arr_grouped_speed = []
+            for _ in range(len(space_bins) - 1):
+                x_arr_grouped_speed.append(np.array([]))
+
             space_inds = np.digitize(x_arr, space_bins)
 
             for k, ind in enumerate(space_inds):
                 if 0 < ind < len(space_bins):
-                    if 0 < all_trj_time_inds[i][j] < len(time_bins[i]):
-                        grouped_speed[-all_trj_time_inds[i][j]][ind - 1] = \
-                            np.append(grouped_speed[-all_trj_time_inds[i][j]][ind - 1],
-                                                     all_speed_arrays[i][j][k])
+                    x_arr_grouped_speed[ind - 1] = np.append(x_arr_grouped_speed[ind - 1],
+                                                             all_speed_arrays[i][j][k])
+            # print(x_arr_grouped_speed)
+            avg_speed_bins = []
+            for m in range(len(space_bins) - 1):
+                if x_arr_grouped_speed[m].shape[0] != 0:
+                    avg_speed_bins.append(np.mean(x_arr_grouped_speed[m]))
+                else:
+                    avg_speed_bins.append(np.nan)
+            # print(avg_speed_bins)
+            # print(all_trj_time_inds[i][j])
+            if 0 < all_trj_time_inds[i][j] < len(time_bins[i]):
+                if grouped_speed[-all_trj_time_inds[i][j]] is None:
+                    grouped_speed[-all_trj_time_inds[i][j]] = np.array([avg_speed_bins])
+                else:
+                    grouped_speed[-all_trj_time_inds[i][j]] = np.vstack([grouped_speed[-all_trj_time_inds[i][j]],
+                                                                        avg_speed_bins])
 
+                    # if 0 < all_trj_time_inds[i][j] < len(time_bins[i]):
+                    #     grouped_speed[-all_trj_time_inds[i][j]][ind - 1] = \
+                    #         np.append(grouped_speed[-all_trj_time_inds[i][j]][ind - 1],
+                    #                                  all_speed_arrays[i][j][k])
+        # print(grouped_speed)
         grouped_speeds.append(grouped_speed)
 
 
@@ -973,30 +1070,58 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
             mid_point = bins_stamps[k] + (bins_stamps[k + 1] - bins_stamps[k]) / 2
             t.append(datetime.datetime.fromtimestamp(mid_point))
 
-        speed = []
-        for m in range(len(grouped_speed)):
-            speed.append([])
-            for n in range(len(grouped_speed[0])):
-                speed[m].append(np.nan)
+        speed = None
 
-        for r, speeds_list in enumerate(grouped_speed):
-            for c, speeds in enumerate(speeds_list):
-                if speeds != np.array([]):
-                    speed[r][c] = round(
-                        np.mean(speeds),2)#[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]), 2)
+        for trajs_speed in grouped_speed:
+            if trajs_speed is not None:
+                new_row = np.nanmean(trajs_speed, axis=0)
+            else:
+                new_row = np.array([np.nan]*(len(space_bins) - 1))
 
-        t_lims = mdates.date2num([t[0], t[-1]])
-        im = ax.imshow(speed, extent=[x[0], x[-1], t_lims[0], t_lims[-1]], origin='lower',
-           cmap='RdYlBu_r', aspect='auto') #np.array(speed, dtype=float))
+            if speed is None:
+                speed = np.array([new_row])
+            else:
+                speed = np.vstack([speed, new_row])
+
+            # for c, speeds in enumerate(speeds_list):
+            #     if speeds != np.array([]):
+            #         speed[r][c] = round(np.mean(speeds),2)
+            #         #[abs(speeds - np.mean(speeds)) < 1.5 * np.std(speeds)]), 2)
+
+        t_num = mdates.date2num(t)
+        X, T = np.meshgrid(x, t_num)
+        contour = ax.contourf(X, T, speed, 20, cmap='RdYlBu_r')
+        # im = ax.imshow(speed, extent=[x[0], x[-1], t_num[0], t_num[-1]], origin='lower',
+        #                cmap='RdYlBu_r', aspect='auto') #np.array(speed, dtype=float))
+
+        cbar = plt.colorbar(contour)
+        cbar.ax.tick_params(labelsize=8)
+
+
+
+        q_line = sessions[i].query(Line)
+        if unitIdxs[i] == 'all_lines':
+            for line in q_line.all():
+                if line.type.name == 'roadbed':
+                    x_list = [p.x for p in line.points]
+                    y_list = [p.y for p in line.points]
+                    points = np.array([x_list, y_list], dtype=np.float64)
+                    prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
+                    ax.axvline(np.average(prj_points[0]), lw=1, alpha=0.5)
+        else:
+            line = q_line.filter(Line.idx == unitIdxs[i]).first()
+            x_list = [p.x for p in line.points]
+            y_list = [p.y for p in line.points]
+            points = np.array([x_list, y_list], dtype=np.float64)
+            prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
+            ax.axvline(np.average(prj_points[0]), lw=1, alpha=0.5)
 
         ax.yaxis_date()
         # locator = mdates.AutoDateLocator()
         # ax.xaxis.set_major_locator(locator)
         date_format = mdates.DateFormatter('%H:%M')
-
         ax.yaxis.set_major_formatter(date_format)
-        cbar = plt.colorbar(im)
-        cbar.ax.tick_params(labelsize=8)
+
 
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=8)
@@ -1008,7 +1133,7 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         userTitle = 'car'
     elif transports[0] == 'walking':
         userTitle = 'pedestrian'
-    ax.set_title('Speed of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
+    ax.set_title('Speed of {}s {} #{} over time'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
     # ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     ax.text(0.03, 0.93, str('StudioProject'),
@@ -1688,7 +1813,7 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
         x = xy_arr[0]
         y = xy_arr[1]
         userType = traj.getUserType()
-        line, = ax.plot(x, y, color=userTypeColors[userType], lw=0.5, label=userTypeNames[userType])
+        line, = ax.plot(x, y, color=userTypeColors[userType], lw=0.3, label=userTypeNames[userType])
         traj_line[str(traj.getNum())] = [traj, line]
 
     q_line = session.query(Line)
@@ -1701,7 +1826,7 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
 
             points = np.array([x_list, y_list], dtype = np.float64)
             prj_points = imageToWorldProject(points, intrinsicCameraMatrix, distortionCoefficients, homography)
-            ax.plot(prj_points[0], prj_points[1])
+            ax.plot(prj_points[0], prj_points[1], lw=0.4)
 
     if q_zone.all() != []:
         for zone in q_zone:
@@ -1713,10 +1838,10 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
             rand_color = np.random.random(3)
             fc = np.append(rand_color, 0.15)
             ec = np.array([0, 0, 0, 0.5])
-            zone = Polygon(prj_xy, fc=fc, ec=ec, lw=0.5)
+            zone = Polygon(prj_xy, fc=fc, ec=ec, lw=0.3)
             ax.add_patch(zone)
     ax.axis('equal')
-    ax.tick_params(axis='both', labelsize=5)
+    ax.tick_params(axis='both', labelsize=3)
     handles, labels = ax.get_legend_handles_labels()
     handle_list = []
     label_list = []
@@ -1724,7 +1849,7 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
         if not label in label_list:
             handle_list.append(handles[i])
             label_list.append(label)
-    ax.legend(handle_list, label_list, loc='upper left', prop={'size': 5})
+    ax.legend(handle_list, label_list, loc='upper left', prop={'size': 3})
 
     return traj_line
 

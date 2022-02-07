@@ -8,16 +8,16 @@ import ast
 from enum import Enum as eEnum
 from pathlib import Path
 from configparser import ConfigParser
-from PyQt5.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
+from PyQt6.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QHBoxLayout,
                              QToolBox, QPushButton, QTextEdit, QLineEdit, QMainWindow,
-                             QComboBox, QGroupBox, QDateTimeEdit, QAction, QStyle,
+                             QComboBox, QGroupBox, QDateTimeEdit, QStyle,
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel, QGraphicsItemGroup,
                              QGraphicsLineItem, QGraphicsEllipseItem,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
                              QAbstractItemView, QTableView, QListWidget, QListWidgetItem)
-from PyQt5.QtGui import QColor, QIcon, QFont, QCursor, QPen, QBrush
-from PyQt5.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObject, QThread, pyqtSignal
-from PyQt5.QtMultimediaWidgets import QGraphicsVideoItem
+from PyQt6.QtGui import QColor, QIcon, QFont, QCursor, QPen, QBrush, QAction
+from PyQt6.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObject, QThread, pyqtSignal
+from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
 
 from iframework import createDatabase, connectDatabase, Person, Mode, Group, GroupBelonging, Vehicle,\
     Activity, LineCrossing, ZoneCrossing, Point, Line, Zone, pointLineAssociation
@@ -150,7 +150,7 @@ class ObsToolbox(QMainWindow):
         self.toolbar.addAction(importTrajAction)
         self.toolbar.addAction(plotTrajAction)
         self.toolbar.insertSeparator(importTrajAction)
-        self.addToolBar(Qt.LeftToolBarArea, self.toolbar)
+        self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, self.toolbar)
 
         # ++++++++++++++++++ Toolbox tabs +++++++++++++++++++++++++
         # =================== Road user tab =======================
@@ -182,7 +182,7 @@ class ObsToolbox(QMainWindow):
 
 
         self.group_list_wdgt = QListWidget()
-        self.group_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.group_list_wdgt.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.group_list_wdgt.currentRowChanged.connect(self.rowChanged)
         # group_grid_layout.addWidget(self.group_list_wdgt)
         group_grpBox_layout.addWidget(self.group_list_wdgt, 2, 0, 1, 3)
@@ -242,7 +242,7 @@ class ObsToolbox(QMainWindow):
         # self.linepass_listGrpBox.setEnabled(False)
 
         self.linepass_list_wdgt = QListWidget()
-        self.linepass_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.linepass_list_wdgt.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.linepass_list_wdgt.currentRowChanged.connect(self.rowChanged)
         linepass_listGrpB_layout.addWidget(self.linepass_list_wdgt)
 
@@ -282,7 +282,7 @@ class ObsToolbox(QMainWindow):
         # self.zonepass_listGrpBox.setEnabled(False)
 
         self.zonepass_list_wdgt = QListWidget()
-        self.zonepass_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.zonepass_list_wdgt.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.zonepass_list_wdgt.currentRowChanged.connect(self.rowChanged)
         zonepass_listGrpB_layout.addWidget(self.zonepass_list_wdgt)
         self.zonepass_listGrpBox.setLayout(zonepass_listGrpB_layout)
@@ -321,7 +321,7 @@ class ObsToolbox(QMainWindow):
         # self.act_listGrpBox.setEnabled(False)
 
         self.act_list_wdgt = QListWidget()
-        self.act_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.act_list_wdgt.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.act_list_wdgt.currentRowChanged.connect(self.rowChanged)
         act_listGrpB_layout.addWidget(self.act_list_wdgt)
         self.act_listGrpBox.setLayout(act_listGrpB_layout)
@@ -361,7 +361,7 @@ class ObsToolbox(QMainWindow):
         # self.act_listGrpBox.setEnabled(False)
 
         self.line_list_wdgt = QListWidget()
-        self.line_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.line_list_wdgt.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.line_list_wdgt.currentRowChanged.connect(self.rowChanged)
         line_listGrpB_layout.addWidget(self.line_list_wdgt)
         self.line_listGrpBox.setLayout(line_listGrpB_layout)
@@ -401,7 +401,7 @@ class ObsToolbox(QMainWindow):
         # self.act_listGrpBox.setEnabled(False)
 
         self.zone_list_wdgt = QListWidget()
-        self.zone_list_wdgt.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.zone_list_wdgt.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.zone_list_wdgt.currentRowChanged.connect(self.rowChanged)
         zone_listGrpB_layout.addWidget(self.zone_list_wdgt)
         self.zone_listGrpBox.setLayout(zone_listGrpB_layout)
@@ -441,24 +441,24 @@ class ObsToolbox(QMainWindow):
         self.openMdbFileBtn.clicked.connect(self.openMdbFile)
         traj_tab_mdbLayout.addWidget(self.openMdbFileBtn)
 
-        # traj_tab_gridLayout.addWidget(NavigationToolbar(self.canvas, self, False), 2, 0, 1, 4)  # , Qt.AlignLeft)
+        # traj_tab_gridLayout.addWidget(NavigationToolbar(self.canvas, self, False), 2, 0, 1, 4)  # , Qt.AlignmentFlag.AlignLeft)
 
-        traj_tab_gridLayout.addWidget(QLabel('Site:'), 0, 0)  # , Qt.AlignRight)
+        traj_tab_gridLayout.addWidget(QLabel('Site:'), 0, 0)  # , Qt.AlignmentFlag.AlignRight)
         self.siteNameCombobx = QComboBox()
         # self.siteNameCombobx.setMinimumWidth(120)
         self.siteNameCombobx.currentIndexChanged.connect(self.siteChanged)
-        traj_tab_gridLayout.addWidget(self.siteNameCombobx, 0, 1)  # , Qt.AlignLeft)
+        traj_tab_gridLayout.addWidget(self.siteNameCombobx, 0, 1)  # , Qt.AlignmentFlag.AlignLeft)
 
-        traj_tab_gridLayout.addWidget(QLabel('Cam. view:'), 0, 2)  # , Qt.AlignRight)
+        traj_tab_gridLayout.addWidget(QLabel('Cam. view:'), 0, 2)  # , Qt.AlignmentFlag.AlignRight)
         self.camViewCombobx = QComboBox()
         self.camViewCombobx.currentIndexChanged.connect(self.viewChanged)
-        traj_tab_gridLayout.addWidget(self.camViewCombobx, 0, 3)  # , Qt.AlignLeft)
+        traj_tab_gridLayout.addWidget(self.camViewCombobx, 0, 3)  # , Qt.AlignmentFlag.AlignLeft)
 
-        traj_tab_gridLayout.addWidget(QLabel('Traj DB:'), 1, 0)  # , Qt.AlignRight)
+        traj_tab_gridLayout.addWidget(QLabel('Traj DB:'), 1, 0)  # , Qt.AlignmentFlag.AlignRight)
         self.trjDbCombobx = QComboBox()
         # self.trjDbCombobx.setMinimumWidth(130)
         # self.trjDbCombobx.currentTextChanged.connect(self.plotItems)
-        traj_tab_gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)  # , Qt.AlignLeft)
+        traj_tab_gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)  # , Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotItems)
@@ -576,9 +576,9 @@ class ObsToolbox(QMainWindow):
 
         if not self.trjDBFile.exists():
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The trajectory database does not exist!')
-            msg.exec_()
+            msg.exec()
             self.figure.clear()
             self.canvas.draw()
             return
@@ -604,9 +604,9 @@ class ObsToolbox(QMainWindow):
 
         if not self.homoFile.exists():
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The homography file does not exist!')
-            msg.exec_()
+            msg.exec()
             self.figure.clear()
             self.canvas.draw()
             return
@@ -920,8 +920,9 @@ class ObsToolbox(QMainWindow):
             return
         msg = QMessageBox()
         rep = msg.question(self, 'Delete trajectory',
-                           'Are you sure to DELETE the current trajectory?', msg.Yes | msg.No)
-        if rep == msg.No:
+                           'Are you sure to DELETE the current trajectory?',
+                           msg.StandardButton.Yes | msg.StandardButton.No)
+        if rep == msg.StandardButton.No:
             return
 
         self.prevTrajectory()
@@ -930,19 +931,19 @@ class ObsToolbox(QMainWindow):
         self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
 
     def loadTrajectory(self):
-        if self.mdbFileLedit.text() == '':
+        if self.mdbFileLedit.text() == '' or self.traj_line == None or self.trjIdxLe.text() == '-1':
             return
-        if self.traj_line == None:
+
+        trj_idx = self.trjIdxLe.text()
+        userType = self.traj_line[trj_idx][2][0]
+        if userType == 0:
             return
 
         self.loadTrjBtn.setEnabled(False)
         self.userTypeCb.setEnabled(False)
         self.groupSizeCb.setEnabled(False)
 
-        trj_idx = self.trjIdxLe.text()
-        userType = self.traj_line[trj_idx][2][0]
-
-        if userType != -1 and userType != 0:# and lines != []:
+        if userType != -1:# and lines != []:
             self.user_newGroup_click()
             group_idx = int(self.group_idx_cmbBox.currentText())
             self.traj_line[trj_idx][2][6] = group_idx
@@ -1041,8 +1042,9 @@ class ObsToolbox(QMainWindow):
 
         msg = QMessageBox()
         rep = msg.question(self, 'Save trajectories',
-                           'Are you sure to SAVE all loaded trajectories?', msg.Yes | msg.No)
-        if rep == msg.No:
+                           'Are you sure to SAVE all loaded trajectories?',
+                           msg.StandardButton.Yes | msg.StandardButton.No)
+        if rep == msg.StandardButton.No:
             return
 
         trj_con = sqlite3.connect(self.trjDBFile)
@@ -1324,8 +1326,9 @@ class ObsToolbox(QMainWindow):
 
         msg = QMessageBox()
         rep = msg.question(self, 'Delete group',
-                           'Are you sure to DELETE the group and its corresponding records?', msg.Yes | msg.No)
-        if rep == msg.No:
+                           'Are you sure to DELETE the group and its corresponding records?',
+                           msg.StandardButton.Yes | msg.StandardButton.No)
+        if rep == msg.StandardButton.No:
             return
 
         if self.act_list_wdgt.count() > 0:
@@ -1640,18 +1643,18 @@ class ObsToolbox(QMainWindow):
     def line_newRecBtn_click(self):
         if session == None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText('The database file is not defined.')
             msg.setInformativeText('Use Creat/Open iFramework database tool')
-            msg.setIcon(QMessageBox.Critical)
-            msg.exec_()
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.exec()
             return
 
         if not self.sender().isChecked():
             self.parent().gView.unsetCursor()
             return
 
-        cursor = QCursor(Qt.CrossCursor)
+        cursor = QCursor(Qt.CursorShape.CrossCursor)
         self.parent().gView.setCursor(cursor)
         self.parent().raise_()
         self.parent().activateWindow()
@@ -1708,18 +1711,18 @@ class ObsToolbox(QMainWindow):
     def zone_newRecBtn_click(self):
         if session == None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText('The database file is not defined.')
             msg.setInformativeText('Use Creat/Open iFramework database tool')
-            msg.setIcon(QMessageBox.Critical)
-            msg.exec_()
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.exec()
             return
 
         if not self.sender().isChecked():
             self.parent().gView.unsetCursor()
             return
 
-        cursor = QCursor(Qt.CrossCursor)
+        cursor = QCursor(Qt.CursorShape.CrossCursor)
         self.parent().gView.setCursor(cursor)
         self.parent().raise_()
         self.parent().activateWindow()
@@ -2109,10 +2112,11 @@ class ObsToolbox(QMainWindow):
                     if self.parent().videoCurrentDatetime == input_wdgt_val:
                         msg = QMessageBox()
                         rep = msg.question(self, 'Duplicate object',
-                                           'Are you sure to duplicate the current object?', msg.Yes | msg.No)
-                        if rep == msg.No:
+                                           'Are you sure to duplicate the current object?',
+                                           msg.StandardButton.Yes | msg.StandardButton.No)
+                        if rep == msg.StandardButton.No:
                             return
-                        elif rep == msg.Yes:
+                        elif rep == msg.StandardButton.Yes:
                             break
             i =+ 1
 
@@ -2173,9 +2177,9 @@ class ObsToolbox(QMainWindow):
         # obs_instance = session.query(Study_site).first()
         # if obs_instance == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The observatoin start time is not set!')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         # current_obs_end = obs_instance.obsEnd
 
@@ -2223,9 +2227,10 @@ class ObsToolbox(QMainWindow):
 
     def deleteObject(self, grpBx, grid_wdgt, newBtn, editBtn):
         msg = QMessageBox()
-        rep = msg.question(self, 'Delete', 'Are you sure to delete the record?', msg.Yes | msg.No)
+        rep = msg.question(self, 'Delete', 'Are you sure to delete the record?',
+                           msg.StandardButton.Yes | msg.StandardButton.No)
 
-        if rep == msg.No:
+        if rep == msg.StandardButton.No:
             return
 
         self.sender().setEnabled(False)
@@ -2287,131 +2292,135 @@ class ObsToolbox(QMainWindow):
             if session is None:
                 session = connectDatabase(self.dbFilename)
 
+            # group_idx_list = [str(i[0]) for i in session.query(Group.idx).all()]
+            # self.group_idx_cmbBox.addItems(group_idx_list)
+            # self.group_idx_cmbBox.setCurrentIndex(-1)
+
     def tempHist(self):
         if session == None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The database file is not defined.')
-            msg.exec_()
+            msg.exec()
             return
         tempHistWin = TempHistWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        tempHistWin.exec_()
+        tempHistWin.exec()
 
 
     def stackedHist(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         stackHistWin = StackHistWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        stackHistWin.exec_()
+        stackHistWin.exec()
 
     def speedPlot(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         speedPlotWin = SpeedPlotWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        speedPlotWin.exec_()
+        speedPlotWin.exec()
 
     def odMatrix(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         odMtrxWin = OdMatrixWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        odMtrxWin.exec_()
+        odMtrxWin.exec()
 
     def pieChart(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         pieChartWin = PieChartWindow(self)
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
-        pieChartWin.exec_()
+        pieChartWin.exec()
 
     def modeChart(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         modeChartWin = ModeChartWindow(self)
         # modeChartWin.setModal(True)
         # modeChartWin.setAttribute(Qt.WA_DeleteOnClose)
-        modeChartWin.exec_()
+        modeChartWin.exec()
 
     def compHist(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         compHistWin = CompHistWindow(self)
 
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        compHistWin.exec_()
+        compHistWin.exec()
 
     def genReport(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         genRepWin = genReportWindow(self)
         genRepWin.setGeometry(200, 200, 800, 480)
 
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
-        genRepWin.exec_()
+        genRepWin.exec()
 
     def compIndicators(self):
         # if session == None:
         #     msg = QMessageBox()
-        #     msg.setIcon(QMessageBox.Critical)
+        #     msg.setIcon(QMessageBox.Icon.Critical)
         #     msg.setText('The database file is not defined.')
-        #     msg.exec_()
+        #     msg.exec()
         #     return
         compIndWin = compIndicatorsWindow(self)
         compIndWin.setGeometry(200, 100, 900, 600)
 
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
-        compIndWin.exec_()
+        compIndWin.exec()
 
     def importTrajectories(self):
         if session == None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The database file is not defined.')
-            msg.exec_()
+            msg.exec()
             return
 
         importTrajWin = importTrajWindow(self)
@@ -2419,14 +2428,14 @@ class ObsToolbox(QMainWindow):
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        importTrajWin.exec_()
+        importTrajWin.exec()
 
     def plotTrajectories(self):
         if session == None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The database file is not defined.')
-            msg.exec_()
+            msg.exec()
             return
 
         plotTrajWin = plotTrajWindow(self)
@@ -2434,7 +2443,7 @@ class ObsToolbox(QMainWindow):
         # tempHistWin.setModal(True)
         # tempHistWin.setAttribute(Qt.WA_DeleteOnClose)
 
-        plotTrajWin.exec_()
+        plotTrajWin.exec()
 
 class TempHistWindow(QDialog):
     def __init__(self, parent=None):
@@ -2449,29 +2458,29 @@ class TempHistWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignmentFlag.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Interval:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Interval:'), 0, 6, Qt.AlignmentFlag.AlignRight)
         self.intervaLe = QLineEdit('10')
         self.intervaLe.setFixedWidth(35)
-        gridLayout.addWidget(self.intervaLe, 0, 7)#, Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervaLe, 0, 7)#, Qt.AlignmentFlag.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 8, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotTHist)
@@ -2515,9 +2524,9 @@ class TempHistWindow(QDialog):
         err = tempDistHist(transport, actionType, unitIdx, ax, session, bins=bins)
         if err != None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText(err)
-            msg.exec_()
+            msg.exec()
         else:
             # refresh canvas
             self.canvas.draw()
@@ -2560,17 +2569,17 @@ class StackHistWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 5, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 5, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.userCombobx = QComboBox()
         self.userCombobx.addItems(['pedestrian', 'vehicle', 'activities'])
-        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Attribute:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Attribute:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.attrCombobx = QComboBox()
         self.attrCombobx.addItems(['age', 'gender', 'vehicleType', 'activityType'])
-        gridLayout.addWidget(self.attrCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.attrCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotSHist)
@@ -2604,9 +2613,9 @@ class StackHistWindow(QDialog):
         err = stackedHist(roadUser, attr, ax, session, bins)
         if err != None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText(err)
-            msg.exec_()
+            msg.exec()
         else:
             # refresh canvas
             self.canvas.draw()
@@ -2643,31 +2652,31 @@ class SpeedPlotWindow(QDialog):
         self.openDbFileBtn.clicked.connect(self.opendbFile)
         dbLayout.addWidget(self.openDbFileBtn, 1)
 
-        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignmentFlag.AlignRight)
         self.dbLabelLedit = QLineEdit()
         dbLayout.addWidget(self.dbLabelLedit, 2)
 
-        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Unit Index:'), 0, 4)#, 1, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Index:'), 0, 4)#, 1, 2, Qt.AlignmentFlag.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 5)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5)#, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignmentFlag.AlignRight)
         self.directionCombobx = QComboBox()
         self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
-        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
+        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignmentFlag.AlignLeft)
 
         self.addInputBtn = QPushButton(QIcon('icons/addToList.png'), 'Add')
         # self.addInputBtn.setIcon(QIcon('icons/addToList.png'))
@@ -2688,21 +2697,21 @@ class SpeedPlotWindow(QDialog):
         self.inputTable.setHorizontalHeaderLabels(self.columnNames)
         gridLayout.addWidget(self.inputTable, 1, 0, 1, 10)
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 4, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 4, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Plot type:'), 2, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Plot type:'), 2, 4, Qt.AlignmentFlag.AlignRight)
         self.plotTypeCmbx = QComboBox()
         self.plotTypeCmbx.addItems(['Box plot', 'Histogram', 'Over space', 'Space-time'])
         self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
-        gridLayout.addWidget(self.plotTypeCmbx, 2, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.plotTypeCmbx, 2, 5, Qt.AlignmentFlag.AlignLeft)
 
         self.intervalType = QLabel('Time interval:')
-        gridLayout.addWidget(self.intervalType, 2, 6, Qt.AlignRight)
+        gridLayout.addWidget(self.intervalType, 2, 6, Qt.AlignmentFlag.AlignRight)
         self.intervaLe = QLineEdit('30')
         self.intervaLe.setFixedWidth(35)
-        gridLayout.addWidget(self.intervaLe, 2, 7, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervaLe, 2, 7, Qt.AlignmentFlag.AlignLeft)
         self.intervalUnit = QLabel('(min.)')
-        gridLayout.addWidget(self.intervalUnit, 2, 8, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervalUnit, 2, 8, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotSpeed)
@@ -2776,9 +2785,9 @@ class SpeedPlotWindow(QDialog):
 
         if err != None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText(err)
-            msg.exec_()
+            msg.exec()
         else:
             # refresh canvas
             self.canvas.draw()
@@ -2795,9 +2804,9 @@ class SpeedPlotWindow(QDialog):
     def addInBtnClick(self):
         if self.dbFileLedit.text() == '':
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The database file is not defined!')
-            msg.exec_()
+            msg.exec()
             return
 
         rowPosition = self.inputTable.rowCount()
@@ -2847,12 +2856,12 @@ class OdMatrixWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Road user:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.userCombobx = QComboBox()
         self.userCombobx.addItems(['pedestrian', 'vehicle', 'cyclist'])
-        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.userCombobx, 0, 1, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotOdMtrx)
@@ -2884,9 +2893,9 @@ class OdMatrixWindow(QDialog):
         err = odMatrix(roadUser, ax, session)
         if err != None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText(err)
-            msg.exec_()
+            msg.exec()
         else:
             # refresh canvas
             self.canvas.draw()
@@ -2913,20 +2922,20 @@ class PieChartWindow(QDialog):
         winLayout = QVBoxLayout()
         gridLayout = QGridLayout()
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 1, 0, 1, 7, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(['all types', 'walking', 'cardriver'])
         self.transportCombobx.currentTextChanged.connect(self.getAttrList)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Attribute:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Attribute:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.attrCombobx = QComboBox()
         self.attrCombobx.addItems(['transport'])
-        gridLayout.addWidget(self.attrCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.attrCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Time span:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Time span:'), 0, 4, Qt.AlignmentFlag.AlignRight)
         self.timeSpanCombobx = QComboBox()
 
         start_obs_time, end_obs_time = getObsStartEnd(session)
@@ -2952,7 +2961,7 @@ class PieChartWindow(QDialog):
 
         self.timeSpanCombobx.addItems(timeSpans)
         self.timeSpanCombobx.currentTextChanged.connect(self.plotPieChart)
-        gridLayout.addWidget(self.timeSpanCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.timeSpanCombobx, 0, 5, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotPieChart)
@@ -2995,9 +3004,9 @@ class PieChartWindow(QDialog):
         err = pieChart(transport, attr, sTime, eTime, ax, session)
         if err != None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText(err)
-            msg.exec_()
+            msg.exec()
         else:
             # refresh canvas
             self.canvas.draw()
@@ -3051,7 +3060,7 @@ class ModeChartWindow(QDialog):
         self.openDbFileBtn.clicked.connect(self.opendbFile)
         dbLayout.addWidget(self.openDbFileBtn, 1)
 
-        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignmentFlag.AlignRight)
         self.dbLabelLedit = QLineEdit()
         dbLayout.addWidget(self.dbLabelLedit, 2)
 
@@ -3074,13 +3083,13 @@ class ModeChartWindow(QDialog):
         self.inputTable.setHorizontalHeaderLabels(self.columnNames)
         gridLayout.addWidget(self.inputTable, 1, 0, 1, 9)
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 5, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 5, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Interval:'), 2, 5, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Interval:'), 2, 5, Qt.AlignmentFlag.AlignRight)
         self.intervalLe = QLineEdit('60')
         self.intervalLe.setFixedWidth(35)
-        gridLayout.addWidget(self.intervalLe, 2, 6)#, Qt.AlignRight)
-        gridLayout.addWidget(QLabel('(min.)'), 2, 7)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervalLe, 2, 6)#, Qt.AlignmentFlag.AlignRight)
+        gridLayout.addWidget(QLabel('(min.)'), 2, 7)#, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotModeChart)
@@ -3097,9 +3106,9 @@ class ModeChartWindow(QDialog):
     def addInBtnClick(self):
         if self.dbFileLedit.text() == '':
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The database file is not defined!')
-            msg.exec_()
+            msg.exec()
             return
 
         rowPosition = self.inputTable.rowCount()
@@ -3134,25 +3143,25 @@ class ModeChartWindow(QDialog):
         if dbFilename != '':
             self.dbFileLedit.setText(dbFilename)
 
-        self.actionTypeCombobx.setCurrentIndex(-1)
+        # self.actionTypeCombobx.setCurrentIndex(-1)
 
 
-    def actionTypeChanged(self):
-        if self.dbFileLedit.text() == '':
-            self.actionTypeCombobx.setCurrentIndex(-1)
-            return
-        current_session = connectDatabase(self.dbFileLedit.text())
-        actionType = self.actionTypeCombobx.currentText()
-
-        self.unitIdxCombobx.clear()
-        if 'line' in actionType.split(' '):
-            idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
-            idxItems.insert(0, 'all_lines')
-            self.unitIdxCombobx.addItems(idxItems)
-        elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
-
-        self.plotBtn.setEnabled(True)
+    # def actionTypeChanged(self):
+    #     if self.dbFileLedit.text() == '':
+    #         self.actionTypeCombobx.setCurrentIndex(-1)
+    #         return
+    #     current_session = connectDatabase(self.dbFileLedit.text())
+    #     actionType = self.actionTypeCombobx.currentText()
+    #
+    #     self.unitIdxCombobx.clear()
+    #     if 'line' in actionType.split(' '):
+    #         idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
+    #         idxItems.insert(0, 'all_lines')
+    #         self.unitIdxCombobx.addItems(idxItems)
+    #     elif 'zone' in actionType.split(' '):
+    #         self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
+    #
+    #     self.plotBtn.setEnabled(True)
 
 
 class CompHistWindow(QDialog):
@@ -3183,31 +3192,31 @@ class CompHistWindow(QDialog):
         self.openDbFileBtn.clicked.connect(self.opendbFile)
         dbLayout.addWidget(self.openDbFileBtn, 1)
 
-        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignmentFlag.AlignRight)
         self.dbLabelLedit = QLineEdit()
         dbLayout.addWidget(self.dbLabelLedit, 2)
 
-        gridLayout.addWidget(QLabel('Transport:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
-        gridLayout.addWidget(self.transportCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Action type:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 4, Qt.AlignmentFlag.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 5, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 6, Qt.AlignmentFlag.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 7, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 7, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Direction:'), 0, 8, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Direction:'), 0, 8, Qt.AlignmentFlag.AlignRight)
         self.directionCombobx = QComboBox()
         self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
-        gridLayout.addWidget(self.directionCombobx, 0, 9, Qt.AlignLeft)
+        gridLayout.addWidget(self.directionCombobx, 0, 9, Qt.AlignmentFlag.AlignLeft)
 
         self.addInputBtn = QPushButton(QIcon('icons/addToList.png'), 'Add')
         # self.addInputBtn.setIcon(QIcon('icons/addToList.png'))
@@ -3228,19 +3237,19 @@ class CompHistWindow(QDialog):
         self.inputTable.setHorizontalHeaderLabels(self.columnNames)
         gridLayout.addWidget(self.inputTable, 1, 0, 1, 13)
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 6, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self), 2, 0, 1, 6, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Plot type:'), 2, 7, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Plot type:'), 2, 7, Qt.AlignmentFlag.AlignRight)
         self.plotTypeCmbx = QComboBox()
         self.plotTypeCmbx.addItems(['Line plot', 'Scatter plot'])
         # self.plotTypeCmbx.currentIndexChanged.connect(self.plotTypeChanged)
-        gridLayout.addWidget(self.plotTypeCmbx, 2, 8, Qt.AlignLeft)
+        gridLayout.addWidget(self.plotTypeCmbx, 2, 8, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Interval:'), 2, 9, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Interval:'), 2, 9, Qt.AlignmentFlag.AlignRight)
         self.intervaLe = QLineEdit('10')
         self.intervaLe.setFixedWidth(35)
-        gridLayout.addWidget(self.intervaLe, 2, 10)  # , Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 2, 11, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervaLe, 2, 10)  # , Qt.AlignmentFlag.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 2, 11, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotCompHist)
@@ -3264,9 +3273,9 @@ class CompHistWindow(QDialog):
     def plotCompHist(self):
         if self.inputTable.rowCount() == 0:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('No added dataset in the list!')
-            msg.exec_()
+            msg.exec()
             return
 
         self.figure.clear()
@@ -3288,9 +3297,9 @@ class CompHistWindow(QDialog):
 
         if err != None:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
+            msg.setIcon(QMessageBox.Icon.Information)
             msg.setText(err)
-            msg.exec_()
+            msg.exec()
         else:
             # refresh canvas
             self.canvas.draw()
@@ -3317,9 +3326,9 @@ class CompHistWindow(QDialog):
     def addInBtnClick(self):
         if self.dbFileLedit.text() == '':
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The database file is not defined!')
-            msg.exec_()
+            msg.exec()
             return
 
         rowPosition = self.inputTable.rowCount()
@@ -3362,7 +3371,7 @@ class genReportWindow(QDialog):
         self.table = QTableView()
         # self.table.horizontalHeader().setStretchLastSection(True)
         # self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         # self.table.verticalHeader().hide()
         self.indicatorsDf = None
 
@@ -3383,38 +3392,38 @@ class genReportWindow(QDialog):
         self.openDbFileBtn.clicked.connect(self.opendbFile)
         dbLayout.addWidget(self.openDbFileBtn, 1)
 
-        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignmentFlag.AlignRight)
         self.dbLabelLedit = QLineEdit()
         dbLayout.addWidget(self.dbLabelLedit, 2)
 
-        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums + ['Activity'])
         # self.siteNameCombobx.currentTextChanged.connect(self.genReport)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignmentFlag.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignmentFlag.AlignRight)
         self.directionCombobx = QComboBox()
         self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
-        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
+        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Time interval:'), 0, 8, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Time interval:'), 0, 8, Qt.AlignmentFlag.AlignRight)
         self.intervalCombobx = QComboBox()
         self.intervalCombobx.addItems(['5', '10', '15', '20', '30', '60', '90', '120'])
-        gridLayout.addWidget(self.intervalCombobx, 0, 9)#, Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 0, 10, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervalCombobx, 0, 9)#, Qt.AlignmentFlag.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 0, 10, Qt.AlignmentFlag.AlignLeft)
 
         self.genRepBtn = QPushButton('Generate report')
         self.genRepBtn.clicked.connect(self.genReport)
@@ -3466,14 +3475,14 @@ class genReportWindow(QDialog):
 
         model = dfTableModel(self.indicatorsDf, norm_indDf)
         self.table.setModel(model)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)#.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)#.Stretch)
 
     def saveReport(self):
         if not self.indicatorsDf is None:
             self.indicatorsDf.to_clipboard()
             msg = QMessageBox()
             msg.setText('The table is copied to the clipboard.')
-            msg.exec_()
+            msg.exec()
 
     def actionTypeChanged(self):
         if self.dbFileLedit.text() == '':
@@ -3507,7 +3516,7 @@ class compIndicatorsWindow(QDialog):
         self.table = QTableView()
         # self.table.horizontalHeader().setStretchLastSection(True)
         # self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         # self.table.verticalHeader().hide()
         self.indicatorsDf = None
         self.session1 = None
@@ -3529,32 +3538,32 @@ class compIndicatorsWindow(QDialog):
         self.openDbFileBtn.clicked.connect(self.opendbFile)
         dbLayout.addWidget(self.openDbFileBtn, 1)
 
-        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignRight)
+        dbLayout.addWidget(QLabel('Label:'), 1, Qt.AlignmentFlag.AlignRight)
         self.dbLabelLedit = QLineEdit()
         dbLayout.addWidget(self.dbLabelLedit, 2)
 
-        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Transport:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.transportCombobx = QComboBox()
         self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums + ['Activity'])
         # self.siteNameCombobx.currentTextChanged.connect(self.compIndicators)
-        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignLeft)
+        gridLayout.addWidget(self.transportCombobx, 0, 1, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Action type:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.actionTypeCombobx = QComboBox()
         self.actionTypeCombobx.addItems(actionTypeList)
         self.actionTypeCombobx.setCurrentIndex(-1)
         self.actionTypeCombobx.currentTextChanged.connect(self.actionTypeChanged)
-        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignLeft)
+        gridLayout.addWidget(self.actionTypeCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Unit Idx:'), 0, 4, Qt.AlignmentFlag.AlignRight)
         self.unitIdxCombobx = QComboBox()
-        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignLeft)
+        gridLayout.addWidget(self.unitIdxCombobx, 0, 5, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Direction:'), 0, 6, Qt.AlignmentFlag.AlignRight)
         self.directionCombobx = QComboBox()
         self.directionCombobx.addItems(['both', 'Right to left', 'Left to right'])
         self.directionCombobx.setCurrentIndex(0)
-        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignLeft)
+        gridLayout.addWidget(self.directionCombobx, 0, 7, Qt.AlignmentFlag.AlignLeft)
 
         self.addInputBtn = QPushButton(QIcon('icons/addToList.png'), 'Add')
         # self.addInputBtn.setIcon(QIcon('icons/addToList.png'))
@@ -3576,11 +3585,11 @@ class compIndicatorsWindow(QDialog):
         self.inputTable.setHorizontalHeaderLabels(self.columnNames)
         gridLayout.addWidget(self.inputTable, 1, 0, 1, 10)
 
-        gridLayout.addWidget(QLabel('Time interval:'), 2, 5, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Time interval:'), 2, 5, Qt.AlignmentFlag.AlignRight)
         self.intervalCombobx = QComboBox()
         self.intervalCombobx.addItems(['5', '10', '15', '20', '30', '60', '90', '120'])
-        gridLayout.addWidget(self.intervalCombobx, 2, 6)  # , Qt.AlignLeft)
-        gridLayout.addWidget(QLabel('(min.)'), 2, 7, Qt.AlignLeft)
+        gridLayout.addWidget(self.intervalCombobx, 2, 6)  # , Qt.AlignmentFlag.AlignLeft)
+        gridLayout.addWidget(QLabel('(min.)'), 2, 7, Qt.AlignmentFlag.AlignLeft)
 
         self.genRepBtn = QPushButton('Compare Indicators')
         self.genRepBtn.clicked.connect(self.compIndicators)
@@ -3602,9 +3611,9 @@ class compIndicatorsWindow(QDialog):
     def compIndicators(self):
         if self.inputTable.rowCount() != 2:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('Two input items are required!')
-            msg.exec_()
+            msg.exec()
             return
 
         inputs = {n: [] for n in self.columnNames}
@@ -3621,14 +3630,14 @@ class compIndicatorsWindow(QDialog):
 
         model = dfTableModel(self.indicatorsDf)
         self.table.setModel(model)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)#.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)#.Stretch)
 
     def saveReport(self):
         if not self.indicatorsDf is None:
             self.indicatorsDf.to_clipboard()
             msg = QMessageBox()
             msg.setText('The table is copied to the clipboard.')
-            msg.exec_()
+            msg.exec()
 
     def opendbFile(self):
         dbFilename, _ = QFileDialog.getOpenFileName(self, "Open database file",
@@ -3641,9 +3650,9 @@ class compIndicatorsWindow(QDialog):
     def addInBtnClick(self):
         if self.dbFileLedit.text() == '':
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The database file is not defined!')
-            msg.exec_()
+            msg.exec()
             return
 
         rowPosition = self.inputTable.rowCount()
@@ -3651,9 +3660,9 @@ class compIndicatorsWindow(QDialog):
             self.inputTable.insertRow(rowPosition)
         else:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Warning)
+            msg.setIcon(QMessageBox.Icon.Warning)
             msg.setText('Only two items is accepted!')
-            msg.exec_()
+            msg.exec()
             return
 
         self.inputTable.setItem(rowPosition, 0, QTableWidgetItem(self.dbLabelLedit.text()))
@@ -3713,24 +3722,24 @@ class plotTrajWindow(QDialog):
         self.openMdbFileBtn.clicked.connect(self.openMdbFile)
         mdbLayout.addWidget(self.openMdbFileBtn)
 
-        gridLayout.addWidget(NavigationToolbar(self.canvas, self, False), 2, 0, 1, 4)#, Qt.AlignLeft)
+        gridLayout.addWidget(NavigationToolbar(self.canvas, self, False), 2, 0, 1, 4)#, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Site name:'), 0, 0)#, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Site name:'), 0, 0)#, Qt.AlignmentFlag.AlignRight)
         self.siteNameCombobx = QComboBox()
         # self.siteNameCombobx.setMinimumWidth(120)
         self.siteNameCombobx.currentTextChanged.connect(self.siteChanged)
-        gridLayout.addWidget(self.siteNameCombobx, 0, 1)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.siteNameCombobx, 0, 1)#, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Camera view:'), 0, 2)#, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Camera view:'), 0, 2)#, Qt.AlignmentFlag.AlignRight)
         self.camViewCombobx = QComboBox()
         self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
-        gridLayout.addWidget(self.camViewCombobx, 0, 3)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.camViewCombobx, 0, 3)#, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Traj database:'), 1, 0)#, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Traj database:'), 1, 0)#, Qt.AlignmentFlag.AlignRight)
         self.trjDbCombobx = QComboBox()
         # self.trjDbCombobx.setMinimumWidth(130)
         # self.trjDbCombobx.currentTextChanged.connect(self.plotItems)
-        gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)#, Qt.AlignmentFlag.AlignLeft)
 
         self.plotBtn = QPushButton('Plot')
         self.plotBtn.clicked.connect(self.plotItems)
@@ -3812,9 +3821,9 @@ class plotTrajWindow(QDialog):
 
         if not self.trjDBFile.exists():
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The trajectory database does not exist!')
-            msg.exec_()
+            msg.exec()
             self.figure.clear()
             self.canvas.draw()
             return
@@ -3837,9 +3846,9 @@ class plotTrajWindow(QDialog):
 
         if not self.homoFile.exists():
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
+            msg.setIcon(QMessageBox.Icon.Critical)
             msg.setText('The homography file does not exist!')
-            msg.exec_()
+            msg.exec()
             self.figure.clear()
             self.canvas.draw()
             return
@@ -3851,6 +3860,7 @@ class plotTrajWindow(QDialog):
 
         self.traj_line = plotTrajectory(self.trjDBFile, self.intrinsicCameraMatrix, self.distortionCoefficients,
                                        self.homoFile, self.ax, session)
+        return
         for tl in self.traj_line:
             tl.append([-1, [], [], [], [], 1])
             #[userType, [screenLineIdxs], [crossingInstants], [speeds], [secs], groupSize]
@@ -3978,8 +3988,9 @@ class plotTrajWindow(QDialog):
             return
         msg = QMessageBox()
         rep = msg.question(self, 'Delete trajectory',
-                           'Are you sure to DELETE the current trajectory?', msg.Yes | msg.No)
-        if rep == msg.No:
+                           'Are you sure to DELETE the current trajectory?',
+                           msg.StandardButton.Yes | msg.StandardButton.No)
+        if rep == msg.StandardButton.No:
             return
 
         self.prevTrajectory()
@@ -3993,8 +4004,9 @@ class plotTrajWindow(QDialog):
 
         msg = QMessageBox()
         rep = msg.question(self, 'Load trajectory',
-                           'Are you sure to LOAD all trajectories to database?', msg.Yes | msg.No)
-        if rep == msg.No:
+                           'Are you sure to LOAD all trajectories to database?',
+                           msg.StandardButton.Yes | msg.StandardButton.No)
+        if rep == msg.StandardButton.No:
             return
 
         streetUserObjects = []
@@ -4118,22 +4130,22 @@ class importTrajWindow(QDialog):
         self.openMdbFileBtn.clicked.connect(self.openMdbFile)
         mdbLayout.addWidget(self.openMdbFileBtn)
 
-        gridLayout.addWidget(QLabel('Site name:'), 0, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Site name:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.siteNameCombobx = QComboBox()
         # self.siteNameCombobx.setMinimumWidth(120)
         self.siteNameCombobx.currentTextChanged.connect(self.siteChanged)
-        gridLayout.addWidget(self.siteNameCombobx, 0, 1)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.siteNameCombobx, 0, 1)#, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Camera view:'), 0, 2, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Camera view:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.camViewCombobx = QComboBox()
         self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
-        gridLayout.addWidget(self.camViewCombobx, 0, 3)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.camViewCombobx, 0, 3)#, Qt.AlignmentFlag.AlignLeft)
 
-        gridLayout.addWidget(QLabel('Trajectory database:'), 1, 0, Qt.AlignRight)
+        gridLayout.addWidget(QLabel('Trajectory database:'), 1, 0, Qt.AlignmentFlag.AlignRight)
         self.trjDbCombobx = QComboBox()
         # self.trjDbCombobx.setMinimumWidth(130)
         # self.trjDbCombobx.currentTextChanged.connect(self.plotItems)
-        gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)#, Qt.AlignLeft)
+        gridLayout.addWidget(self.trjDbCombobx, 1, 1, 1, 2)#, Qt.AlignmentFlag.AlignLeft)
 
         self.importBtn = QPushButton('Import')
         self.importBtn.clicked.connect(self.importTrajs)
@@ -4354,13 +4366,13 @@ class dfTableModel(QAbstractTableModel):
     def columnCount(self, parnet=None):
         return self._data.shape[1]
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if index.isValid():
-            if role == Qt.DisplayRole:
+            if role == Qt.ItemDataRole.DisplayRole:
                 return str(self._data.iloc[index.row(), index.column()])
-            if role == Qt.TextAlignmentRole:
-                return Qt.AlignCenter
-            if role == Qt.BackgroundRole:
+            if role == Qt.ItemDataRole.TextAlignmentRole:
+                return Qt.AlignmentFlag.AlignCenter
+            if role == Qt.ItemDataRole.BackgroundRole:
                 value = str(self._data.iloc[index.row(), index.column()])
                 if value[0] == '-':
                     return QColor(255, 204, 204)
@@ -4381,7 +4393,7 @@ class dfTableModel(QAbstractTableModel):
                         c.setBlueF(rgba[2])
                         return c
 
-            if role == Qt.FontRole:
+            if role == Qt.ItemDataRole.FontRole:
                 if index.column() == 0:
                     font = QFont()
                     font.setBold(True)
@@ -4389,9 +4401,9 @@ class dfTableModel(QAbstractTableModel):
         return None
 
     def headerData(self, section, orientation, role):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self._data.columns[section]
-        if orientation == Qt.Vertical and role == Qt.DisplayRole:
+        if orientation == Qt.Orientation.Vertical and role == Qt.ItemDataRole.DisplayRole:
             return self._data.index[section]
         return None
 
@@ -4402,4 +4414,4 @@ if __name__ == '__main__':
     obsTb = ObsToolbox()
     obsTb.show()
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
