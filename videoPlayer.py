@@ -545,18 +545,20 @@ class VideoWindow(QMainWindow):
 
 
         for key in gItems:
-            if key[0] == 'video':
+            if key[0] == 'database':
                 item = key[1]
-                self.videoFile = item['fileName']
-                self.openVideoFile()
-                self.mediaPlayer.setPosition(int(item['sliderValue']))
-
-            elif key[0] == 'database':
-                item = key[1]
-                print(item['fileName'])
-                if item['fileName'] != None:
+                if item['fileName'] is not None:
                     self.obsTb.dbFilename = item['fileName']
                     self.obsTb.opendbFile()
+
+            elif key[0] == 'video':
+                item = key[1]
+                if item['fileName'] is not None:
+                    self.videoFile = item['fileName']
+                    self.openVideoFile()
+                    self.mediaPlayer.setPosition(int(item['sliderValue']))
+                    if item['fileName'] is not None:
+                        self.loadGraphics()
 
             elif key[0] == 'trajectory':
                 item = key[1]
@@ -578,9 +580,9 @@ class VideoWindow(QMainWindow):
                     w, h = item['obsTbx_size'].split(',')
                     self.obsTb.setGeometry(int(x), int(y), int(w), int(h))
 
-        self.loadGraphics()
-        self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
-                                             os.path.basename(self.projectFile)))
+
+        # self.setWindowTitle('{} - {}'.format(os.path.basename(self.videoFile),
+        #                                      os.path.basename(self.projectFile)))
 
     def saveProject(self):
 
@@ -606,13 +608,13 @@ class VideoWindow(QMainWindow):
 
         xmlWriter.writeStartElement('project')
 
+        xmlWriter.writeStartElement('database')
+        xmlWriter.writeTextElement("fileName", self.obsTb.dbFilename)
+        xmlWriter.writeEndElement()
+
         xmlWriter.writeStartElement('video')
         xmlWriter.writeTextElement("fileName", self.videoFile) #mediaPlayer.media().canonicalUrl().path())
         xmlWriter.writeTextElement("sliderValue", str(self.mediaPlayer.position()))
-        xmlWriter.writeEndElement()
-
-        xmlWriter.writeStartElement('database')
-        xmlWriter.writeTextElement("fileName", self.obsTb.dbFilename)
         xmlWriter.writeEndElement()
 
         xmlWriter.writeStartElement('trajectory')
