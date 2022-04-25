@@ -5,6 +5,7 @@
 @author: Abbas
 """
 from scipy.interpolate import make_interp_spline
+from scipy.stats import gaussian_kde
 import numpy as np
 from pathlib import Path
 import datetime
@@ -474,30 +475,41 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
             speed_lists.append([i[0] for i in q.all() if i[0] is not None])
 
 
-    # bins_start = int(np.floor(min([min(speed_list1), min(speed_list2)])))
-    bins_end = np.ceil(max([max(speed_list) for speed_list in speed_lists if speed_list != []]))
-    bins_end = int(((bins_end // 10) + 1) * 10)
-
-    bins = [b for b in range(0, bins_end, interval)]
-    bins_ticks = [(bins[i] + bins[i+1])/2 for i in range(len(bins) - 1)]
+    # # bins_start = int(np.floor(min([min(speed_list1), min(speed_list2)])))
+    # bins_end = np.ceil(max([max(speed_list) for speed_list in speed_lists if speed_list != []]))
+    # bins_end = int(((bins_end // 10) + 1) * 10)
+    #
+    # bins = [b for b in range(0, bins_end, interval)]
+    # bins_ticks = [(bins[i] + bins[i+1])/2 for i in range(len(bins) - 1)]
 
     if ax == None:
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
     for i in range(inputNo):
-        hist, bin_edges = np.histogram(speed_lists[i], bins=bins, density=True)
-        bins_np = np.array(bins_ticks)
-        bins_np_smooth = np.linspace(bins_np.min(), bins_np.max(), len(bins_ticks) * 10)
-        spl = make_interp_spline(bins_np, hist, k=2)
-        value_np_smooth = spl(bins_np_smooth)
-        ax.plot(bins_np_smooth, value_np_smooth, label=labels[i], color=plotColors[i])
-        # ax.hist(speed_lists[i], alpha=alpha, color=colors[i], ec=ec, label=labels[i],
-        #         rwidth=rwidth, bins=bins, density=True)
+        speed_mean = np.mean(speed_lists[i])
+        speed_std = np.std(speed_lists[i])
+        density = gaussian_kde(speed_lists[i])
+        x = np.linspace(min(speed_lists[i]), max(speed_lists[i]), 300)
+        y = density(x)
+
+        ax.axvspan(speed_mean - speed_std, speed_mean + speed_std, alpha=0.1, color=plotColors[i])
+        ax.plot(x, y, label=labels[i], color=plotColors[i])
+        ax.axvline(x=speed_mean, ls='--', lw=1, color=plotColors[i])
+
+        # hist, bin_edges = np.histogram(speed_lists[i], bins=bins, density=True)
+        # bins_np = np.array(bins_ticks)
+        # bins_np_smooth = np.linspace(bins_np.min(), bins_np.max(), len(bins_ticks) * 10)
+        # spl = make_interp_spline(bins_np, hist, k=2)
+        # value_np_smooth = spl(bins_np_smooth)
+        # ax.plot(bins_np_smooth, value_np_smooth, label=labels[i], color=plotColors[i])
+        # # ax.hist(speed_lists[i], alpha=alpha, color=colors[i], ec=ec, label=labels[i],
+        # #         rwidth=rwidth, bins=bins, density=True)
 
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=7)
     ax.set_xlabel('Speed (km/h)', fontsize=8)
+    ax.set_ylabel('Density', fontsize=8)
     ax.legend(fontsize=5)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     userTitle = transports[0]
@@ -505,11 +517,11 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
         userTitle = 'car'
     elif transports[0] == 'walking':
         userTitle = 'pedestrian'
-    ax.set_title('Speed histogram of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
+    ax.set_title('Probability density function of speed for {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=9, color='gray',
+            fontsize=8, color='gray',
             ha='left', va='bottom',
             transform=ax.transAxes,
             weight="bold", alpha=.5)
@@ -1389,7 +1401,7 @@ def pieChart(transport, attr, sTime, eTime, ax, session):
 
 # =====================================================================
 def generateReport(dbFileName, transport, actionType, unitIdx, direction, interval,
-                   start_time=None, end_time=None):
+                   start_time=None, end_time=None, showReport=False, ax=None, outputFile=None):
 
     session = connectDatabase(dbFileName)
 
@@ -1821,8 +1833,87 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                 if parts[1] == '(100.0%)':
                     indDf.loc[i, c] = '{} ({}%)'.format(parts[0], 100)
 
+    if (showReport == True and ax == None) or outputFile != None:
+        row_num, col_num = indDf.shape
+
+        if showReport == False:
+            plt.ioff()
+
+        if ax == None:
+            fig, ax = plt.subplots(tight_layout=True)  # , figsize=(6,2))
+            fig.patch.set_visible(False)
+            ax.axis('off')
+            fig.set_figheight(fig.get_figheight() * (0.0450937950937951 * (row_num + 1)))
+        else:
+            fig = ax.get_figure()
+
+        norm_indDf = pd.DataFrame()
+        for i in range(indDf.shape[0]):
+            for j in range(indDf.shape[1]):
+                if j == 0:
+                    norm_indDf.loc[i, j] = np.nan
+                    continue
+                val_str = str(indDf.iloc[i, j]).split(' ')[0]
+                if val_str.isdigit():
+                    value = int(val_str)
+                elif val_str.replace('.', '', 1).isdigit():
+                    value = float(val_str)
+                else:
+                    value = np.nan
+                norm_indDf.loc[i, j] = value
+            min_val = np.nanmin(norm_indDf.loc[i, :])
+            max_val = np.nanmax(norm_indDf.loc[i, :])
+            range_val = max_val - min_val
+            if range_val != 0:
+                norm_indDf.loc[i, :] = norm_indDf.loc[i, :].apply(lambda x: (x - min_val) / range_val)
+            else:
+                norm_indDf.loc[i, :] = 0
+
+        norm_indDf.iloc[:, 0] = np.nan
+
+        cmap = matplotlib.cm.get_cmap('Wistia')
+        cellColours = cmap(norm_indDf.values)
+
+        the_table = ax.table(cellText=indDf.values,
+                             cellLoc='center',
+                             cellColours=cellColours,
+                             colLabels=indDf.columns,
+                             colLoc='center',
+                             colColours=['lavender']*col_num,
+                             rowLabels=indDf.index,
+                             rowColours=['lavender']*row_num,
+                             rowLoc='right',
+                             # bbox=(0, 0, 1, 1),
+                             # edges='horizontal',
+                             loc='center')
+
+        the_table.auto_set_font_size(False)
+        the_table.set_fontsize(5)
+
+        # ax.text(-0.22, 0.85, str('StudioProject'),
+        #         fontsize=7, color='gray',
+        #         ha='left', va='bottom',
+        #         transform=ax.transAxes,
+        #         weight="bold", alpha=.5)
+
+        if outputFile != None:
+            plt.savefig(outputFile, bbox_inches='tight')
+            if showReport == False:
+                plt.close(fig)
+
+        if showReport == True:
+            plt.show()
 
     return indDf
+
+
+# from indicators import generateReport
+# import matplotlib.pyplot as plt
+# dbFile = '/Users/abbas/Test_StudioProject/Champagneur_2019.sqlite'
+# outputFile = '/Users/abbas/Desktop/Figure_1.pdf'
+# report = generateReport(dbFile, 'cardriver', 'crossing line', 1, 'both', 60, showReport=False, outputFile=outputFile)
+
+        # fig.tight_layout()
 
 
 def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, directions, interval):
@@ -1842,10 +1933,10 @@ def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, direct
     else:
         end_time = last_obs_time2.time()
 
-    indDf1 = generateReport(dbFiles[0], transports[0], actionTypes[0], unitIdxs[0], directions[0],
-                            interval, start_time, end_time)
-    indDf2 = generateReport(dbFiles[1], transports[1], actionTypes[1], unitIdxs[1], directions[1],
-                            interval, start_time, end_time)
+    indDf1 = generateReport(dbFiles[0], transports[0], actionTypes[0], unitIdxs[0], directions[0], interval, start_time,
+                            end_time)
+    indDf2 = generateReport(dbFiles[1], transports[1], actionTypes[1], unitIdxs[1], directions[1], interval, start_time,
+                            end_time)
 
     indDf = pd.DataFrame()
     # indDf = indDf1.iloc[0:3, :].copy()
