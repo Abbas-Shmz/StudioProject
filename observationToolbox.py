@@ -27,7 +27,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
-from indicators import tempDistHist, stackedHist, odMatrix, pieChart, generateReport, \
+from indicators import tempDistHist, stackedHistTransport, odMatrix, pieChart, generateReport, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
     plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
     modeShareCompChart, speedHistogram, speedOverSpacePlot, speedSpaceTimePlot, batchPlots
@@ -2695,9 +2695,8 @@ class StackHistWindow(QDialog):
         interval = int(self.intervaLe.text())
         attr = self.attribCmbx.currentText()
 
-        err = stackedHist(inputs['Database file'], inputs['Label'], inputs['Transport'],
-                          inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
-                          attr, ax, interval)
+        err = stackedHistTransport(inputs['Database file'], inputs['Label'], inputs['Transport'], inputs['Action type'],
+                                   inputs['Unit Idx'], inputs['Direction'], attr, ax, interval)
 
         if err != None:
             msg = QMessageBox()

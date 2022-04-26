@@ -145,7 +145,7 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
 
     if ax == None:
-        fig = plt.figure()  # figsize=(5, 5), dpi=200, tight_layout=True)
+        fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
         ax = fig.add_subplot(111)  # plt.subplots(1, 1)
 
     if plotType == 'Line plot':
@@ -157,7 +157,7 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
 
             # ax.plot(time_ticks, hist, label=labels[l])
             #------------------------
-            if hist.min() == -1:
+            if hist.min() == 0:
                 ax.plot(time_ticks, hist, label=labels[l])
             else:
                 date_np = np.array(time_ticks)
@@ -297,9 +297,10 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
 
         # # plt.show()
 
+
 # ==============================================================
-def stackedHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions, attr,
-                 ax=None, interval=20, alpha=1):#, colors=plotColors):
+def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, directions, attr,
+                 ax=None, interval=20, alpha=1, colors=plotColors):
     inputNo = len(dbFiles)
     sessions = []
     first_obs_times = []
@@ -345,7 +346,7 @@ def stackedHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions, 
 
 
     if ax == None:
-        fig = plt.figure()
+        fig = plt.figure(tight_layout=True)
         ax = fig.add_subplot(111)
 
     bins_num = len(bins[i]) - 1
@@ -399,7 +400,7 @@ def stackedHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions, 
             time_list = [i[0] for i in q_val.all()]
             if time_list != []:
                 hist, _ = np.histogram(time_list, bins=bins[i])
-                ax.bar((ind - 0.25 + width/2) + width*i, hist, color=plotColors[j], bottom=y_offset,
+                ax.bar((ind - 0.25 + width/2) + width*i, hist, color=colors[j], bottom=y_offset,
                         width=width, label=val, edgecolor='grey', lw=0.5)
 
                 y_offset = y_offset + hist
@@ -437,6 +438,124 @@ def stackedHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions, 
 
     ax.text(0.03, 0.93, str('StudioProject'),
             fontsize=9, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
+
+
+# ==============================================================
+def stackedHistActivity(dbFiles, labels, attribute,
+                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=plotColors):
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+        cls_obs = LineCrossing
+
+        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_times.append(first_obs_time.time())
+        last_obs_times.append(last_obs_time.time())
+
+    start_obs_time = max(first_obs_times)
+    end_obs_time = min(last_obs_times)
+
+    bins_start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), start_obs_time)
+    bins_end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), end_obs_time)
+
+    start = ceil_time(bins_start, interval)
+    end = ceil_time(bins_end, interval) - datetime.timedelta(minutes=interval)
+
+    bin_edges = calculateBinsEdges(start, end, interval)
+    # bin_edges.insert(0, bins_start)
+    # bin_edges.insert(-1, bins_end)
+
+    if len(bin_edges) < 3:
+        err = 'The observation duration is not enough for the selected interval!'
+        return err
+
+    times = [b.time() for b in bin_edges]
+
+    bins = []
+    for i in range(inputNo):
+        date1 = getObsStartEnd(sessions[i])[0].date()
+        bins.append([datetime.datetime.combine(date1, t) for t in times])
+
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)
+        ax = fig.add_subplot(111)
+
+    bins_num = len(bins[i]) - 1
+    ind = np.arange(bins_num)
+    width = 0.5 / inputNo
+
+    if attribute in ['age', 'gender']:
+        field_ = getattr(Person, attribute)
+    elif attribute == 'activity':
+        field_ = getattr(Activity, attribute)
+
+    enum_list = field_.type.enums
+
+    for i in range(inputNo):
+        x = (ind - 0.25 + width / 2) + (width * i)
+        y_offset = np.array([0] * bins_num)
+
+        q = sessions[i].query(Activity.startTime)\
+            .join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx)\
+            .join(Person, Person.idx == GroupBelonging.personIdx)
+
+        for j, val in enumerate(enum_list):
+            q_val = q.filter(field_ == val)
+            time_list = [i[0] for i in q_val.all()]
+            if time_list != []:
+                hist, _ = np.histogram(time_list, bins=bins[i])
+                ax.bar(x, hist, color=plotColors[j], bottom=y_offset,
+                        width=width, label=val, edgecolor='grey', lw=0.5)
+
+                y_offset = y_offset + hist
+
+        for k, t in enumerate(x):
+            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=90, fontsize=5)
+
+
+    # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
+    xticks = []
+    for t in range(bins_num):
+        xticks.append('{}-{}'.format(bins[0][t].strftime('%H:%M'), bins[0][t + 1].strftime('%H:%M')))
+
+    ax.set_ylim((-0.03, ax.get_ylim()[1] + 1))
+
+    tick_rotation = 0
+    if bins_num >= 20:
+        tick_rotation = 45
+
+    ax.tick_params(axis='x', labelsize=4, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=6)
+    ax.set_xlabel('Time of day', fontsize=7)
+    ax.set_ylabel('No. of activities', fontsize=7)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_xticks(ind, xticks)
+    ax.set_title('Temporal distribution of activities' + ' by ' + attribute, fontsize=10)
+    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+
+    handles, labels = ax.get_legend_handles_labels()
+    handle_list = []
+    label_list = []
+    for i, label in enumerate(labels):
+        if not label in label_list:
+            handle_list.append(handles[i])
+            label_list.append(label)
+    ax.legend(handle_list, label_list, loc='upper right', prop={'size': 5})
+
+
+    ax.text(0.03, 0.93, str('StudioProject'),
+            fontsize=8, color='gray',
             ha='left', va='bottom',
             transform=ax.transAxes,
             weight="bold", alpha=.5)
@@ -483,7 +602,7 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
     # bins_ticks = [(bins[i] + bins[i+1])/2 for i in range(len(bins) - 1)]
 
     if ax == None:
-        fig = plt.figure()
+        fig = plt.figure(tight_layout=True)
         ax = fig.add_subplot(111)
 
     for i in range(inputNo):
@@ -527,7 +646,6 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
             weight="bold", alpha=.5)
 
 
-
 def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
                  ax=None, interval=20, alpha=1, colors=plotColors):
 
@@ -552,11 +670,14 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         first_obs_times.append(first_obs_time.time())
         last_obs_times.append(last_obs_time.time())
 
-    bins_start = max(first_obs_times)
-    bins_end = min(last_obs_times)
+    start_obs_time = max(first_obs_times)
+    end_obs_time = min(last_obs_times)
 
-    start = datetime.datetime.combine(datetime.datetime(2000,1,1), bins_start)
-    end = datetime.datetime.combine(datetime.datetime(2000,1,1), bins_end)
+    bins_start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), start_obs_time)
+    bins_end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), end_obs_time)
+
+    start = ceil_time(bins_start, interval)
+    end = ceil_time(bins_end, interval) - datetime.timedelta(minutes=interval)
 
     bin_edges = calculateBinsEdges(start, end, interval)
 
@@ -627,10 +748,18 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
             i += 1
         grouped_speeds.append(grouped_speed)
     
+    # ticks = []
+    # for i in range(len(bins[0]) - 1):
+    #     t = (bins[0][i] + (bins[0][i + 1] - bins[0][i]) / 2).time()
+    #     ticks.append(t.strftime('%H:%M'))
+
     ticks = []
-    for i in range(len(bins[0]) - 1):
-        t = (bins[0][i] + (bins[0][i + 1] - bins[0][i]) / 2).time()
-        ticks.append(t.strftime('%H:%M'))
+    for t in range(len(bins[0]) - 1):
+        ticks.append('{}-{}'.format(bins[0][t].strftime('%H:%M'), bins[0][t + 1].strftime('%H:%M')))
+
+    tick_rotation = 0
+    if len(bins[0]) - 1 >= 20:
+        tick_rotation = 45
 
     def set_box_color(bp, color):
         plt.setp(bp['boxes'], color=color)
@@ -640,7 +769,7 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         plt.setp(bp['means'], color=color)
 
     if ax == None:
-        fig = plt.figure()
+        fig = plt.figure(tight_layout=True)
         ax = fig.add_subplot(111)
 
     for i in range(inputNo):
@@ -664,9 +793,9 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     ax.set_xticklabels(ticks)
     ax.set_xlim(-1, len(ticks) * 2)
 
-    ax.tick_params(axis='x', labelsize=8, rotation=0)
+    ax.tick_params(axis='x', labelsize=8, rotation=tick_rotation)
     ax.tick_params(axis='y', labelsize=7)
-    ax.set_xlabel('Time', fontsize=8)
+    ax.set_xlabel('Time of day', fontsize=8)
     ax.set_ylabel('Speed (km/h)', fontsize=8)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     userTitle = transports[0]
@@ -678,7 +807,7 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=9, color='gray',
+            fontsize=8, color='gray',
             ha='left', va='bottom',
             transform=ax.transAxes,
             weight="bold", alpha=.5)
@@ -868,7 +997,7 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
 
 
     if ax == None:
-        fig = plt.figure()
+        fig = plt.figure(tight_layout=True)
         ax = fig.add_subplot(111)
 
     x = []
@@ -938,6 +1067,7 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
             ha='left', va='bottom',
             transform=ax.transAxes,
             weight="bold", alpha=.5)
+
 
 # ==============================================================
 def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions, metadataFile,
@@ -1148,7 +1278,7 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
         grouped_speeds.append(grouped_speed)
 
     if axs is None:
-        fig = plt.figure()
+        fig = plt.figure(tight_layout=True)
         axs = fig.subplots(1, inputNo, sharey='row')
 
     if inputNo == 1:
@@ -1372,6 +1502,7 @@ def odMatrix(user, ax, session):
     #
     # plt.show()
 
+
 #=====================================================================
 def pieChart(transport, attr, sTime, eTime, ax, session):
 
@@ -1398,6 +1529,7 @@ def pieChart(transport, attr, sTime, eTime, ax, session):
     #           loc="upper right")
 
     plt.setp(autotexts, size=12, weight="bold")
+
 
 # =====================================================================
 def generateReport(dbFileName, transport, actionType, unitIdx, direction, interval,
@@ -1907,15 +2039,7 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
     return indDf
 
 
-# from indicators import generateReport
-# import matplotlib.pyplot as plt
-# dbFile = '/Users/abbas/Test_StudioProject/Champagneur_2019.sqlite'
-# outputFile = '/Users/abbas/Desktop/Figure_1.pdf'
-# report = generateReport(dbFile, 'cardriver', 'crossing line', 1, 'both', 60, showReport=False, outputFile=outputFile)
-
-        # fig.tight_layout()
-
-
+# =====================================================================
 def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, directions, interval):
 
     session1 = connectDatabase(dbFiles[0])
@@ -2000,6 +2124,7 @@ def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, direct
     return indDf
 
 
+# =====================================================================
 def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homographyFile, ax, session):
     objects = storage.loadTrajectoriesFromSqlite(trjDBFile, 'object')
     homography = np.loadtxt(homographyFile, delimiter=' ')
@@ -2050,6 +2175,7 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
     return traj_line
 
 
+# =====================================================================
 def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, homoFile,
                      video_start, frameRate, session):
     log = {}
@@ -2126,6 +2252,7 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
 
     return log
 
+# =====================================================================
 def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all'):
     plt.ioff()
     # fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
@@ -2219,6 +2346,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all'):
                             continue
 
 
+# =====================================================================
 def creatStreetusers(userType, lines, instants, speeds, groupSize):
     linePass_list = []
     modes_list = []
@@ -2257,6 +2385,8 @@ def creatStreetusers(userType, lines, instants, speeds, groupSize):
 
     return [group] + linePass_list + modes_list
 
+
+# =====================================================================
 def modeShareCompChart(dbFiles, labels, interval, axs=None):
     inputNo = len(dbFiles)
     sessions = []
@@ -2292,7 +2422,7 @@ def modeShareCompChart(dbFiles, labels, interval, axs=None):
     times = [b.time() for b in bins]
 
     if axs is None:
-        fig = plt.figure()
+        fig = plt.figure(tight_layout=True)
         ax = fig.subplots(2, 2, sharex=True, sharey='row')
 
     ax = [axs[0,0], axs[0,1], axs[1,0], axs[1,1]]
@@ -2418,6 +2548,7 @@ def modeShareCompChart(dbFiles, labels, interval, axs=None):
     # # ax[0].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
     # # ax[0].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
 
+
 # =========================================
 def image_to_ground(img_points, homography):
     n_points = img_points.shape[1]
@@ -2435,6 +2566,8 @@ def image_to_ground(img_points, homography):
 
     return ground[:-1,:]
 
+
+# =====================================================================
 def getLabelSizePie(transport, fieldName, startTime, endTime, session):
 
     if transport == 'all types':
@@ -2472,6 +2605,7 @@ def getLabelSizePie(transport, fieldName, startTime, endTime, session):
     return labels, sizes
 
 
+# =====================================================================
 def getPeakHours(start_obs_time, end_obs_time, interval):
     # morningPeakStart = morningPeakStart,
     # morningPeakEnd = morningPeakEnd,
@@ -2538,6 +2672,8 @@ def getPeakHours(start_obs_time, end_obs_time, interval):
     #
     # return peakHours
 
+
+# =====================================================================
 def ceil_time(time, m):
     if time.second == 0 and time.microsecond == 0 and time.minute % m == 0:
         return time
@@ -2547,6 +2683,8 @@ def ceil_time(time, m):
     time = (time + datetime.timedelta(minutes=diff)).replace(second=0, microsecond=0)
     return time
 
+
+# =====================================================================
 def getObsStartEnd(session):
     first_linePass_time = session.query(func.min(LineCrossing.instant)).first()[0]
     last_linePass_time = session.query(func.max(LineCrossing.instant)).first()[0]
@@ -2572,6 +2710,8 @@ def getObsStartEnd(session):
     # end_obs_time = site_instance.obsEnd
     return start_obs_time, end_obs_time
 
+
+# =====================================================================
 def calculateBinsEdges(start, end, interval=None):
     if start.date() != end.date():
         end = datetime.datetime.combine(start.date(), end.time())
@@ -2600,6 +2740,7 @@ def calculateBinsEdges(start, end, interval=None):
     return bins
 
 
+# =====================================================================
 def calculateNoBins(session, minutes=binsMinutes):
     start_obs_time, end_obs_time = getObsStartEnd(session)
     duration = end_obs_time - start_obs_time
@@ -2610,6 +2751,7 @@ def calculateNoBins(session, minutes=binsMinutes):
     return bins
 
 
+# =====================================================================
 def heatmap(data, row_labels, col_labels, ax=None,
             cbar_kw={}, cbarlabel="", **kwargs):
     """
@@ -2671,6 +2813,7 @@ def heatmap(data, row_labels, col_labels, ax=None,
     return im, cbar
 
 
+# =====================================================================
 def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
                      textcolors=("black", "white"),
                      threshold=None, **textkw):
@@ -2730,6 +2873,7 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     return texts
 
 
+# =====================================================================
 def getVideoMetadata(filename):
     HachoirConfig.quiet = True
     parser = createParser(filename)
@@ -2759,7 +2903,9 @@ def getVideoMetadata(filename):
 
 
 # ======================= DEMO MODE ============================
-# if __name__ == '__main__':
-#     # tempDistHist(user = 'vehicle', od_name = 'road_2')
-#     # stackedHist('activities', 'activityType', 20)
-#     odMatrix('cyclist', session)
+if __name__ == '__main__':
+    dbFile1 = '/Users/abbas/Test_StudioProject/Hartland_2019.sqlite'
+    dbFile2 = '/Users/abbas/Test_StudioProject/Hartland_2020.sqlite'
+    tempDistHist([dbFile1, dbFile2], ['2019', '2020'], ['cardriver', 'cardriver'],
+                 ['crossing line', 'crossing line'], ['1', '1'], ['both', 'both'], interval=15)
+
