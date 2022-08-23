@@ -37,8 +37,8 @@ userTypeNames = ['unknown', 'car', 'pedestrian', 'motorcycle', 'bicycle', 'bus',
                  'scooter', 'skate', 'Activity']
 userTypeColors = ['gray',   'blue', 'orange',    'violet',       'green',  'yellow', 'black', 'cyan',
                   'red',  'brown', 'salmon']
-plotColors = ['deepskyblue', 'salmon', 'pink', 'orange', 'bisque', 'lightsteelblue', 'lightgreen', 'violet', 'navy',
-              'purple', 'aqua', 'blue', 'olive', 'green', 'black', 'cyan', 'brown', 'gray']
+plotColors = ['deepskyblue', 'salmon', 'gold', 'forestgreen', 'violet', 'cadetblue', 'saddlebrown', 'yellowgreen',
+              'chocolate', 'navy', 'purple', 'aqua', 'blue', 'darkkhaki', 'green', 'black', 'cyan', 'brown', 'gray', 'olive']
 
 config_object = ConfigParser()
 cfg = config_object.read("config.ini")
@@ -57,8 +57,9 @@ else:
     binsMinutes = 10
 
 # ==============================================================
-def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
-                 ax=None, interval=20, plotType='Line plot', alpha=1, colors=plotColors):
+def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=None,
+                 ax=None, interval=20, plotType='Line plot', alpha=1, colors=plotColors, siteName=None,
+                 drawMean=True):
 
     inputNo = len(dbFiles)
     sessions = []
@@ -79,20 +80,6 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         first_obs_times.append(first_obs_time.time())
         last_obs_times.append(last_obs_time.time())
 
-    bins_start = max(first_obs_times)
-    bins_end = min(last_obs_times)
-
-    start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
-    end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
-
-    bins = calculateBinsEdges(start, end, interval)
-
-    if len(bins) < 3:
-        err = 'The observation duration is not enough for the selected interval!'
-        return err
-
-    to_timestamp = np.vectorize(lambda x: x.timestamp())
-
     time_lists = []
     for i in range(inputNo):
         if 'line' in actionTypes[i].split(' '):
@@ -101,10 +88,23 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
             else:
                 q = sessions[i].query(LineCrossing.instant).filter(LineCrossing.lineIdx == unitIdxs[i])
 
-            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+            # q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+            #     .join(Person, Person.idx == GroupBelonging.personIdx) \
+            #     .join(Mode, Mode.personIdx == Person.idx) \
+            #     .filter(Mode.transport == transports[i])
+
+            q = q.join(Line, Line.idx == LineCrossing.lineIdx) \
+                .join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
                 .join(Person, Person.idx == GroupBelonging.personIdx) \
                 .join(Mode, Mode.personIdx == Person.idx) \
                 .filter(Mode.transport == transports[i])
+
+            if transports[i] != 'walking':
+                q = q.join(Vehicle, Vehicle.idx == Mode.vehicleIdx)
+
+            if transports[i] == 'cardriver':
+                q = q.filter(Line.type == 'roadbed')
+                # .filter(Vehicle.category == 'car')
 
             if directions[i] == 'Right to left':
                 q = q.filter(LineCrossing.rightToLeft == True)
@@ -128,37 +128,76 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
 
         time_lists.append([i[0] for i in q.all()])
 
-    for i in range(inputNo):
-        if time_lists[i] == []:
-            return 'No {} is observed {} #{}!'.format(transports[i], actionTypes[i], unitIdxs[i])
+    if all([i == [] for i in time_lists]):
+        return 'No observation!'
 
     for time_list in time_lists:
+        if time_list == []:
+            continue
         i = 0
         for time_ticks in time_list:
             time_list[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
             i += 1
 
-    bins_stamps = to_timestamp(bins)
-    time_ticks = []
-    for i in range(len(bins) - 1):
-        mid_point = bins_stamps[i] + (bins_stamps[i + 1] - bins_stamps[i]) / 2
-        time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
 
     if ax == None:
         fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
         ax = fig.add_subplot(111)  # plt.subplots(1, 1)
 
+    to_timestamp = np.vectorize(lambda x: x.timestamp())
+
     if plotType == 'Line plot':
-        l = 0
-        for time_list in time_lists:
+        bins_start = min(first_obs_times)
+        bins_end = max(last_obs_times)
+
+        start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
+        end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
+
+        bins = calculateBinsEdges(start, end, interval)
+
+        if len(bins) < 3:
+            err = 'The observation duration is not enough for the selected interval!'
+            return err
+
+        for l, time_list in enumerate(time_lists):
+            if time_list == []:
+                continue
+
             time_stamps = to_timestamp(time_list)
 
+            bins_stamps = to_timestamp(bins)
+
+            min_time_stamps = min(time_stamps)
+            max_time_stamps = max(time_stamps)
+
+            bins_idx_remove = []
+            for bs in bins_stamps[0:-1]:
+                if bs < min_time_stamps and bins_stamps[list(bins_stamps).index(bs) + 1] < max_time_stamps:
+                    bins_idx_remove.append(list(bins_stamps).index(bs))
+                elif bs > min_time_stamps and bins_stamps[list(bins_stamps).index(bs) + 1] > max_time_stamps:
+                    bins_idx_remove.append(list(bins_stamps).index(bs) + 1)
+                elif bs > min_time_stamps and bins_stamps[list(bins_stamps).index(bs) + 1] < max_time_stamps:
+                    continue
+                else:
+                    err = 'The observation duration is not long enough for the selected interval!'
+                    return err
+            if len(bins_idx_remove) > 0:
+                bins_stamps = np.delete(bins_stamps, bins_idx_remove)
+
+            time_ticks = []
+            for i in range(len(bins_stamps) - 1):
+                mid_point = bins_stamps[i] + (bins_stamps[i + 1] - bins_stamps[i]) / 2
+                time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
+
             hist, bin_edges = np.histogram(time_stamps, bins=bins_stamps)
+            if len(hist) == 0:
+                err = 'There is no observation for the selected arguments!'
+                return err
 
             # ax.plot(time_ticks, hist, label=labels[l])
             #------------------------
             if hist.min() == 0:
-                ax.plot(time_ticks, hist, label=labels[l])
+                ax.plot(time_ticks, hist, label=labels[l], color=plotColors[l])
             else:
                 date_np = np.array(time_ticks)
                 date_num = mdates.date2num(date_np)
@@ -167,13 +206,33 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
                 value_np_smooth = spl(date_num_smooth)
                 ax.plot(mdates.num2date(date_num_smooth), value_np_smooth, label=labels[l], color=plotColors[l])
             #------------------------
-            ax.axhline(y=np.mean(hist), color=plotColors[l], linestyle='--',
-                      lw=1, label= 'Mean of {}'.format(labels[l]))
+            if drawMean:
+                ax.axhline(y=np.mean(hist), color=plotColors[l], linestyle='--',
+                          lw=1, label= 'Mean of {}'.format(labels[l]))
             # ------------------------
-            l += 1
+
     elif plotType == 'Scatter plot':
         if inputNo != 2:
             return 'The scatter plot is possible for only two datasets!'
+
+        bins_start = max(first_obs_times)
+        bins_end = min(last_obs_times)
+
+        start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
+        end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
+
+        bins = calculateBinsEdges(start, end, interval)
+
+        if len(bins) < 3:
+            err = 'The observation duration is not enough for the selected interval!'
+            return err
+
+        bins_stamps = to_timestamp(bins)
+        time_ticks = []
+        for i in range(len(bins) - 1):
+            mid_point = bins_stamps[i] + (bins_stamps[i + 1] - bins_stamps[i]) / 2
+            time_ticks.append(datetime.datetime.fromtimestamp(mid_point))
+
         time_stamps1 = to_timestamp(time_lists[0])
         hist1, bin_edges = np.histogram(time_stamps1, bins=bins_stamps)
 
@@ -250,15 +309,20 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
             tm = 'car'
         elif transports[0] == 'walking':
             tm = 'pedestrian'
+        elif transports[0] == 'cycling':
+            tm = 'cyclist'
 
         ax.set_ylabel('No. of {}s'.format(tm), fontsize=8)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
         if unitIdxs[0].split('_')[0] == 'all':
-            ax.set_title('Number of all {}s {}s every {} minutes'
-                         .format(tm, actionTypes[0], interval), fontsize=8)
+            title = f'Number of all observed {tm}s every {interval} minutes'
         else:
-            ax.set_title('Number of {}s {} #{} every {} minutes'
-                         .format(tm, actionTypes[0], unitIdxs[0], interval), fontsize=8)
+            title = f'Number of {tm}s {actionTypes[0]} #{unitIdxs[0]} every {interval} minutes'
+        if siteName != None:
+            title = f'{title} in {siteName}'
+        ax.set_title(title, fontsize=8)
+
         if not all(l == '' for l in labels):
             ax.legend(loc='upper right', fontsize=6)
 
@@ -289,18 +353,125 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
 
     ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
 
-    ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=9, color='gray',
-            ha='left', va='bottom',
-            transform=ax.transAxes,
-            weight="bold", alpha=.5)
+    watermark(ax)
 
         # # plt.show()
 
 
 # ==============================================================
+def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directions=None,
+                 ax=None, siteName=None, alpha=1, colors=plotColors):
+    # TODO: Empirical peak hour
+    inputNo = len(dbFiles)
+    sessions = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+
+    time_lists = []
+    for i in range(inputNo):
+        if 'line' in actionTypes[i].split(' '):
+            if unitIdxs[i] == 'all_lines':
+                q = sessions[i].query(func.min(LineCrossing.instant))
+            else:
+                q = sessions[i].query(LineCrossing.instant).filter(LineCrossing.lineIdx == unitIdxs[i])
+
+            q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+                .join(Person, Person.idx == GroupBelonging.personIdx) \
+                .join(Mode, Mode.personIdx == Person.idx) \
+                .filter(Mode.transport == transports[i])
+
+            if directions[i] == 'Right to left':
+                q = q.filter(LineCrossing.rightToLeft == True)
+            elif directions[i] == 'Left to right':
+                q = q.filter(LineCrossing.rightToLeft == False)
+
+        elif 'zone' in actionTypes[i].split(' '):
+            q = sessions[i].query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdxs[i]). \
+                join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
+            if 'entering' in actionTypes[i].split(' '):
+                q = q.filter(ZoneCrossing.entering == True)
+            elif 'exiting' in actionTypes[i].split(' '):
+                q = q.filter(ZoneCrossing.entering == False)
+
+        if unitIdxs[i] == 'all_lines':
+            q = q.group_by(Person.idx)
+
+        time_lists.append([i[0] for i in q.all()])
+
+
+    if all(tl == [] for tl in time_lists):
+        return 'No observation!'
+
+    for time_list in time_lists:
+        if time_list == []:
+            continue
+        for i, time_ticks in enumerate(time_list):
+            time_list[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
+        ax = fig.add_subplot(111)  # plt.subplots(1, 1)
+
+    for i, time_list in enumerate(time_lists):
+        if time_list == []:
+            continue
+        date_np = np.array(time_list)
+        date_num = mdates.date2num(date_np)
+
+        density = gaussian_kde(date_num)
+        x = np.linspace(date_num.min(), date_num.max(), 100)
+        y = density(x)
+        ax.plot(mdates.num2date(x), y, label=labels[i], color=colors[i])
+
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
+
+    # ax.xaxis.set_major_locator(mdates.HourLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+
+    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+
+    xLabel = 'Time of day'
+
+    # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
+    ax.tick_params(axis='x', labelsize=8, rotation=0)
+    ax.tick_params(axis='y', labelsize=7)
+    ax.set_xlabel(xLabel, fontsize=8)
+
+    tm = transports[0]
+    if len(transports) == 1:
+        if transports[0] == 'cardriver':
+            tm = 'car'
+        elif transports[0] == 'walking':
+            tm = 'pedestrian'
+        elif transports[0] == 'cycling':
+            tm = 'cyclist'
+    else:
+        tm = 'street user'
+
+    ax.set_ylabel(f'Pobability density', fontsize=8)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    if unitIdxs[0].split('_')[0] == 'all':
+        title = f'Pobability density function (PDF) of all observed {tm}s'
+    else:
+        title = f'Pobability density function (PDF) of {tm}s {actionTypes[0]} #{unitIdxs[0]}'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=8)
+    if not all(l == '' for l in labels):
+        ax.legend(loc='upper right', fontsize=6)
+
+
+    ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
+
+    watermark(ax)
+
+
+# ==============================================================
 def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, directions, attr,
-                 ax=None, interval=20, alpha=1, colors=plotColors):
+                 ax=None, interval=20, alpha=1, colors=plotColors, siteName=None):
     inputNo = len(dbFiles)
     sessions = []
     first_obs_times = []
@@ -354,6 +525,7 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
     width = 0.5 / inputNo
 
     for i in range(inputNo):
+        x = (ind - 0.25 + width / 2) + (width * i)
         y_offset = np.array([0] * bins_num)
 
         if 'line' in actionTypes[i].split(' '):
@@ -386,12 +558,12 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
         if unitIdxs[i] == 'all_lines':
             q = q.group_by(Person.idx)
 
-        if transports[i] == 'walking':
+        if transports[i] in ['walking', 'cycling'] and attr in ['age', 'gender']:
             field_ = getattr(Person, attr)
-        elif transports[i] == 'Activity':
-            field_ = getattr(Activity, attr)
-        else:
+        elif transports[i] == 'cardriver' and attr in ['category']:
             field_ = getattr(Vehicle, attr)
+        else:
+            return 'The attribute does not match with the transport mode!'
 
         enum_list = field_.type.enums
 
@@ -400,10 +572,13 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
             time_list = [i[0] for i in q_val.all()]
             if time_list != []:
                 hist, _ = np.histogram(time_list, bins=bins[i])
-                ax.bar((ind - 0.25 + width/2) + width*i, hist, color=colors[j], bottom=y_offset,
+                ax.bar(x, hist, color=colors[j], bottom=y_offset,
                         width=width, label=val, edgecolor='grey', lw=0.5)
 
                 y_offset = y_offset + hist
+
+        for k, t in enumerate(x):
+            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=90, fontsize=5)
 
 
     # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
@@ -411,7 +586,16 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
     for t in range(bins_num):
         xticks.append('{}-{}'.format(bins[0][t].strftime('%H:%M'), bins[0][t + 1].strftime('%H:%M')))
 
-    user = transports[0]
+    ax.set_ylim((-0.03, int(ax.get_ylim()[1]) + 1))
+
+    tm = transports[0]
+    if transports[0] == 'cardriver':
+        tm = 'car'
+    elif transports[0] == 'walking':
+        tm = 'pedestrian'
+    elif transports[0] == 'cycling':
+        tm = 'cyclist'
+
     tick_rotation = 0
     if bins_num >= 20:
         tick_rotation = 45
@@ -419,10 +603,13 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
     ax.tick_params(axis='x', labelsize=4, rotation=tick_rotation)
     ax.tick_params(axis='y', labelsize=6)
     ax.set_xlabel('Time of day', fontsize=7)
-    ax.set_ylabel('No. of ' + user, fontsize=7)
+    ax.set_ylabel(f'No. of {tm}s', fontsize=7)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
-    ax.set_title('Temporal distribution of ' + user + ' by ' + attr, fontsize=10)
+    title = f'Number of {tm}s by {attr} every {interval} minute'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=8)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
     # ax.legend(loc="upper right", fontsize=5)
 
@@ -436,16 +623,213 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
     ax.legend(handle_list, label_list, loc='upper right', prop={'size': 5})
 
 
-    ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=9, color='gray',
-            ha='left', va='bottom',
-            transform=ax.transAxes,
-            weight="bold", alpha=.5)
+    watermark(ax)
+
+
+# ==============================================================
+def sitesBAtransport(dbFileList, siteNames, transport, directions, BAlabels=['Before', 'After'],
+                      actionType='crossing line', unitIdxs='all_lines', ax=None, colors=plotColors):
+    sitesNo = len(dbFileList)
+    sites_sessions = []
+    obs_durations = []
+
+    for site_dbFiles in dbFileList:
+        session_before = connectDatabase(site_dbFiles[0])
+        session_after = connectDatabase(site_dbFiles[1])
+        sites_sessions.append([session_before, session_after])
+        if 'line' in actionType.split(' '):
+            cls_obs = LineCrossing
+        elif 'zone' in actionType.split(' '):
+            cls_obs = ZoneCrossing
+
+        first_obs_before = session_before.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_before = session_before.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_after = session_after.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_after = session_after.query(func.max(cls_obs.instant)).first()[0]
+
+        duration_before = last_obs_before - first_obs_before
+        duration_before_in_s = duration_before.total_seconds()
+        duration_before_hours = duration_before_in_s / 3600
+
+        duration_after = last_obs_after - first_obs_after
+        duration_after_in_s = duration_after.total_seconds()
+        duration_after_hours = duration_after_in_s / 3600
+
+        obs_durations.append([duration_before_hours, duration_after_hours])
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)
+        ax = fig.add_subplot(111)
+
+    y_list = []
+    for i in range(2):
+        y_list.append([0] * sitesNo)
+        for j, sessions in enumerate(sites_sessions):
+
+            if 'line' in actionType.split(' '):
+                if unitIdxs == 'all_lines':
+                    q =sessions[i].query(func.min(LineCrossing.instant))
+                else:
+                    q = sessions[i].query(LineCrossing.instant).filter(LineCrossing.lineIdx == unitIdxs)
+
+                q = q.join(Line, Line.idx == LineCrossing.lineIdx) \
+                    .join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+                    .join(Person, Person.idx == GroupBelonging.personIdx) \
+                    .join(Mode, Mode.personIdx == Person.idx) \
+                    .filter(Mode.transport == transport)
+
+                if transport != 'walking':
+                    q = q.join(Vehicle, Vehicle.idx == Mode.vehicleIdx)
+
+                if transport == 'cardriver':
+                    q = q.filter(Line.type == 'roadbed')
+                        # .filter(Vehicle.category == 'car')
+
+                if directions[j] == 'Right to left':
+                    q = q.filter(LineCrossing.rightToLeft == True)
+                elif directions[j] == 'Left to right':
+                    q = q.filter(LineCrossing.rightToLeft == False)
+
+            elif 'zone' in actionType.split(' '):
+                q = sessions[i].query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdxs). \
+                    join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx)
+                if 'entering' in actionTypes[i].split(' '):
+                    q = q.filter(ZoneCrossing.entering == True)
+                elif 'exiting' in actionTypes[i].split(' '):
+                    q = q.filter(ZoneCrossing.entering == False)
+
+            if unitIdxs == 'all_lines':
+                q = q.group_by(Person.idx)
+
+            time_list = [t[0] for t in q.all()]
+            if time_list != [] and obs_durations[j][i] != 0:
+                y_list[i][j] = len(time_list) / obs_durations[j][i]
+
+    for i in range(len(y_list[0])):
+        if y_list[0][i] == 0 and y_list[1][i] == 0:
+            y_list[0][i] = None
+            y_list[1][i] = None
+            siteNames[i] = None
+
+    y_list[0] = [i for i in y_list[0] if not i is None] #list(filter(None, y_list[0]))
+    y_list[1] = [i for i in y_list[1] if not i is None]
+    siteNames = [i for i in siteNames if not i is None]
+
+    ind = np.arange(len(y_list[0]))
+    width = 0.5 / 2
+    for i in range(2):
+        x = (ind - 0.25 + width / 2) + (width * i)
+        ax.bar(x, y_list[i], color=colors[i], width=width, label=BAlabels[i], edgecolor='grey', lw=0.5)
+
+    xticks = siteNames
+    ax.set_ylim((-0.03, int(ax.get_ylim()[1]) + 1))
+
+    tm = transport
+    if transport == 'cardriver':
+        tm = 'car'
+    elif transport == 'walking':
+        tm = 'pedestrian'
+    elif transport == 'cycling':
+        tm = 'cyclist'
+
+    tick_rotation = 0
+    if len(siteNames) >= 20:
+        tick_rotation = 45
+
+    ax.tick_params(axis='x', labelsize=6, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=6)
+    ax.set_xlabel('Name of sites', fontsize=7)
+    ax.set_ylabel(f'Number of {tm}s per hour', fontsize=7)
+    # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_xticks(ind, xticks)
+    title = f'Flow of {tm}s in all sites'
+
+    ax.set_title(title, fontsize=8)
+    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+    ax.legend(loc="upper right", fontsize=5)
+
+    watermark(ax)
+
+
+# ==============================================================
+def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'],
+                      ax=None, colors=plotColors):
+    sitesNo = len(dbFileList)
+    sites_sessions = []
+    obs_durations = []
+
+    for site_dbFiles in dbFileList:
+        session_before = connectDatabase(site_dbFiles[0])
+        session_after = connectDatabase(site_dbFiles[1])
+        sites_sessions.append([session_before, session_after])
+        cls_obs = LineCrossing
+
+        first_obs_before = session_before.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_before = session_before.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_after = session_after.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_after = session_after.query(func.max(cls_obs.instant)).first()[0]
+
+        duration_before = last_obs_before - first_obs_before
+        duration_before_in_s = duration_before.total_seconds()
+        duration_before_hours = duration_before_in_s / 3600
+
+        duration_after = last_obs_after - first_obs_after
+        duration_after_in_s = duration_after.total_seconds()
+        duration_after_hours = duration_after_in_s / 3600
+
+        obs_durations.append([duration_before_hours, duration_after_hours])
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)
+        ax = fig.add_subplot(111)
+
+    y_list = []
+    for i in range(2):
+        y_list.append([0] * sitesNo)
+        for j, sessions in enumerate(sites_sessions):
+
+            q = sessions[i].query(Activity.startTime) \
+                .join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx) \
+                .join(Person, Person.idx == GroupBelonging.personIdx)
+
+            time_list = [t[0] for t in q.all()]
+            if time_list != [] and obs_durations[j][i] != 0:
+                y_list[i][j] = len(time_list) / obs_durations[j][i]
+
+
+    ind = np.arange(len(y_list[0]))
+    width = 0.5 / 2
+    for i in range(2):
+        x = (ind - 0.25 + width / 2) + (width * i)
+        ax.bar(x, y_list[i], color=colors[i], width=width, label=BAlabels[i], edgecolor='grey', lw=0.5)
+
+    xticks = siteNames
+    # ax.set_ylim((-0.03, int(ax.get_ylim()[1]) + 1))
+
+    tick_rotation = 0
+    if len(siteNames) >= 20:
+        tick_rotation = 45
+
+    ax.tick_params(axis='x', labelsize=6, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=6)
+    ax.set_xlabel('Name of sites', fontsize=7)
+    ax.set_ylabel('Number of activities per hour', fontsize=7)
+    # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_xticks(ind, xticks)
+    title = 'Rate of activities in all sites'
+
+    ax.set_title(title, fontsize=8)
+    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+    ax.legend(loc="upper right", fontsize=5)
+
+    watermark(ax)
 
 
 # ==============================================================
 def stackedHistActivity(dbFiles, labels, attribute,
-                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=plotColors):
+                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=plotColors, siteName=None):
     inputNo = len(dbFiles)
     sessions = []
     first_obs_times = []
@@ -529,7 +913,7 @@ def stackedHistActivity(dbFiles, labels, attribute,
     for t in range(bins_num):
         xticks.append('{}-{}'.format(bins[0][t].strftime('%H:%M'), bins[0][t + 1].strftime('%H:%M')))
 
-    ax.set_ylim((-0.03, ax.get_ylim()[1] + 1))
+    ax.set_ylim((-0.03, int(ax.get_ylim()[1]) + 1))
 
     tick_rotation = 0
     if bins_num >= 20:
@@ -541,7 +925,14 @@ def stackedHistActivity(dbFiles, labels, attribute,
     ax.set_ylabel('No. of activities', fontsize=7)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
-    ax.set_title('Temporal distribution of activities' + ' by ' + attribute, fontsize=10)
+
+    if attribute == 'activity':
+        attribute = 'activity type'
+    title = f'Number of activities by {attribute} every {interval} minute'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=8)
+
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     handles, labels = ax.get_legend_handles_labels()
@@ -554,16 +945,12 @@ def stackedHistActivity(dbFiles, labels, attribute,
     ax.legend(handle_list, label_list, loc='upper right', prop={'size': 5})
 
 
-    ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=8, color='gray',
-            ha='left', va='bottom',
-            transform=ax.transAxes,
-            weight="bold", alpha=.5)
+    watermark(ax)
 
 
 # ==============================================================
 def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
-                 ax=None, interval=20, alpha=1, colors=plotColors, ec='k', rwidth=0.9):
+                 ax=None, interval=20, alpha=1, colors=plotColors, ec='k', rwidth=0.9, siteName=None):
     inputNo = len(dbFiles)
     speed_lists = []
     # sessions = []
@@ -575,12 +962,14 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
         else:
             q = session.query(LineCrossing.speed).filter(LineCrossing.lineIdx == unitIdxs[i])
 
-        q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+        q = q.join(Line, Line.idx == LineCrossing.lineIdx) \
+            .join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
             .join(Person, Person.idx == GroupBelonging.personIdx) \
             .join(Mode, Mode.personIdx == Person.idx) \
             .join(Vehicle, Vehicle.idx == Mode.vehicleIdx) \
             .filter(Mode.transport == transports[i]) \
-            .filter(Vehicle.category == 'car')
+            .filter(Vehicle.category == 'car') \
+            .filter(Line.type == 'roadbed')
 
         if directions[i] == 'Right to left':
             q = q.filter(LineCrossing.rightToLeft == True)
@@ -601,20 +990,26 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
     # bins = [b for b in range(0, bins_end, interval)]
     # bins_ticks = [(bins[i] + bins[i+1])/2 for i in range(len(bins) - 1)]
 
+    if all(sl==[] for sl in speed_lists):
+        return 'No observation!'
+
     if ax == None:
         fig = plt.figure(tight_layout=True)
         ax = fig.add_subplot(111)
 
     for i in range(inputNo):
+        if speed_lists[i] == []:
+            continue
         speed_mean = np.mean(speed_lists[i])
         speed_std = np.std(speed_lists[i])
         density = gaussian_kde(speed_lists[i])
         x = np.linspace(min(speed_lists[i]), max(speed_lists[i]), 300)
         y = density(x)
 
-        ax.axvspan(speed_mean - speed_std, speed_mean + speed_std, alpha=0.1, color=plotColors[i])
-        ax.plot(x, y, label=labels[i], color=plotColors[i])
-        ax.axvline(x=speed_mean, ls='--', lw=1, color=plotColors[i])
+        ax.axvspan(speed_mean - speed_std, speed_mean + speed_std, label=f'Std of {labels[i]}',
+                   alpha=0.1, color=plotColors[i])
+        ax.plot(x, y, label=f'Pobability density', color=plotColors[i])
+        ax.axvline(x=speed_mean, label=f'Mean of {labels[i]}', ls='--', lw=1, color=plotColors[i])
 
         # hist, bin_edges = np.histogram(speed_lists[i], bins=bins, density=True)
         # bins_np = np.array(bins_ticks)
@@ -628,7 +1023,7 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
     ax.tick_params(axis='x', labelsize=8, rotation=0)
     ax.tick_params(axis='y', labelsize=7)
     ax.set_xlabel('Speed (km/h)', fontsize=8)
-    ax.set_ylabel('Density', fontsize=8)
+    ax.set_ylabel('Pobability density', fontsize=8)
     ax.legend(fontsize=5)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     userTitle = transports[0]
@@ -636,18 +1031,22 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
         userTitle = 'car'
     elif transports[0] == 'walking':
         userTitle = 'pedestrian'
-    ax.set_title('Probability density function of speed for {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
+
+    if unitIdxs[0] == 'all_lines':
+        title = f'Probability density function (PDF) of speed for all observed {userTitle}s'
+    else:
+        title = f'Probability density function (PDF) of speed for {userTitle}s {actionTypes[0]} #{unitIdxs[0]}'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=8)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
-    ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=8, color='gray',
-            ha='left', va='bottom',
-            transform=ax.transAxes,
-            weight="bold", alpha=.5)
+    watermark(ax)
 
 
+# ==============================================================
 def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
-                 ax=None, interval=20, alpha=1, colors=plotColors):
+                 ax=None, interval=20, alpha=1, colors=plotColors, siteName=None):
 
     inputNo = len(dbFiles)
     sessions = []
@@ -758,7 +1157,7 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         ticks.append('{}-{}'.format(bins[0][t].strftime('%H:%M'), bins[0][t + 1].strftime('%H:%M')))
 
     tick_rotation = 0
-    if len(bins[0]) - 1 >= 20:
+    if len(bins[0]) - 1 >= 10:
         tick_rotation = 45
 
     def set_box_color(bp, color):
@@ -793,7 +1192,7 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     ax.set_xticklabels(ticks)
     ax.set_xlim(-1, len(ticks) * 2)
 
-    ax.tick_params(axis='x', labelsize=8, rotation=tick_rotation)
+    ax.tick_params(axis='x', labelsize=6, rotation=tick_rotation)
     ax.tick_params(axis='y', labelsize=7)
     ax.set_xlabel('Time of day', fontsize=8)
     ax.set_ylabel('Speed (km/h)', fontsize=8)
@@ -803,14 +1202,18 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         userTitle = 'car'
     elif transports[0] == 'walking':
         userTitle = 'pedestrian'
-    ax.set_title('Speed of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
+
+    if unitIdxs[0] == 'all_lines':
+        title = f'Speed of all observed {userTitle}s every {interval} minute'
+    else:
+        title = f'Speed of {userTitle}s {actionTypes[0]} #{unitIdxs[0]} every {interval} minute'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=8)
+
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
-    ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=8, color='gray',
-            ha='left', va='bottom',
-            transform=ax.transAxes,
-            weight="bold", alpha=.5)
+    watermark(ax)
 
 
 # ==============================================================
@@ -1062,11 +1465,7 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
     ax.set_title('Speed of {}s {} #{}'.format(userTitle, actionTypes[0], unitIdxs[0]), fontsize=8)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
-    ax.text(0.03, 0.93, str('StudioProject'),
-            fontsize=9, color='gray',
-            ha='left', va='bottom',
-            transform=ax.transAxes,
-            weight="bold", alpha=.5)
+    watermark(ax)
 
 
 # ==============================================================
@@ -1358,11 +1757,7 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
 
         ax[i].set_title(labels[i], fontsize=6)
 
-        ax[i].text(0.03, 0.93, str('StudioProject'),
-                 fontsize=7, color='gray',
-                 ha='left', va='bottom',
-                 transform=ax[i].transAxes,
-                 weight="bold", alpha=.5)
+        watermark(ax[i])
 
     if axs is not None:
         fig = ax[0].get_figure()
@@ -1504,36 +1899,68 @@ def odMatrix(user, ax, session):
 
 
 #=====================================================================
-def pieChart(transport, attr, sTime, eTime, ax, session):
+def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, endTimes=None, siteName=None):
 
-    sDate = getObsStartEnd(session)[0].date()
-    startTime = datetime.datetime.combine(sDate, sTime)
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
 
-    eDate = getObsStartEnd(session)[1].date()
-    endTime = datetime.datetime.combine(eDate, eTime)
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
 
-    labels, sizes = getLabelSizePie(transport, attr, startTime, endTime, session)
-    explode = [0.01]*len(labels)
+    if axs is None:
+        fig = plt.figure(tight_layout=True)
+        fig.set_figheight(5)
+        fig.set_figwidth(10)
+        axs = fig.subplots(1, inputNo)#, sharex=True, sharey=True)
 
-    wedges, texts, autotexts = ax.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
-                                      shadow=False, startangle=90, textprops={'size': 16, 'weight':'bold'})
-    color_dict = {'walking':'forestgreen', 'cardriver':'salmon', 'bike':'deepskyblue',
-                  'scooter':'orange', 'skating':'pink'}
-    for pie_wedge in wedges:
-        # pie_wedge.set_edgecolor('white')
-        pie_wedge.set_facecolor(color_dict[pie_wedge.get_label()])
 
-    ax.axis('equal')
-    # ax.legend(wedges, labels,
-    #           title="title",
-    #           loc="upper right")
+    for i in range(inputNo):
+        if inputNo > 1:
+            ax = axs[i]
+        else:
+            ax = axs
+        ax.axis('equal')
+        session = sessions[i]
 
-    plt.setp(autotexts, size=12, weight="bold")
+        labels, sizes = getLabelSizePie(transport, attr, session)
+        explode = [0.02]*len(labels)
+
+        wedges, texts, autotexts = ax.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
+                                          shadow=False, startangle=90, textprops={'size': 10, 'weight':'normal'})
+        color_dict = {'walking':'springgreen', 'driving':'lightsalmon', 'cycling':'deepskyblue',
+                      'motorcycle':'orange', 'car':'orange', 'bus':'yellow', 'truck':'silver', 'other':'violet',
+                      'adult':'lightskyblue', 'child':'bisque', 'young_adult':'lightsteelblue',
+                      'teen':'lightcoral', 'senior':'plum', 'male':'deepskyblue', 'female':'lightpink',
+                      'unknown':'silver'}
+        for pie_wedge in wedges:
+            # pie_wedge.set_edgecolor('gray')
+            pie_wedge.set_facecolor(color_dict[pie_wedge.get_label()])
+
+        # ax.axis('equal')
+        # ax.legend(wedges, labels,
+        #           title="title",
+        #           loc="upper right")
+
+        ax.set_title(chartLabels[i], fontsize=12, y=-0.05, weight="bold")
+        plt.setp(autotexts, size=10, weight="normal")
+        if transport == 'all types':
+            suptitle = f'Mode share in {siteName}'
+        elif transport == 'cardriver':
+            suptitle = f'Vehicle types in {siteName}'
+        elif transport == 'walking':
+            suptitle = f'Pedestrians in {siteName}'
+    plt.suptitle(suptitle, fontsize=12, weight="bold")
+
+    # watermark(axs[0])
 
 
 # =====================================================================
 def generateReport(dbFileName, transport, actionType, unitIdx, direction, interval,
-                   start_time=None, end_time=None, showReport=False, ax=None, outputFile=None):
+                   start_time=None, end_time=None, showReport=False, ax=None, outputFile=None,
+                   mainDirection='both', labelRtoL=None, labelLtoR=None):
 
     session = connectDatabase(dbFileName)
 
@@ -1545,7 +1972,7 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
         start_obs_time = datetime.datetime.combine(obs_date, start_time)
         end_obs_time = datetime.datetime.combine(obs_date, end_time)
     else:
-        return
+        return 'The input arguments are not correct!'
 
     entP_peakHours = getPeakHours(start_obs_time, end_obs_time, interval)
 
@@ -1562,12 +1989,20 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
             q = session.query(LineCrossing.groupIdx, LineCrossing.speed) \
                 .filter(LineCrossing.lineIdx == unitIdx)
 
-        q = q.join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
+        q = q.join(Line, Line.idx == LineCrossing.lineIdx) \
+            .join(GroupBelonging, GroupBelonging.groupIdx == LineCrossing.groupIdx) \
             .join(Person, Person.idx == GroupBelonging.personIdx) \
             .join(Mode, Mode.personIdx == Person.idx) \
             .filter(Mode.transport == transport) \
             .filter(LineCrossing.instant >= start_obs_time) \
             .filter(LineCrossing.instant < end_obs_time)
+
+        if transport != 'walking':
+            q = q.join(Vehicle, Vehicle.idx == Mode.vehicleIdx)
+
+        if transport == 'cardriver':
+            q = q.filter(Line.type == 'roadbed')
+            # .filter(Vehicle.category == 'car')
 
         if direction == 'Right to left':
             q = q.filter(LineCrossing.rightToLeft == True)
@@ -1583,18 +2018,22 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
     if unitIdx == 'all_lines':
         q = q.group_by(Person.idx)
 
+    if q.count() == 0:
+        err = 'No observation!'
+        return err
+
     if transport == 'walking':
 
         if 'line' in actionType.split(' '):
-            indicators = ['No. of all people passing through',  # 0
+            indicators = ['No. of all pedestrians',  # 0
                           'No. of females',  # 1
                           'No. of males',  # 2
                           'No. of children',  # 3
                           'No. of elderly people',  # 4
                           'No. of people with pet',  # 5
                           'No. of disabled people',  # 6
-                          'Flow of all people (ped/h)',  # 7
-                          'No of all groups',  # 8
+                          'Flow of pedestrians (ped/h)',  # 7
+                          'No. of all groups',  # 8
                           'No. of groups with size = 1',  # 9
                           'No. of groups with size = 2',  # 10
                           'No. of groups with size = 3',  # 11
@@ -1691,17 +2130,26 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                     else:
                         indDf.loc[ind, p] = '{}'.format(0)
 
+                elif i == 13:
+                    no_road_peak = q_all_peaks.filter(Line.type == 'roadbed').count()
+                    pct = round((no_road_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_road_peak, pct)
+
 
 
     elif transport == 'cardriver':
         if 'line' in actionType.split(' '):
-            indicators = ['No. of all vehicles passing through',   # 0
-                          'Flow of passing vehicles (veh/h)', # 1
-                          'Speed average (km/h)',    # 2
-                          'Speed standard deviation (km/h)',  # 3
-                          'Speed median (km/h)',  # 4
-                          'Speed 85th percentile (km/h)',  # 5
-                          'Percent of drivers comply with speed limit' #6
+            indicators = ['No. of all vehicles',   # 0
+                          f'No. of vehicles towards {labelLtoR}',  # 1
+                          f'No. of vehicles towards {labelRtoL}',  # 2
+                          f'Flow of vehicles towards {labelLtoR} (veh/h)', # 3
+                          f'Flow of vehicles towards {labelRtoL} (veh/h)',  # 4
+                          f'Flow of all vehicles (veh/h)', # 5
+                          'Speed: average (km/h)',    # 6
+                          'Speed: std (km/h)',  # 7
+                          'Speed: median (km/h)',  # 8
+                          'Speed: 85th percentile (km/h)',  # 9
+                          'Percent of drivers comply with speed limit' # 10
                           ]
 
         no_all_vehs = q.count()
@@ -1740,23 +2188,41 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                         pct = round((no_all_peak / noAll) * 100, 1) if noAll != 0 else 0
                         indDf.loc[ind, p] = '{} ({}%)'.format(no_all_peak, pct)
 
-                elif i == 1:
+                elif i == 1 and mainDirection == 'both':
+                    no_lToR_peak = q_all_peaks.filter(LineCrossing.rightToLeft == False).count()
+                    pct = round((no_lToR_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_lToR_peak, pct)
+
+                elif i == 2 and mainDirection == 'both':
+                    no_rToL_peak = q_all_peaks.filter(LineCrossing.rightToLeft == True).count()
+                    pct = round((no_rToL_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_rToL_peak, pct)
+
+                elif i ==3 and mainDirection == 'both':
+                    no_lToR_peak = q_all_peaks.filter(LineCrossing.rightToLeft == False).count()
+                    indDf.loc[ind, p] = '{}'.format(round(no_lToR_peak / duration_hours, 1))
+
+                elif i == 4 and mainDirection == 'both':
+                    no_rToL_peak = q_all_peaks.filter(LineCrossing.rightToLeft == True).count()
+                    indDf.loc[ind, p] = '{}'.format(round(no_rToL_peak / duration_hours, 1))
+
+                elif i == 5 and mainDirection != 'both':
                     indDf.loc[ind, p] = '{}'.format(round(no_all_peak / duration_hours, 1))
 
-                elif 1 < i < 6:
+                elif 5 < i < 10:
                     rec_list = q_all_peaks.all()
                     if rec_list != []:
                         if unitIdx == 'all_lines':
                             speed_list = [i[1]/i[2] for i in rec_list if i[1] != None]
                         else:
                             speed_list = [i[1] for i in rec_list if i[1] != None]
-                        if i == 2:
+                        if i == 6:
                             stat_val = round(np.mean(speed_list), 1)
-                        elif i == 3:
+                        elif i == 7:
                             stat_val = round(np.std(speed_list), 1)
-                        elif i == 4:
+                        elif i == 8:
                             stat_val = round(np.median(speed_list), 1)
-                        elif i == 5:
+                        elif i == 9:
                             stat_val = round(np.percentile(speed_list, 85), 1)
                     else:
                         stat_val = 0
@@ -1765,11 +2231,12 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
 
     elif transport == 'cycling':
         if 'line' in actionType.split(' '):
-            indicators = ['No. of all cyclists',    # 0
-                          'No. of cyclists riding on sidewalk',     # 1
-                          'No. of cyclists riding against traffic', # 2
-                          'Flow of all bikes (bik/h)',  # 3
-                          'No. of female cyclists'  #4
+            indicators = ['No. of all cyclists',  # 0
+                          'Flow of cyclists (bik/h)',  # 1
+                          'Cyclists riding on sidewalk',  # 2
+                          'Cyclists riding against traffic',  # 3
+                          'No. of female cyclists',  #4
+                          'No. of children cycling'  # 5
                           ]
 
         no_all_biks = q.count()
@@ -1809,30 +2276,39 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                         indDf.loc[ind, p] = '{} ({}%)'.format(no_all_peak, pct)
 
                 elif i == 1:
-                    q_lineType_peak = q_all_peaks.join(Line, Line.idx == LineCrossing.lineIdx).\
-                        filter(Line.type == 'sidewalk')
+                    no_all_peak = q_all_peaks.count()
+                    flow_all_peak = round(no_all_peak / duration_hours, 1)
+                    indDf.loc[ind, p] = '{}'.format(flow_all_peak)
+
+                elif i == 2:
+                    q_lineType_peak = q_all_peaks.filter(Line.type == 'sidewalk')
                     no_sdwk_peak = q_lineType_peak.count()
                     pct = round((no_sdwk_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_sdwk_peak, pct)
 
-                # elif i ==2:
-                #     q_against = q_all_peaks.join(Site_ODs, Bike_obs.originId == Site_ODs.id) \
-                #         .filter(Site_ODs.direction == 'end_point')
-                #
-                #     no_agst_peak = q_against.count()
-                #     pct = round((no_agst_peak / noAll) * 100, 1) if noAll != 0 else 0
-                #     indDf.loc[ind, p] = '{} ({}%)'.format(no_agst_peak, pct)
-
-                elif i == 3:
-                    no_all_peak = q_all_peaks.count()
-                    flow_all_peak = round(no_all_peak / duration_hours, 1)
-                    indDf.loc[ind, p] = '{}'.format(flow_all_peak)
+                elif i ==3:
+                    if mainDirection == 'both':
+                        continue
+                    elif mainDirection == 'right-to-left':
+                        against_tf = False
+                    elif mainDirection == 'left-to-right':
+                        against_tf = True
+                    q_against = q_all_peaks.filter(LineCrossing.rightToLeft == against_tf)
+                    no_agst_peak = q_against.count()
+                    pct = round((no_agst_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_agst_peak, pct)
 
                 elif i == 4:
                     q_femaleCyclist_peak = q_all_peaks.filter(Person.gender == 'female')
                     no_femCylist_peak = q_femaleCyclist_peak.count()
                     pct = round((no_femCylist_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_femCylist_peak, pct)
+
+                elif i == 5:
+                    q_childCyclist_peak = q_all_peaks.filter(Person.age == 'child')
+                    no_childCylist_peak = q_childCyclist_peak.count()
+                    pct = round((no_childCylist_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_childCylist_peak, pct)
 
 
     elif transport == 'Activity':
@@ -1965,6 +2441,9 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                 if parts[1] == '(100.0%)':
                     indDf.loc[i, c] = '{} ({}%)'.format(parts[0], 100)
 
+    # ----- Deleting second and last column
+    indDf = indDf.drop([indDf.columns[1], indDf.columns[-1]], axis=1)
+
     if (showReport == True and ax == None) or outputFile != None:
         row_num, col_num = indDf.shape
 
@@ -2020,7 +2499,9 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                              loc='center')
 
         the_table.auto_set_font_size(False)
-        the_table.set_fontsize(5)
+        the_table.set_fontsize(6)
+
+        # the_table.scale(1, 1.5)
 
         # ax.text(-0.22, 0.85, str('StudioProject'),
         #         fontsize=7, color='gray',
@@ -2253,26 +2734,32 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
     return log
 
 # =====================================================================
-def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all'):
+def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelRtoL=None, labelLtoR=None):
     plt.ioff()
     # fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
     # ax = fig.add_subplot(111)
     transportType = ['cardriver', 'cycling', 'walking']
     actionType = ['crossing line', 'entering zone', 'exiting zone']
     directionTypes = ['both', 'Right to left', 'Left to right']
+    attrTransitList = ['age', 'gender', 'category']
+    attrActivityList = ['age', 'gender', 'activity']
 
     con = sqlite3.connect(metaDataFile)
     cur = con.cursor()
 
-    # Check if database is a metadata file
+    # ---------------- Check if database is a metadata file -------------------
     cur.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='video_sequences' ''')
     if cur.fetchone()[0] == 0:
         return 'The selected database is NOT a metadata file! Select a proper file.'
 
+    mainDirections = {}
     if site == 'all':
-        cur.execute('SELECT name FROM sites')
-        sites = cur.fetchall()
-        site = [s[0] for s in sites]
+        cur.execute('SELECT name, description FROM sites')
+        sites_dirs = cur.fetchall()
+        site = [s[0] for s in sites_dirs]
+        direc = [s[1] for s in sites_dirs]
+        for i, s in enumerate(site):
+            mainDirections[s] = direc[i]
     else:
         site = [site]
 
@@ -2298,53 +2785,414 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all'):
 
             site_camView[s][camView] = Path(metaDataFile).parent/s/Path(homoFile[0][0]).parent
 
+    # ========================== FUNCTION Folders ==========================
+    transit_path = f'{outputFolder}/Transit'
+    access_path = f'{outputFolder}/Access'
+    place_path = f'{outputFolder}/Place'
+
+    # ========================== ACROSS ALL SITES ==========================
+    allSitesTransit_path = f'{transit_path}/Across all sites'
+    allSitesAccess_path = f'{access_path}/Across all sites'
+    allSitesPlace_path = f'{place_path}/Across all sites'
+
+    Path(allSitesTransit_path).mkdir(parents=True, exist_ok=True)
+    Path(allSitesAccess_path).mkdir(parents=True, exist_ok=True)
+    Path(allSitesPlace_path).mkdir(parents=True, exist_ok=True)
+
+    vehicleDbfileList = []
+    vehicleSiteNames = []
+    vehicleDirections = []
+
+    walkCycDbfileList = []
+    walkCycSiteNames = []
+    walkCycDirections = []
+
     for site in site_camView.keys():
+
+        # ========================== TRANSIT Folders =========================
+        transitCount_path = f'{transit_path}/{site}/Number of users over time'
+        transitCountAllmodes_path = f'{transitCount_path}/All modes'
+        Path(transitCountAllmodes_path).mkdir(parents=True, exist_ok=True)
+        transitSpeed_path = f'{transit_path}/{site}/Speed of users over time'
+
+        # ========================== ACCESS Folders ==========================
+        accessCount_path = f'{access_path}/{site}/Number of users over time'
+
+        # ========================== PLACE Folders ==========================
+        activitiesCount_path = f'{place_path}/{site}/Number of activities over time'
+        # Path(transit_path).mkdir(parents=True, exist_ok=True)
+
+        # ========================== Creat Folders ==========================
+        for transport in transportType:
+            transitCountMode_path = f'{transitCount_path}/{transport}'
+            Path(transitCountMode_path).mkdir(parents=True, exist_ok=True)
+
+            transitSpeedMode_path = f'{transitSpeed_path}/{transport}'
+            Path(transitSpeedMode_path).mkdir(parents=True, exist_ok=True)
+
+            accessCountMode_path = f'{accessCount_path}/{transport}'
+            Path(accessCountMode_path).mkdir(parents=True, exist_ok=True)
+
+
+        # if site != 'pratt':
+        #     continue
+
         dbFiles = []
         labels = []
         for view in site_camView[site].keys():
-            dbFilePath = site_camView[site][view]/'iframework.sqlite'
+            dbFilePath = site_camView[site][view]/f'{site}.sqlite'
             if dbFilePath.exists():
-                Path(outputFolder + '/' + site).mkdir(exist_ok=True)
+                # Path(outputFolder + '/' + site).mkdir(exist_ok=True)
                 dbFiles.append(str(dbFilePath))
-                labels.append(str(view))
+                labels.append(str(view).capitalize())
 
                 current_session = connectDatabase(str(dbFilePath))
-                unitIdx_line = [str(id[0]) for id in current_session.query(Line.idx).all()]
-                unitIdx_line.insert(0, 'all_lines')
-                unitIdx_zone = [str(id[0]) for id in current_session.query(Zone.idx).all()]
+                unitIdx_line = [[str(id[0]), id[1].name]
+                                for id in current_session.query(Line.idx, Line.type).all()]
+                unitIdx_line.insert(0, ['all_lines', 'all_types'])
+                unitIdx_zone = [[str(id[0]), id[1].name]
+                                for id in current_session.query(Zone.idx, Zone.type).all()]
             else:
                 continue
 
         if dbFiles == []:
             continue
 
+        for dir in ['South', 'North']:
+            vehicleDbfileList.append(dbFiles)
+            vehicleSiteNames.append(site.capitalize() + f' ({dir})')
+
+        walkCycDbfileList.append(dbFiles)
+        walkCycSiteNames.append(site.capitalize())
+
+        # ++++++++++++++++++++++ PDF all modes plots ++++++++++++++++++++++
+        for i, dbFile in enumerate(dbFiles):
+            fig, ax = plt.subplots(tight_layout=True)
+            err = transportModePDF([dbFile]*3, ['Vehicle', 'Pedestrian', 'Cyclist'],
+                                   ['cardriver', 'walking', 'cycling'],
+                                   [actionType[0], actionType[0], actionType[0]],
+                                   ['all_lines', 'all_lines', 'all_lines'],
+                                   ['both', 'both', 'both'],
+                                   ax=ax,
+                                   siteName=f'{site.capitalize()} ({labels[i]})',
+                                   colors=[userTypeColors[1], userTypeColors[2], userTypeColors[4]])
+            if err == None:
+                plt.savefig(f'{transitCountAllmodes_path}/PDF_All-modes_{labels[i].capitalize()}_{site.capitalize()}.pdf')
+            plt.close(fig)
+
+        # ========================== PLACE FUNCTION ==========================
+        Path(activitiesCount_path).mkdir(parents=True, exist_ok=True)
+        for attr in attrActivityList:
+            fig, ax = plt.subplots(tight_layout=True)
+            err = stackedHistActivity(dbFiles, labels, attr, ax=ax, interval=60, colors=plotColors,
+                                      siteName=site.capitalize())
+            if err == None:
+                plt.savefig(f'{activitiesCount_path}/Activities_by-{attr}_{site.capitalize()}.pdf')
+            plt.close(fig)
+
+        # ========================== Pie chart, MODE SHARE  ==========================
+        fig = plt.figure(tight_layout=True)
+        fig.set_figheight(5)
+        fig.set_figwidth(10)
+        axs = fig.subplots(1, 2)
+
+        err = pieChart(dbFiles, labels, 'all types', 'transport', axs=axs, siteName=site.capitalize())
+
+        if err == None:
+            plt.savefig(
+                f'{transitCountAllmodes_path}/Pie_Mode-share_Before-after_{site.capitalize()}.pdf')
+        plt.close(fig)
+
+        # ========================== Pie chart, VEHICLE Type  ==========================
+        fig = plt.figure(tight_layout=True)
+        fig.set_figheight(5)
+        fig.set_figwidth(10)
+        axs = fig.subplots(1, 2)
+
+        err = pieChart(dbFiles, labels, 'cardriver', 'category', axs=axs, siteName=site.capitalize())
+        if err == None:
+            plt.savefig(
+                f'{transitCount_path}/cardriver/Pie_Vehicle-type_Before-after_{site.capitalize()}.pdf')
+        plt.close(fig)
+
+        # ========================== Pie chart, PEDESTRIAN age  ==========================
+        fig = plt.figure(tight_layout=True)
+        fig.set_figheight(5)
+        fig.set_figwidth(10)
+        axs = fig.subplots(1, 2)
+
+        err = pieChart(dbFiles, labels, 'walking', 'age', axs=axs, siteName=site.capitalize())
+        if err == None:
+            plt.savefig(
+                f'{transitCount_path}/walking/Pie_Pedestrian-age_Before-after_{site.capitalize()}.pdf')
+        plt.close(fig)
+
+        # ========================== Pie chart, PEDESTRIAN gender  ==========================
+        fig = plt.figure(tight_layout=True)
+        fig.set_figheight(5)
+        fig.set_figwidth(10)
+        axs = fig.subplots(1, 2)
+
+        err = pieChart(dbFiles, labels, 'walking', 'gender', axs=axs, siteName=site.capitalize())
+        if err == None:
+            plt.savefig(
+                f'{transitCount_path}/walking/Pie_Pedestrian-gender_Before-after_{site.capitalize()}.pdf')
+        plt.close(fig)
+
+        #--------------------------------------------------------------------
         for transport in transportType:
-            Path(outputFolder + '/' + site + '/' + transport).mkdir(exist_ok=True)
-            transports = [transport]*len(dbFiles)
+            transports = [transport] * len(dbFiles)
+
+            # transitCountMode_path = f'{transitCount_path}/{transport}'
+            # Path(transitCountMode_path).mkdir(parents=True, exist_ok=True)
+            #
+            # accessCountMode_path = f'{accessCount_path}/{transport}'
+            # Path(accessCountMode_path).mkdir(parents=True, exist_ok=True)
+
+            # if transport == 'cardriver':
+            #     transitSpeedMode_path = f'{transitSpeed_path}/{transport}'
+            #     Path(transitSpeedMode_path).mkdir(parents=True, exist_ok=True)
+
+            # ++++++++++++++++++++++ PDF all observed users Before-vs-After ++++++++++++++++++++++
+            fig, ax = plt.subplots(tight_layout=True)
+            err = transportModePDF(dbFiles, labels, transports,
+                                   [actionType[0], actionType[0]],
+                                   ['all_lines', 'all_lines'],
+                                   ['both', 'both'],
+                                   ax=ax,
+                                   siteName=site.capitalize(),
+                                   colors=plotColors)
+            if err == None:
+                plt.savefig(
+                    f'{transitCount_path}/{transport}/PDF_Before-after_All-observed-{transport}_{site.capitalize()}.pdf')
+            plt.close(fig)
+
+            # ++++++++++++++++++++++ TRANSIT Stacked plots ++++++++++++++++++++++
+            for attr in attrTransitList:
+                fig, ax = plt.subplots(tight_layout=True)
+                err = stackedHistTransport(dbFiles, labels, transports, [actionType[0], actionType[0]],
+                                   ['all_lines', 'all_lines'], ['both', 'both'], attr, ax=ax, interval=60,
+                                           colors=plotColors, siteName=site.capitalize())
+                if err == None:
+                    plt.savefig(
+                        f'{transitCount_path}/{transport}/Stacked_All-lines_{transport}_by-{attr}_{site.capitalize()}.pdf')
+                plt.close(fig)
+
+            # ++++++++++++++++++++++ Indicator reports ++++++++++++++++++++++
+            for i, dbFile in enumerate(dbFiles):
+                # if transport in ['walking', 'cycling']:
+                outputFile = f'{transitCount_path}/{transport}/Table_{labels[i]}_{transport}_{site.capitalize()}.pdf'
+                generateReport(dbFile, transport, actionType[0], 'all_lines', 'both', 120,
+                               outputFile=outputFile, mainDirection=mainDirections[site],
+                               labelRtoL='south', labelLtoR='north')
+                # elif transport == 'cardriver':
+                #     for direction in directionTypes:
+                #         outputFile = f'{transitCount_path}/{transport}/Table_{labels[i]}_{transport}_{direction}_{site.capitalize()}.pdf'
+                #         generateReport(dbFile, transport, actionType[0], 'all_lines', direction, 120,
+                #                        outputFile=outputFile, mainDirection=mainDirections[site],
+                #                        labelRtoL='south', labelLtoR='north')
+
+            # ------------------------------------------------------------------
             for action in actionType:
-                Path(outputFolder + '/' + site + '/' + transport+ '/' + action).mkdir(exist_ok=True)
                 actions = [action]*len(dbFiles)
+
                 if 'line' in action.split(' '):
                     unitIdx_list = unitIdx_line
                 elif 'zone' in action.split(' '):
                     unitIdx_list = unitIdx_zone
+
                 for unitIdx in unitIdx_list:
-                    unitIdxs = [unitIdx]*len(dbFiles)
+                    unitIdxs = [unitIdx[0]]*len(dbFiles)
+                    if 'zone' in action.split(' ') and transport == 'cardriver':
+                        fig, ax = plt.subplots(tight_layout=True)
+                        err = tempDistHist(dbFiles, labels, transports, actions,
+                                           unitIdxs, ax=ax, interval=30, siteName=site.capitalize())
+                        if err == None:
+                            plt.savefig(
+                                f'{accessCount_path}/{transport}/Zone_{unitIdx[0]}_{unitIdx[1]}_{action}_{transport}_{site.capitalize()}.pdf')
+                        plt.close(fig)
+                        continue
+
                     for direction in directionTypes:
                         directions = [direction]*len(dbFiles)
+
+                        # --------------- Number of Users Over Time ------------------------
                         fig, ax = plt.subplots(tight_layout=True)
-
                         err = tempDistHist(dbFiles, labels, transports, actions,
-                                           unitIdxs, directions, ax, 15)
-
+                                           unitIdxs, directions, ax, 20, siteName=site.capitalize())
                         if err == None:
-                            plt.savefig('{}/{}/{}/{}/{}_{}.pdf'.format(outputFolder, site, transport, action,
-                                                                       unitIdx, direction))
-                            plt.close(fig)
-                        else:
-                            plt.close(fig)
-                            continue
+                            if unitIdx[1] == 'adjoining_ZOI':
+                                save_path = f'{accessCount_path}/{transport}'
+                            else:
+                                save_path = f'{transitCount_path}/{transport}'
 
+                            if 'line' in action.split(' '):
+                                plt.savefig(
+                                    f'{save_path}/L-{unitIdx[0]}_{unitIdx[1]}_Dir-{direction}_{transport}_{site.capitalize()}.pdf')
+
+                        plt.close(fig)
+
+                        # --------------- Speed of Users Over Time ------------------------
+                        # +++++++++++++++ Speed Probability density function ++++++++++++++
+                        fig, ax = plt.subplots(tight_layout=True)
+                        err = speedHistogram(dbFiles, labels, transports, actions,
+                                           unitIdxs, directions, ax, 15, siteName=site.capitalize())
+                        if err == None:
+                            plt.savefig(
+                                f'{transitSpeed_path}/{transport}/PDF_L-{unitIdx[0]}_Dir-{direction}_{transport}_{site.capitalize()}.pdf')
+                        plt.close(fig)
+
+                        # +++++++++++++++++++++++++ Speed Box Plot ++++++++++++++++++++++++
+                        fig, ax = plt.subplots(tight_layout=True)
+                        err = speedBoxPlot(dbFiles, labels, transports, actions,
+                                             unitIdxs, directions, ax, 60, siteName=site.capitalize())
+                        if err == None:
+                            plt.savefig(
+                                f'{transitSpeed_path}/{transport}/Box_L-{unitIdx[0]}_Dir-{direction}_{transport}_{site.capitalize()}.pdf')
+                        plt.close(fig)
+
+    for i in range(len(walkCycSiteNames)):
+        vehicleDirections.append('Right to left')
+        vehicleDirections.append('Left to right')
+        walkCycDirections.append('both')
+
+    # ================= Flow of users across all sites ============================
+    fig, ax = plt.subplots(tight_layout=True)
+    err = sitesBAtransport(vehicleDbfileList, vehicleSiteNames, 'cardriver', vehicleDirections, ax=ax)
+    if err == None:
+        plt.savefig(f'{allSitesTransit_path}/Flow-vehicles_Before-after_All-sites.pdf')
+    plt.close(fig)
+
+    for transit in ['walking', 'cycling']:
+        fig, ax = plt.subplots(tight_layout=True)
+        err = sitesBAtransport(walkCycDbfileList, walkCycSiteNames, transit, walkCycDirections, ax=ax)
+        if err == None:
+            plt.savefig(f'{allSitesTransit_path}/Flow-{transit}_Before-after_All-sites.pdf')
+        plt.close(fig)
+
+    # =================== Number of vehicles over time across all sites =============
+    vehicleDbfilesBefore = [i[0] for i in vehicleDbfileList]
+    vehicleDbfilesAfter = [i[1] for i in vehicleDbfileList]
+
+    fig, ax = plt.subplots(tight_layout=True)
+    err = tempDistHist(vehicleDbfilesBefore, vehicleSiteNames, ['cardriver']*len(vehicleSiteNames),
+                       ['crossing line']*len(vehicleSiteNames), ['all_lines']*len(vehicleSiteNames),
+                       vehicleDirections, ax, 20, siteName='all sites', drawMean=False)
+
+    if err == None:
+        plt.savefig(f'{allSitesTransit_path}/No-vehicles_Before_All-sites.pdf')
+    plt.close(fig)
+
+    fig, ax = plt.subplots(tight_layout=True)
+    err = tempDistHist(vehicleDbfilesAfter, vehicleSiteNames, ['cardriver'] * len(vehicleSiteNames),
+                       ['crossing line'] * len(vehicleSiteNames), ['all_lines'] * len(vehicleSiteNames),
+                       vehicleDirections, ax, 20, siteName='all sites', drawMean=False)
+    if err == None:
+        plt.savefig(f'{allSitesTransit_path}/No-vehicles_After_All-sites.pdf')
+    plt.close(fig)
+
+    # =================== Number of pedestrians and cyclists over time across all sites =============
+    walkCycDbfileBefore = [i[0] for i in walkCycDbfileList]
+    walkCycDbfileAfter = [i[1] for i in walkCycDbfileList]
+
+    for transit in ['walking', 'cycling']:
+        fig, ax = plt.subplots(tight_layout=True)
+        err = tempDistHist(walkCycDbfileBefore, walkCycSiteNames, [transit] * len(walkCycSiteNames),
+                           ['crossing line'] * len(walkCycSiteNames), ['all_lines'] * len(walkCycSiteNames),
+                           walkCycDirections, ax, 20, siteName='all sites', drawMean=False)
+        if err == None:
+            plt.savefig(f'{allSitesTransit_path}/No-{transit}_Before_All-sites.pdf')
+        plt.close(fig)
+
+    for transit in ['walking', 'cycling']:
+        fig, ax = plt.subplots(tight_layout=True)
+        err = tempDistHist(walkCycDbfileAfter, walkCycSiteNames, [transit] * len(walkCycSiteNames),
+                           ['crossing line'] * len(walkCycSiteNames), ['all_lines'] * len(walkCycSiteNames),
+                           walkCycDirections, ax, 20, siteName='all sites', drawMean=False)
+        if err == None:
+            plt.savefig(f'{allSitesTransit_path}/No-{transit}_After_All-sites.pdf')
+        plt.close(fig)
+
+
+    # ===================== Vehicles: R2L vs. L2R ==============================
+    for site in site_camView.keys():
+        for view in site_camView[site]:
+            dbFiles = [str(site_camView[site][view]/f'{site}.sqlite'),
+                       str(site_camView[site][view]/f'{site}.sqlite')]
+
+            fig, ax = plt.subplots(tight_layout=True)
+            err = tempDistHist(dbFiles, ['South', 'North'], ['cardriver', 'cardriver'],
+                               ['crossing line', 'crossing line'], ['all_lines', 'all_lines'],
+                               ['Right to left', 'Left to right'],
+                               ax=ax, interval=30, siteName=site.capitalize())
+            if err == None:
+                plt.savefig(
+                    f'{transit_path}/{site}/Number of users over time/cardriver/South-vs-North_{view}_Vehicles_{site.capitalize()}.pdf')
+            plt.close(fig)
+
+            # ++++++++++++++++++++++ PDF South v.s North in Before and After ++++++++++++++++++++++
+            fig, ax = plt.subplots(tight_layout=True)
+            err = transportModePDF(dbFiles, ['South', 'North'], ['cardriver', 'cardriver'],
+                                   ['crossing line', 'crossing line'], ['all_lines', 'all_lines'],
+                                   ['Right to left', 'Left to right'],
+                                   ax=ax,
+                                   siteName=site.capitalize(),
+                                   colors=plotColors)
+            if err == None:
+                plt.savefig(
+                    f'{transit_path}/{site}/Number of users over time/cardriver/PDF_South-vs-North_{view}_Vehicles_{site.capitalize()}.pdf')
+            plt.close(fig)
+
+        # ++++++++++++++++++++++ PDF Before v.s After in South and North  ++++++++++++++++++++++
+        dbFiles = []
+        labels = []
+        for view in site_camView[site]:
+            dbFiles.append(str(site_camView[site][view] /f'{site}.sqlite'))
+            labels.append(view)
+        for dir in ['Right to left', 'Left to right']:
+            fig, ax = plt.subplots(tight_layout=True)
+            err = transportModePDF(dbFiles, labels, ['cardriver', 'cardriver'],
+                                   ['crossing line', 'crossing line'], ['all_lines', 'all_lines'],
+                                   [dir, dir],
+                                   ax=ax,
+                                   siteName=site.capitalize(),
+                                   colors=plotColors)
+
+            if err == None:
+                if dir == 'Right to left':
+                    d = 'South'
+                else:
+                    d = 'North'
+                plt.savefig(
+                    f'{transit_path}/{site}/Number of users over time/cardriver/PDF_Before-after_{d}_Vehicles_{site.capitalize()}.pdf')
+            plt.close(fig)
+
+
+    # ------------------- Activities ACROSS ALL SITES --------------------------
+    fig, ax = plt.subplots(tight_layout=True)
+    err = sitesBAactivity(walkCycDbfileList, walkCycSiteNames, ax=ax)
+    if err == None:
+        plt.savefig(f'{allSitesPlace_path}/Rate-activities_Before-after_All_sites.pdf')
+    plt.close(fig)
+
+
+    print('Done! .....')
+
+# from indicators import batchPlots
+# from pathlib import Path
+# def rm_tree(pth):
+#     pth = Path(pth)
+#     for child in pth.glob('*'):
+#         if child.is_file():
+#             child.unlink()
+#         else:
+#             rm_tree(child)
+#     pth.rmdir()
+# metaDataFile = '/Users/abbas/Documents/PhD/video_files/metadata.sqlite'
+# outputFolder = '/Users/abbas/Desktop/plots'
+# if Path(outputFolder).exists():
+#     rm_tree(outputFolder)
+# batchPlots(metaDataFile, outputFolder)
 
 # =====================================================================
 def creatStreetusers(userType, lines, instants, speeds, groupSize):
@@ -2478,11 +3326,7 @@ def modeShareCompChart(dbFiles, labels, interval, axs=None):
         ax[i].yaxis.set_major_locator(MaxNLocator(integer=True))
         ax[i].legend(labels, loc='upper right', fontsize=5)
 
-        ax[i].text(0.03, 0.92, str('StudioProject'),
-                   fontsize=5, color='gray',
-                   ha='left', va='bottom',
-                   transform=ax[i].transAxes,
-                   weight="bold", alpha=.5)
+        watermark(ax[i])
     plt.suptitle('Comparison of transportation mode share', fontsize=8)
 
     # date1 = getObsStartEnd(sessions[0])[0].date()
@@ -2568,39 +3412,63 @@ def image_to_ground(img_points, homography):
 
 
 # =====================================================================
-def getLabelSizePie(transport, fieldName, startTime, endTime, session):
+def getLabelSizePie(transport, fieldName, session, startTime=None, endTime=None, threshold=0.02):
 
     if transport == 'all types':
         field_ = getattr(Mode, fieldName)
         q = session.query(field_, func.count(func.distinct(Mode.idx))) \
             .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
-            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
-            .filter(LineCrossing.instant >= startTime) \
-            .filter(LineCrossing.instant < endTime) \
-            .group_by(field_)
+            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx)
+
     elif transport == 'walking':
         field_ = getattr(Person, fieldName)
         q = session.query(field_, func.count(field_)) \
             .join(Mode, Person.idx == Mode.personIdx) \
             .filter(Mode.transport == transport) \
             .join(GroupBelonging, GroupBelonging.personIdx == Person.idx) \
-            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
-            .filter(LineCrossing.instant >= startTime) \
-            .filter(LineCrossing.instant < endTime) \
-            .group_by(field_)
+            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx)
+
     elif transport == 'cardriver':
         field_ = getattr(Vehicle, fieldName)
         q = session.query(field_, func.count(field_)) \
             .join(Mode, Vehicle.idx == Mode.vehicleIdx) \
             .filter(Mode.transport == transport) \
             .join(GroupBelonging, GroupBelonging.personIdx == Mode.personIdx) \
-            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx) \
-            .filter(LineCrossing.instant >= startTime) \
-            .filter(LineCrossing.instant < endTime) \
-            .group_by(field_)
+            .join(LineCrossing, LineCrossing.groupIdx == GroupBelonging.groupIdx)
+
+    if startTime != None and endTime != None:
+        q = q.filter(LineCrossing.instant >= startTime)\
+            .filter(LineCrossing.instant < endTime)
+
+    q = q.group_by(field_)
 
     labels = [i[0].name if not isinstance(i[0], str) else i[0] for i in q.all()]
     sizes = [int(i[1]) for i in q.all()]
+
+    sizes_percent = np.array(sizes) / np.sum(sizes)
+    other_indices = []
+    for i, s in enumerate(sizes_percent):
+        if s < threshold:
+            other_indices.append(i)
+
+    if len(other_indices) > 1:
+
+        other_sum = 0
+        for i in other_indices:
+            other_sum = other_sum + sizes[i]
+
+        sizes = [sizes[i] for i in range(len(sizes)) if not i in other_indices]
+        labels = [labels[i] for i in range(len(labels)) if not i in other_indices]
+
+        if round(other_sum / np.sum(sizes), 2) > 0:
+            sizes.append(other_sum)
+            labels.append('other')
+    elif len(other_indices) == 1:
+        if round(sizes[other_indices[0]] / np.sum(sizes), 2) == 0:
+            sizes = [sizes[i] for i in range(len(sizes)) if not i in other_indices]
+            labels = [labels[i] for i in range(len(labels)) if not i in other_indices]
+
+    labels = list(map(lambda x: x.replace('cardriver', 'driving'), labels))
 
     return labels, sizes
 
@@ -2616,8 +3484,14 @@ def getPeakHours(start_obs_time, end_obs_time, interval):
     key_config = '{} - {}'
     key_format = '%H:%M'
 
-    bins_start = ceil_time(start_obs_time, interval)
-    bins_end = ceil_time(end_obs_time, interval) - datetime.timedelta(minutes=interval)
+    if interval <= 60:
+        c_m = interval
+    else:
+        c_m = 60
+
+    bins_start = ceil_time(start_obs_time, c_m)
+    no_bins = (end_obs_time - bins_start).seconds // (interval*60)
+    bins_end = bins_start + datetime.timedelta(minutes=(interval*no_bins))
 
     key = key_config.format(start_obs_time.strftime(key_format), end_obs_time.strftime(key_format))
     peakHours[key] = [start_obs_time.time(), end_obs_time.time()]
@@ -2626,14 +3500,15 @@ def getPeakHours(start_obs_time, end_obs_time, interval):
     peakHours[key] = [start_obs_time.time(), bins_start.time()]
 
     bin_edge = bins_start
-    while bin_edge != bins_end:
+    for i in range(no_bins):
         bin_edge2 = bin_edge + datetime.timedelta(minutes=interval)
         key = key_config.format(bin_edge.strftime(key_format), bin_edge2.strftime(key_format))
         peakHours[key] = [bin_edge.time(), bin_edge2.time()]
         bin_edge = bin_edge2
 
-    key = key_config.format(bins_end.strftime(key_format), end_obs_time.strftime(key_format))
-    peakHours[key] = [bins_end.time(), end_obs_time.time()]
+    if bins_end < end_obs_time:
+        key = key_config.format(bins_end.strftime(key_format), end_obs_time.strftime(key_format))
+        peakHours[key] = [bins_end.time(), end_obs_time.time()]
 
     return peakHours
 
@@ -2901,11 +3776,19 @@ def getVideoMetadata(filename):
     return creationDatetime, width, height
 
 
+# =====================================================================
+def watermark(ax):
+    ax.text(0.02, 0.95, str('StudioProject'),
+            fontsize=8, color='gray',
+            ha='left', va='bottom',
+            transform=ax.transAxes,
+            weight="bold", alpha=.5)
 
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':
+    from indicators import transportModePDF
     dbFile1 = '/Users/abbas/Test_StudioProject/Hartland_2019.sqlite'
     dbFile2 = '/Users/abbas/Test_StudioProject/Hartland_2020.sqlite'
-    tempDistHist([dbFile1, dbFile2], ['2019', '2020'], ['cardriver', 'cardriver'],
-                 ['crossing line', 'crossing line'], ['1', '1'], ['both', 'both'], interval=15)
+    transportModePDF([dbFile1, dbFile2], ['2019', '2020'], ['cardriver', 'cardriver'],
+                     ['crossing line', 'crossing line'], ['1', '1'], ['both', 'both'])
 

@@ -3591,6 +3591,13 @@ class genReportWindow(QDialog):
 
         self.indicatorsDf = generateReport(dbFileName, transport, actionType, unitIdx, direction, interval)
 
+        if isinstance(self.indicatorsDf, str):
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Critical)
+            msg.setText(self.indicatorsDf)
+            msg.exec()
+            return
+
         norm_indDf = pd.DataFrame()
         for i in range(self.indicatorsDf.shape[0]):
             for j in range(self.indicatorsDf.shape[1]):
