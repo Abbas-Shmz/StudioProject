@@ -27,7 +27,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib.pyplot as plt
 
-from indicators import tempDistHist, stackedHistTransport, odMatrix, pieChart, generateReport, \
+from indicators import tempDistHist, stackedHistTransport, odMatrix, pieChart, generateReportTransit, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
     plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
     modeShareCompChart, speedHistogram, speedOverSpacePlot, speedSpaceTimePlot, batchPlots
@@ -3589,7 +3589,7 @@ class genReportWindow(QDialog):
         direction = self.directionCombobx.currentText()
         interval = int(self.intervalCombobx.currentText())
 
-        self.indicatorsDf = generateReport(dbFileName, transport, actionType, unitIdx, direction, interval)
+        self.indicatorsDf = generateReportTransit(dbFileName, transport, actionType, unitIdx, direction, interval)
 
         if isinstance(self.indicatorsDf, str):
             msg = QMessageBox()

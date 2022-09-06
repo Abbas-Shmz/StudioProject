@@ -59,7 +59,8 @@ else:
 # ==============================================================
 def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=None,
                  ax=None, interval=20, plotType='Line plot', alpha=1, colors=plotColors, siteName=None,
-                 drawMean=True):
+                 drawMean=True, smooth=False,
+                 titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
 
     inputNo = len(dbFiles)
     sessions = []
@@ -196,7 +197,7 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
 
             # ax.plot(time_ticks, hist, label=labels[l])
             #------------------------
-            if hist.min() == 0:
+            if not smooth:
                 ax.plot(time_ticks, hist, label=labels[l], color=plotColors[l])
             else:
                 date_np = np.array(time_ticks)
@@ -300,9 +301,9 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         xLabel = 'Time of day'
 
         # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
-        ax.tick_params(axis='x', labelsize=8, rotation=0)
-        ax.tick_params(axis='y', labelsize=7)
-        ax.set_xlabel(xLabel, fontsize=8)
+        ax.tick_params(axis='x', labelsize=xTickSize, rotation=0)
+        ax.tick_params(axis='y', labelsize=yTickSize)
+        ax.set_xlabel(xLabel, fontsize=xLabelSize)
 
         tm = transports[0]
         if transports[0] == 'cardriver':
@@ -312,19 +313,19 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         elif transports[0] == 'cycling':
             tm = 'cyclist'
 
-        ax.set_ylabel('No. of {}s'.format(tm), fontsize=8)
+        ax.set_ylabel('No. of {}s'.format(tm), fontsize=yLabelSize)
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
         if unitIdxs[0].split('_')[0] == 'all':
-            title = f'Number of all observed {tm}s every {interval} minutes'
+            title = f'No. of {tm}s every {interval} min.'
         else:
-            title = f'Number of {tm}s {actionTypes[0]} #{unitIdxs[0]} every {interval} minutes'
+            title = f'No. of {tm}s {actionTypes[0]} #{unitIdxs[0]} every {interval} min.'
         if siteName != None:
             title = f'{title} in {siteName}'
-        ax.set_title(title, fontsize=8)
+        ax.set_title(title, fontsize=titleSize)
 
         if not all(l == '' for l in labels):
-            ax.legend(loc='upper right', fontsize=6)
+            ax.legend(loc='best', fontsize=legendFontSize)
 
     elif plotType == 'Scatter plot':
 
@@ -345,8 +346,8 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         elif transports[1] == 'walking':
             tm2 = 'pedestrian'
 
-        ax.set_xlabel('Number of {}s ({})'.format(tm1, labels[0]), fontsize=8)
-        ax.set_ylabel('Number of {}s ({})'.format(tm2, labels[1]), fontsize=8)
+        ax.set_xlabel('No. of {}s ({})'.format(tm1, labels[0]), fontsize=8)
+        ax.set_ylabel('No. of {}s ({})'.format(tm2, labels[1]), fontsize=8)
         ax.set_title('Scatter plot of {}s {} #{}'.format(tm1, actionTypes[0], unitIdxs[0]),
                      fontsize=8)
         ax.axis('equal')
@@ -360,7 +361,8 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
 
 # ==============================================================
 def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directions=None,
-                 ax=None, siteName=None, alpha=1, colors=plotColors):
+                 ax=None, siteName=None, alpha=1, colors=plotColors,
+                     titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
     # TODO: Empirical peak hour
     inputNo = len(dbFiles)
     sessions = []
@@ -436,32 +438,32 @@ def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directi
     xLabel = 'Time of day'
 
     # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
-    ax.tick_params(axis='x', labelsize=8, rotation=0)
-    ax.tick_params(axis='y', labelsize=7)
-    ax.set_xlabel(xLabel, fontsize=8)
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=0)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel(xLabel, fontsize=xLabelSize)
 
     tm = transports[0]
-    if len(transports) == 1:
+    if len(transports) > 1 and transports[0] != transports[1]:
+        tm = 'street user'
+    else:
         if transports[0] == 'cardriver':
             tm = 'car'
         elif transports[0] == 'walking':
             tm = 'pedestrian'
         elif transports[0] == 'cycling':
             tm = 'cyclist'
-    else:
-        tm = 'street user'
 
-    ax.set_ylabel(f'Pobability density', fontsize=8)
+    ax.set_ylabel(f'Pobability density', fontsize=yLabelSize)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     if unitIdxs[0].split('_')[0] == 'all':
-        title = f'Pobability density function (PDF) of all observed {tm}s'
+        title = f'PDF of all observed {tm}s'
     else:
-        title = f'Pobability density function (PDF) of {tm}s {actionTypes[0]} #{unitIdxs[0]}'
+        title = f'PDF of {tm}s {actionTypes[0]} #{unitIdxs[0]}'
     if siteName != None:
         title = f'{title} in {siteName}'
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=titleSize)
     if not all(l == '' for l in labels):
-        ax.legend(loc='upper right', fontsize=6)
+        ax.legend(loc='best', fontsize=legendFontSize)
 
 
     ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
@@ -606,7 +608,7 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
     ax.set_ylabel(f'No. of {tm}s', fontsize=7)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
-    title = f'Number of {tm}s by {attr} every {interval} minute'
+    title = f'No. of {tm}s by {attr} every {interval} min.'
     if siteName != None:
         title = f'{title} in {siteName}'
     ax.set_title(title, fontsize=8)
@@ -628,7 +630,8 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
 
 # ==============================================================
 def sitesBAtransport(dbFileList, siteNames, transport, directions, BAlabels=['Before', 'After'],
-                      actionType='crossing line', unitIdxs='all_lines', ax=None, colors=plotColors):
+                      actionType='crossing line', unitIdxs='all_lines', ax=None, colors=plotColors,
+                     titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=6, yTickSize=6, legendFontSize=5):
     sitesNo = len(dbFileList)
     sites_sessions = []
     obs_durations = []
@@ -737,17 +740,17 @@ def sitesBAtransport(dbFileList, siteNames, transport, directions, BAlabels=['Be
     if len(siteNames) >= 20:
         tick_rotation = 45
 
-    ax.tick_params(axis='x', labelsize=6, rotation=tick_rotation)
-    ax.tick_params(axis='y', labelsize=6)
-    ax.set_xlabel('Name of sites', fontsize=7)
-    ax.set_ylabel(f'Number of {tm}s per hour', fontsize=7)
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel('Name of sites', fontsize=xLabelSize)
+    ax.set_ylabel(f'Number of {tm}s per hour', fontsize=yLabelSize)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
     title = f'Flow of {tm}s in all sites'
 
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=titleSize)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
-    ax.legend(loc="upper right", fontsize=5)
+    ax.legend(loc="upper right", fontsize=legendFontSize)
 
     watermark(ax)
 
@@ -950,7 +953,8 @@ def stackedHistActivity(dbFiles, labels, attribute,
 
 # ==============================================================
 def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
-                 ax=None, interval=20, alpha=1, colors=plotColors, ec='k', rwidth=0.9, siteName=None):
+                 ax=None, interval=20, alpha=1, colors=plotColors, ec='k', rwidth=0.9, siteName=None,
+                   titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
     inputNo = len(dbFiles)
     speed_lists = []
     # sessions = []
@@ -1020,11 +1024,11 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
         # # ax.hist(speed_lists[i], alpha=alpha, color=colors[i], ec=ec, label=labels[i],
         # #         rwidth=rwidth, bins=bins, density=True)
 
-    ax.tick_params(axis='x', labelsize=8, rotation=0)
-    ax.tick_params(axis='y', labelsize=7)
-    ax.set_xlabel('Speed (km/h)', fontsize=8)
-    ax.set_ylabel('Pobability density', fontsize=8)
-    ax.legend(fontsize=5)
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=0)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel('Speed (km/h)', fontsize=xLabelSize)
+    ax.set_ylabel('Pobability density', fontsize=yLabelSize)
+    ax.legend(fontsize=legendFontSize)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     userTitle = transports[0]
     if transports[0] == 'cardriver':
@@ -1033,12 +1037,12 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
         userTitle = 'pedestrian'
 
     if unitIdxs[0] == 'all_lines':
-        title = f'Probability density function (PDF) of speed for all observed {userTitle}s'
+        title = f'PDF of speed for all observed {userTitle}s'
     else:
-        title = f'Probability density function (PDF) of speed for {userTitle}s {actionTypes[0]} #{unitIdxs[0]}'
+        title = f'PDF of speed for {userTitle}s {actionTypes[0]} #{unitIdxs[0]}'
     if siteName != None:
         title = f'{title} in {siteName}'
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=titleSize)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
     watermark(ax)
@@ -1046,7 +1050,8 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
 
 # ==============================================================
 def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
-                 ax=None, interval=20, alpha=1, colors=plotColors, siteName=None):
+                 ax=None, interval=20, alpha=1, colors=plotColors, siteName=None,
+                 titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=6, yTickSize=7, legendFontSize=6):
 
     inputNo = len(dbFiles)
     sessions = []
@@ -1179,7 +1184,7 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         # draw temporary red and blue lines and use them to create a legend
         ax.plot([], c=colors[i], label=labels[i])
 
-    ax.legend(fontsize=5)
+    ax.legend(fontsize=legendFontSize)
 
     # ----------------------
     # locator = mdates.AutoDateLocator()
@@ -1192,10 +1197,10 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
     ax.set_xticklabels(ticks)
     ax.set_xlim(-1, len(ticks) * 2)
 
-    ax.tick_params(axis='x', labelsize=6, rotation=tick_rotation)
-    ax.tick_params(axis='y', labelsize=7)
-    ax.set_xlabel('Time of day', fontsize=8)
-    ax.set_ylabel('Speed (km/h)', fontsize=8)
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel('Time of day', fontsize=xLabelSize)
+    ax.set_ylabel('Speed (km/h)', fontsize=yLabelSize)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     userTitle = transports[0]
     if transports[0] == 'cardriver':
@@ -1204,12 +1209,12 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
         userTitle = 'pedestrian'
 
     if unitIdxs[0] == 'all_lines':
-        title = f'Speed of all observed {userTitle}s every {interval} minute'
+        title = f'Speed of all observed {userTitle}s every {interval} min.'
     else:
-        title = f'Speed of {userTitle}s {actionTypes[0]} #{unitIdxs[0]} every {interval} minute'
+        title = f'Speed of {userTitle}s {actionTypes[0]} #{unitIdxs[0]} every {interval} min.'
     if siteName != None:
         title = f'{title} in {siteName}'
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=titleSize)
 
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
@@ -1899,7 +1904,8 @@ def odMatrix(user, ax, session):
 
 
 #=====================================================================
-def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, endTimes=None, siteName=None):
+def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, endTimes=None, siteName=None,
+             titleSize=12, percTextSize=10, labelSize=10):
 
     inputNo = len(dbFiles)
     sessions = []
@@ -1929,7 +1935,8 @@ def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, e
         explode = [0.02]*len(labels)
 
         wedges, texts, autotexts = ax.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
-                                          shadow=False, startangle=90, textprops={'size': 10, 'weight':'normal'})
+                                          shadow=False, startangle=90,
+                                          textprops={'size': percTextSize, 'weight':'normal'})
         color_dict = {'walking':'springgreen', 'driving':'lightsalmon', 'cycling':'deepskyblue',
                       'motorcycle':'orange', 'car':'orange', 'bus':'yellow', 'truck':'silver', 'other':'violet',
                       'adult':'lightskyblue', 'child':'bisque', 'young_adult':'lightsteelblue',
@@ -1944,21 +1951,23 @@ def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, e
         #           title="title",
         #           loc="upper right")
 
-        ax.set_title(chartLabels[i], fontsize=12, y=-0.05, weight="bold")
-        plt.setp(autotexts, size=10, weight="normal")
+        ax.set_title(chartLabels[i], fontsize=titleSize, y=-0.05, weight="bold")
+        plt.setp(autotexts, size=labelSize, weight="normal")
         if transport == 'all types':
             suptitle = f'Mode share in {siteName}'
         elif transport == 'cardriver':
             suptitle = f'Vehicle types in {siteName}'
         elif transport == 'walking':
-            suptitle = f'Pedestrians in {siteName}'
-    plt.suptitle(suptitle, fontsize=12, weight="bold")
+            suptitle = f'Pedestrians by {attr} in {siteName}'
+        elif transport == 'cycling':
+            suptitle = f'Cyclists by {attr} in {siteName}'
+    plt.suptitle(suptitle, fontsize=titleSize, weight="bold")
 
     # watermark(axs[0])
 
 
 # =====================================================================
-def generateReport(dbFileName, transport, actionType, unitIdx, direction, interval,
+def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction, interval,
                    start_time=None, end_time=None, showReport=False, ax=None, outputFile=None,
                    mainDirection='both', labelRtoL=None, labelLtoR=None):
 
@@ -2311,121 +2320,6 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_childCylist_peak, pct)
 
 
-    elif transport == 'Activity':
-        indicators = ['Start time',  # 0
-                      'End time',    # 1
-                      'Duration'    # 2
-                      ]
-        q = session.query(Activity.activity) \
-                   .filter(Activity.startTime >= start_obs_time)\
-                   .filter(Activity.startTime < end_obs_time).distinct()
-
-        activity_dict = {}
-        for rec in q.all():
-            act_type = rec[0].name
-            activity_dict[act_type] = {'count': 0, 'actTotalTime': 0}
-
-        for p in entP_peakHours.keys():
-
-            if entP_peakHours[p] is None:
-                continue
-
-            lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
-            upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
-
-            duration = upperBound - lowerBound
-            duration_in_s = duration.total_seconds()
-            duration_hours = duration_in_s / 3600
-
-            q = session.query(Activity.activity, Activity.startTime, Activity.endTime) \
-                .join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx) \
-                .join(Person, Person.idx == GroupBelonging.personIdx) \
-                       .filter(Activity.startTime >= lowerBound) \
-                       .filter(Activity.startTime < upperBound)
-
-            for key in activity_dict.keys():
-                activity_dict[key]['count'] = 0
-                activity_dict[key]['actTotalTime'] = 0
-
-            for act in q.all():
-                act_type = act[0].name
-                activity_dict[act_type]['count'] += 1
-                activity_dict[act_type]['actTotalTime'] += (act[2] - act[1]).total_seconds()
-
-            total_acts = 0
-            total_time = 0
-            for val in activity_dict.values():
-                total_acts += val['count']
-                total_time += val['actTotalTime']
-
-            all_activity_dict = {'all activities': {'count': total_acts, 'actTotalTime':total_time}}
-            all_activity_dict.update(activity_dict)
-
-            # q_join_person = q.join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx)\
-            #     .join(Person, Person.idx == GroupBelonging.personIdx)
-            no_female_act = q.filter(Person.gender == 'female').count()
-            no_male_act = q.filter(Person.gender == 'male').count()
-            no_chld_act = q.filter(Person.age == 'child').count()
-            no_eldry_act = q.filter(Person.age == 'senior').count()
-
-            if p == indDf.columns[0]:
-                indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
-                                                        round((no_female_act / total_acts)*100, 1))
-                indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
-                                                        round((no_male_act / total_acts)*100, 1))
-                indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
-                                                        round((no_chld_act / total_acts) * 100, 1))
-                indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
-                                                        round((no_eldry_act / total_acts) * 100, 1))
-            else:
-                noAll = int(indDf.loc['No. of females doing activity'].iloc[0].split(' ')[0])
-                indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
-                         round((no_female_act / noAll) * 100, 1) if noAll != 0 else 0)
-
-                noAll = int(indDf.loc['No. of males doing activity'].iloc[0].split(' ')[0])
-                indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
-                         round((no_male_act / noAll) * 100,1) if noAll != 0 else 0)
-
-                noAll = int(indDf.loc['No. of children doing activity'].iloc[0].split(' ')[0])
-                indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
-                         round((no_chld_act / noAll) * 100,1) if noAll != 0 else 0)
-
-                noAll = int(indDf.loc['No. of elderly people doing activity'].iloc[0].split(' ')[0])
-                indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
-                         round((no_eldry_act / noAll) * 100,1) if noAll != 0 else 0)
-
-            for act in all_activity_dict.keys():
-                act_count = all_activity_dict[act]['count']
-                act_totalTime_min = round(all_activity_dict[act]['actTotalTime'] / 60, 1)
-
-                if act == 'all activities' and p == indDf.columns[0]:
-                    indDf.loc['No. of {}'.format(act), p] = '{}'.format(act_count)
-                elif act == 'all activities' and p != indDf.columns[0]:
-                    indDf.loc['No. of {}'.format(act), p] = '{} ({}%)'.format(act_count,
-                                           round((act_count / int(indDf.loc['No. of {}'
-                                           .format(act)].iloc[0].split(' ')[0]))*100, 1))
-                elif act != 'all activities' and p == indDf.columns[0]:
-                    indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
-                                                            round((act_count / total_acts)*100, 1))
-                elif act != 'all activities' and p != indDf.columns[0]:
-                    indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
-                                           round((act_count / int(indDf.loc['No. of people {}'
-                                           .format(act)].iloc[0].split(' ')[0]))*100, 1))
-                if act_totalTime_min > 0:
-                    indDf.loc['Total time of {} (min.)'.format(act), p] = \
-                        '{}'.format(act_totalTime_min)# if act_totalTime_min > 0 else 'NA')
-                    indDf.loc['Avg. time of {} (min.)'.format(act), p] = \
-                      '{}'.format(round(act_totalTime_min / total_acts, 1))# if act_totalTime_min > 0 else 'NA')
-                elif act_totalTime_min == 0 and 'Total time of {} (min.)'.format(act) in indDf.index:
-                    indDf.loc['Total time of {} (min.)'.format(act), p] = '{}'.format(0)
-                    indDf.loc['Avg. time of {} (min.)'.format(act), p] = '{}'.format(0)
-
-                indDf.loc['Rate of {} (act/h)'.format(act), p] = \
-                    '{}'.format(round(act_count / duration_hours, 1))
-
-
-
-
     indDf[indDf.isnull().values] = noDataSign
 
     # indDf.columns = [indDf.columns[0] + ' (% of all)',
@@ -2444,6 +2338,7 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
     # ----- Deleting second and last column
     indDf = indDf.drop([indDf.columns[1], indDf.columns[-1]], axis=1)
 
+    # ----------- Plotting the report ------------------
     if (showReport == True and ax == None) or outputFile != None:
         row_num, col_num = indDf.shape
 
@@ -2521,7 +2416,241 @@ def generateReport(dbFileName, transport, actionType, unitIdx, direction, interv
 
 
 # =====================================================================
-def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, directions, interval):
+def generateReportPlace(dbFileName, interval,start_time=None, end_time=None,
+                        showReport=False, ax=None, outputFile=None):
+
+    session = connectDatabase(dbFileName)
+
+    if start_time == None and end_time == None:
+        start_obs_time, end_obs_time = getObsStartEnd(session)
+
+    elif start_time != None and end_time != None:
+        obs_date = getObsStartEnd(session)[0].date()
+        start_obs_time = datetime.datetime.combine(obs_date, start_time)
+        end_obs_time = datetime.datetime.combine(obs_date, end_time)
+    else:
+        return 'The input arguments are not correct!'
+
+    entP_peakHours = getPeakHours(start_obs_time, end_obs_time, interval)
+
+    indDf = pd.DataFrame(columns=list(entP_peakHours.keys()))#, index=['Start time', 'End time', 'Duration'])
+
+    duration = end_obs_time - start_obs_time
+    duration_in_s = duration.total_seconds()
+    duration_hours = duration_in_s / 3600
+
+
+    indicators = ['Start time',  # 0
+                  'End time',    # 1
+                  'Duration'    # 2
+                  ]
+    q = session.query(Activity.activity) \
+               .filter(Activity.startTime >= start_obs_time)\
+               .filter(Activity.startTime < end_obs_time).distinct()
+
+    activity_dict = {}
+    for rec in q.all():
+        act_type = rec[0].name
+        activity_dict[act_type] = {'count': 0, 'actTotalTime': 0}
+
+    for p in entP_peakHours.keys():
+
+        if entP_peakHours[p] is None:
+            continue
+
+        lowerBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][0])
+        upperBound = datetime.datetime.combine(start_obs_time.date(), entP_peakHours[p][1])
+
+        duration = upperBound - lowerBound
+        duration_in_s = duration.total_seconds()
+        duration_hours = duration_in_s / 3600
+
+        q = session.query(Activity.activity, Activity.startTime, Activity.endTime) \
+            .join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx) \
+            .join(Person, Person.idx == GroupBelonging.personIdx) \
+                   .filter(Activity.startTime >= lowerBound) \
+                   .filter(Activity.startTime < upperBound)
+
+        for key in activity_dict.keys():
+            activity_dict[key]['count'] = 0
+            activity_dict[key]['actTotalTime'] = 0
+
+        for act in q.all():
+            act_type = act[0].name
+            activity_dict[act_type]['count'] += 1
+            activity_dict[act_type]['actTotalTime'] += (act[2] - act[1]).total_seconds()
+
+        total_acts = 0
+        total_time = 0
+        for val in activity_dict.values():
+            total_acts += val['count']
+            total_time += val['actTotalTime']
+
+        all_activity_dict = {'all activities': {'count': total_acts, 'actTotalTime':total_time}}
+        all_activity_dict.update(activity_dict)
+
+        # q_join_person = q.join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx)\
+        #     .join(Person, Person.idx == GroupBelonging.personIdx)
+        no_female_act = q.filter(Person.gender == 'female').count()
+        no_male_act = q.filter(Person.gender == 'male').count()
+        no_chld_act = q.filter(Person.age == 'child').count()
+        no_eldry_act = q.filter(Person.age == 'senior').count()
+
+        if p == indDf.columns[0]:
+            indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
+                                                    round((no_female_act / total_acts)*100, 1))
+            indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
+                                                    round((no_male_act / total_acts)*100, 1))
+            indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
+                                                    round((no_chld_act / total_acts) * 100, 1))
+            indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
+                                                    round((no_eldry_act / total_acts) * 100, 1))
+        else:
+            noAll = int(indDf.loc['No. of females doing activity'].iloc[0].split(' ')[0])
+            indDf.loc['No. of females doing activity', p] = '{} ({}%)'.format(no_female_act,
+                     round((no_female_act / noAll) * 100, 1) if noAll != 0 else 0)
+
+            noAll = int(indDf.loc['No. of males doing activity'].iloc[0].split(' ')[0])
+            indDf.loc['No. of males doing activity', p] = '{} ({}%)'.format(no_male_act,
+                     round((no_male_act / noAll) * 100,1) if noAll != 0 else 0)
+
+            noAll = int(indDf.loc['No. of children doing activity'].iloc[0].split(' ')[0])
+            indDf.loc['No. of children doing activity', p] = '{} ({}%)'.format(no_chld_act,
+                     round((no_chld_act / noAll) * 100,1) if noAll != 0 else 0)
+
+            noAll = int(indDf.loc['No. of elderly people doing activity'].iloc[0].split(' ')[0])
+            indDf.loc['No. of elderly people doing activity', p] = '{} ({}%)'.format(no_eldry_act,
+                     round((no_eldry_act / noAll) * 100,1) if noAll != 0 else 0)
+
+        for act in all_activity_dict.keys():
+            act_count = all_activity_dict[act]['count']
+            act_totalTime_min = round(all_activity_dict[act]['actTotalTime'] / 60, 1)
+
+            if act == 'all activities' and p == indDf.columns[0]:
+                indDf.loc['No. of {}'.format(act), p] = '{}'.format(act_count)
+            elif act == 'all activities' and p != indDf.columns[0]:
+                indDf.loc['No. of {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                       round((act_count / int(indDf.loc['No. of {}'
+                                       .format(act)].iloc[0].split(' ')[0]))*100, 1))
+            elif act != 'all activities' and p == indDf.columns[0]:
+                indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                                        round((act_count / total_acts)*100, 1))
+            elif act != 'all activities' and p != indDf.columns[0]:
+                indDf.loc['No. of people {}'.format(act), p] = '{} ({}%)'.format(act_count,
+                                       round((act_count / int(indDf.loc['No. of people {}'
+                                       .format(act)].iloc[0].split(' ')[0]))*100, 1))
+            if act_totalTime_min > 0:
+                indDf.loc['Total time of {} (min.)'.format(act), p] = \
+                    '{}'.format(act_totalTime_min)# if act_totalTime_min > 0 else 'NA')
+                indDf.loc['Avg. time of {} (min.)'.format(act), p] = \
+                  '{}'.format(round(act_totalTime_min / total_acts, 1))# if act_totalTime_min > 0 else 'NA')
+            elif act_totalTime_min == 0 and 'Total time of {} (min.)'.format(act) in indDf.index:
+                indDf.loc['Total time of {} (min.)'.format(act), p] = '{}'.format(0)
+                indDf.loc['Avg. time of {} (min.)'.format(act), p] = '{}'.format(0)
+
+            indDf.loc['Rate of {} (act/h)'.format(act), p] = \
+                '{}'.format(round(act_count / duration_hours, 1))
+
+    indDf[indDf.isnull().values] = noDataSign
+
+    # indDf.columns = [indDf.columns[0] + ' (% of all)',
+    #                  indDf.columns[1] + ' (% of item)',
+    #                  indDf.columns[2] + ' (% of item)',
+    #                  indDf.columns[3] + ' (% of item)']
+    indDf = indDf.replace(['0 (0.0%)', '0 (0%)'], 0)
+
+    for i in indDf.index:
+        for c in indDf.columns:
+            parts = str(indDf.loc[i, c]).split(' ')
+            if len(parts) > 1:
+                if parts[1] == '(100.0%)':
+                    indDf.loc[i, c] = '{} ({}%)'.format(parts[0], 100)
+
+    # ----- Deleting second and last column
+    indDf = indDf.drop([indDf.columns[1], indDf.columns[-1]], axis=1)
+
+    # ----------- Plotting the report ------------------
+    if (showReport == True and ax == None) or outputFile != None:
+        row_num, col_num = indDf.shape
+
+        if showReport == False:
+            plt.ioff()
+
+        if ax == None:
+            fig, ax = plt.subplots(tight_layout=True)  # , figsize=(6,2))
+            fig.patch.set_visible(False)
+            ax.axis('off')
+            fig.set_figheight(fig.get_figheight() * (0.0450937950937951 * (row_num + 1)))
+        else:
+            fig = ax.get_figure()
+
+        norm_indDf = pd.DataFrame()
+        for i in range(indDf.shape[0]):
+            for j in range(indDf.shape[1]):
+                if j == 0:
+                    norm_indDf.loc[i, j] = np.nan
+                    continue
+                val_str = str(indDf.iloc[i, j]).split(' ')[0]
+                if val_str.isdigit():
+                    value = int(val_str)
+                elif val_str.replace('.', '', 1).isdigit():
+                    value = float(val_str)
+                else:
+                    value = np.nan
+                norm_indDf.loc[i, j] = value
+            min_val = np.nanmin(norm_indDf.loc[i, :])
+            max_val = np.nanmax(norm_indDf.loc[i, :])
+            range_val = max_val - min_val
+            if range_val != 0:
+                norm_indDf.loc[i, :] = norm_indDf.loc[i, :].apply(lambda x: (x - min_val) / range_val)
+            else:
+                norm_indDf.loc[i, :] = 0
+
+        norm_indDf.iloc[:, 0] = np.nan
+
+        cmap = matplotlib.cm.get_cmap('Wistia')
+        cellColours = cmap(norm_indDf.values)
+
+        the_table = ax.table(cellText=indDf.values,
+                             cellLoc='center',
+                             cellColours=cellColours,
+                             colLabels=indDf.columns,
+                             colLoc='center',
+                             colColours=['lavender']*col_num,
+                             rowLabels=indDf.index,
+                             rowColours=['lavender']*row_num,
+                             rowLoc='right',
+                             # bbox=(0, 0, 1, 1),
+                             # edges='horizontal',
+                             loc='center')
+
+        the_table.auto_set_font_size(False)
+        the_table.set_fontsize(6)
+
+        # the_table.scale(1, 1.5)
+
+        # ax.text(-0.22, 0.85, str('StudioProject'),
+        #         fontsize=7, color='gray',
+        #         ha='left', va='bottom',
+        #         transform=ax.transAxes,
+        #         weight="bold", alpha=.5)
+
+        if outputFile != None:
+            plt.savefig(outputFile, bbox_inches='tight')
+            if showReport == False:
+                plt.close(fig)
+
+        if showReport == True:
+            plt.show()
+
+    return indDf
+
+
+
+# =====================================================================
+def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, directions, interval,
+                      showReport=False, ax=None, outputFile=None, mainDirection='both',
+                      labelRtoL=None, labelLtoR=None, streetFunction='transit'):
 
     session1 = connectDatabase(dbFiles[0])
     session2 = connectDatabase(dbFiles[1])
@@ -2538,10 +2667,16 @@ def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, direct
     else:
         end_time = last_obs_time2.time()
 
-    indDf1 = generateReport(dbFiles[0], transports[0], actionTypes[0], unitIdxs[0], directions[0], interval, start_time,
-                            end_time)
-    indDf2 = generateReport(dbFiles[1], transports[1], actionTypes[1], unitIdxs[1], directions[1], interval, start_time,
-                            end_time)
+    if streetFunction == 'transit':
+        indDf1 = generateReportTransit(dbFiles[0], transports[0], actionTypes[0], unitIdxs[0], directions[0],
+                                       interval, start_time, end_time, mainDirection=mainDirection,
+                                       labelRtoL=labelRtoL, labelLtoR=labelLtoR)
+        indDf2 = generateReportTransit(dbFiles[1], transports[1], actionTypes[1], unitIdxs[1], directions[1],
+                                       interval, start_time, end_time, mainDirection=mainDirection,
+                                       labelRtoL=labelRtoL, labelLtoR=labelLtoR)
+    elif streetFunction == 'place':
+        indDf1 = generateReportPlace(dbFiles[0], interval, start_time, end_time)
+        indDf2 = generateReportPlace(dbFiles[1], interval, start_time, end_time)
 
     indDf = pd.DataFrame()
     # indDf = indDf1.iloc[0:3, :].copy()
@@ -2601,6 +2736,71 @@ def compareIndicators(dbFiles, labels, transports, actionTypes, unitIdxs, direct
     #                  indDf.columns[1].split('(')[0][:-1] + ' [% of change]',
     #                  indDf.columns[2].split('(')[0][:-1] + ' [% of change]',
     #                  indDf.columns[3].split('(')[0][:-1] + ' [% of change]']
+
+    # ----------- Plotting the report ------------------
+    if (showReport == True and ax == None) or outputFile != None:
+        row_num, col_num = indDf.shape
+
+        if showReport == False:
+            plt.ioff()
+
+        if ax == None:
+            fig, ax = plt.subplots(tight_layout=True)  # , figsize=(6,2))
+            fig.patch.set_visible(False)
+            ax.axis('off')
+            fig.set_figheight(fig.get_figheight() * (0.0450937950937951 * (row_num + 1)))
+        else:
+            fig = ax.get_figure()
+
+        cellColours = pd.DataFrame()
+        for i in range(indDf.shape[0]):
+            for j in range(indDf.shape[1]):
+                # if j == 0:
+                #     norm_indDf.loc[i, j] = np.nan
+                #     continue
+                val_sign = str(indDf.iloc[i, j]).split(' ')[0][0]
+                if val_sign == '+':
+                    value = 'palegreen'
+                elif val_sign == '-':
+                    value = 'lightpink'
+                elif val_sign == '0':
+                    value = 'lightyellow'
+                else:
+                    value = np.nan
+                cellColours.loc[i, j] = value
+
+        the_table = ax.table(cellText=indDf.values,
+                             cellLoc='center',
+                             cellColours=cellColours.values,
+                             colLabels=indDf.columns,
+                             colLoc='center',
+                             colColours=['lavender']*col_num,
+                             rowLabels=indDf.index,
+                             rowColours=['lavender']*row_num,
+                             rowLoc='right',
+                             # bbox=(0, 0, 1, 1),
+                             # edges='horizontal',
+                             loc='center')
+
+        the_table.auto_set_font_size(False)
+        the_table.set_fontsize(6)
+
+        # the_table.scale(1, 1.5)
+
+        # ax.text(-0.22, 0.85, str('StudioProject'),
+        #         fontsize=7, color='gray',
+        #         ha='left', va='bottom',
+        #         transform=ax.transAxes,
+        #         weight="bold", alpha=.5)
+
+        if outputFile != None:
+            plt.savefig(outputFile, bbox_inches='tight')
+            if showReport == False:
+                plt.close(fig)
+
+        if showReport == True:
+            plt.show()
+
 
     return indDf
 
@@ -2860,7 +3060,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
         for dir in ['South', 'North']:
             vehicleDbfileList.append(dbFiles)
-            vehicleSiteNames.append(site.capitalize() + f' ({dir})')
+            vehicleSiteNames.append(site.capitalize() + f' ({dir[0]})')
 
         walkCycDbfileList.append(dbFiles)
         walkCycSiteNames.append(site.capitalize())
@@ -2875,7 +3075,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                                    ['both', 'both', 'both'],
                                    ax=ax,
                                    siteName=f'{site.capitalize()} ({labels[i]})',
-                                   colors=[userTypeColors[1], userTypeColors[2], userTypeColors[4]])
+                                   colors=[userTypeColors[1], userTypeColors[2], userTypeColors[4]],
+                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                   legendFontSize=10)
             if err == None:
                 plt.savefig(f'{transitCountAllmodes_path}/PDF_All-modes_{labels[i].capitalize()}_{site.capitalize()}.pdf')
             plt.close(fig)
@@ -2890,13 +3092,26 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                 plt.savefig(f'{activitiesCount_path}/Activities_by-{attr}_{site.capitalize()}.pdf')
             plt.close(fig)
 
+        # ++++++++++++++++++++++ Place indicator reports ++++++++++++++++++++++
+        for i, dbFile in enumerate(dbFiles):
+            outputFile = f'{activitiesCount_path}/Table_{labels[i]}_Activities_{site.capitalize()}.pdf'
+            generateReportPlace(dbFile, 120, outputFile=outputFile)
+
+        # -------------------- Place indicator Difference ---------------------
+        outputFile = f'{activitiesCount_path}/Diff-Table_Activities_{site.capitalize()}.pdf'
+        compareIndicators(dbFiles, labels, ['Activity', 'Activity'], [actionType[0], actionType[0]],
+                          ['all_lines', 'all_lines'], ['both', 'both'], 120,
+                          outputFile=outputFile, mainDirection=mainDirections[site],
+                          labelRtoL='south', labelLtoR='north', streetFunction='place')
+
         # ========================== Pie chart, MODE SHARE  ==========================
         fig = plt.figure(tight_layout=True)
         fig.set_figheight(5)
         fig.set_figwidth(10)
         axs = fig.subplots(1, 2)
 
-        err = pieChart(dbFiles, labels, 'all types', 'transport', axs=axs, siteName=site.capitalize())
+        err = pieChart(dbFiles, labels, 'all types', 'transport', axs=axs, siteName=site.capitalize(),
+                       titleSize=14, percTextSize=12, labelSize=12)
 
         if err == None:
             plt.savefig(
@@ -2909,7 +3124,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig.set_figwidth(10)
         axs = fig.subplots(1, 2)
 
-        err = pieChart(dbFiles, labels, 'cardriver', 'category', axs=axs, siteName=site.capitalize())
+        err = pieChart(dbFiles, labels, 'cardriver', 'category', axs=axs, siteName=site.capitalize(),
+                       titleSize=14, percTextSize=12, labelSize=12)
         if err == None:
             plt.savefig(
                 f'{transitCount_path}/cardriver/Pie_Vehicle-type_Before-after_{site.capitalize()}.pdf')
@@ -2921,7 +3137,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig.set_figwidth(10)
         axs = fig.subplots(1, 2)
 
-        err = pieChart(dbFiles, labels, 'walking', 'age', axs=axs, siteName=site.capitalize())
+        err = pieChart(dbFiles, labels, 'walking', 'age', axs=axs, siteName=site.capitalize(),
+                       titleSize=14, percTextSize=12, labelSize=12)
         if err == None:
             plt.savefig(
                 f'{transitCount_path}/walking/Pie_Pedestrian-age_Before-after_{site.capitalize()}.pdf')
@@ -2933,7 +3150,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig.set_figwidth(10)
         axs = fig.subplots(1, 2)
 
-        err = pieChart(dbFiles, labels, 'walking', 'gender', axs=axs, siteName=site.capitalize())
+        err = pieChart(dbFiles, labels, 'walking', 'gender', axs=axs, siteName=site.capitalize(),
+                       titleSize=14, percTextSize=12, labelSize=12)
         if err == None:
             plt.savefig(
                 f'{transitCount_path}/walking/Pie_Pedestrian-gender_Before-after_{site.capitalize()}.pdf')
@@ -2959,9 +3177,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                                    [actionType[0], actionType[0]],
                                    ['all_lines', 'all_lines'],
                                    ['both', 'both'],
-                                   ax=ax,
-                                   siteName=site.capitalize(),
-                                   colors=plotColors)
+                                   ax=ax, siteName=site.capitalize(), colors=plotColors,
+                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                   legendFontSize=10)
             if err == None:
                 plt.savefig(
                     f'{transitCount_path}/{transport}/PDF_Before-after_All-observed-{transport}_{site.capitalize()}.pdf')
@@ -2978,13 +3196,19 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                         f'{transitCount_path}/{transport}/Stacked_All-lines_{transport}_by-{attr}_{site.capitalize()}.pdf')
                 plt.close(fig)
 
-            # ++++++++++++++++++++++ Indicator reports ++++++++++++++++++++++
+            # ++++++++++++++++++++++ Transit indicator reports ++++++++++++++++++++++
             for i, dbFile in enumerate(dbFiles):
-                # if transport in ['walking', 'cycling']:
                 outputFile = f'{transitCount_path}/{transport}/Table_{labels[i]}_{transport}_{site.capitalize()}.pdf'
-                generateReport(dbFile, transport, actionType[0], 'all_lines', 'both', 120,
-                               outputFile=outputFile, mainDirection=mainDirections[site],
-                               labelRtoL='south', labelLtoR='north')
+                generateReportTransit(dbFile, transport, actionType[0], 'all_lines', 'both', 120, outputFile=outputFile,
+                                      mainDirection=mainDirections[site], labelRtoL='south', labelLtoR='north')
+
+            # ------------------ Transit indicator Difference ----------------------
+            outputFile = f'{transitCount_path}/{transport}/Diff-Table_{transport}_{site.capitalize()}.pdf'
+            compareIndicators(dbFiles, labels, transports, [actionType[0], actionType[0]],
+                              ['all_lines', 'all_lines'], ['both', 'both'], 120,
+                              outputFile=outputFile, mainDirection=mainDirections[site],
+                              labelRtoL='south', labelLtoR='north')
+
                 # elif transport == 'cardriver':
                 #     for direction in directionTypes:
                 #         outputFile = f'{transitCount_path}/{transport}/Table_{labels[i]}_{transport}_{direction}_{site.capitalize()}.pdf'
@@ -3019,7 +3243,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                         # --------------- Number of Users Over Time ------------------------
                         fig, ax = plt.subplots(tight_layout=True)
                         err = tempDistHist(dbFiles, labels, transports, actions,
-                                           unitIdxs, directions, ax, 20, siteName=site.capitalize())
+                                           unitIdxs, directions, ax, 20, siteName=site.capitalize(),
+                                           titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                           legendFontSize=10)
                         if err == None:
                             if unitIdx[1] == 'adjoining_ZOI':
                                 save_path = f'{accessCount_path}/{transport}'
@@ -3036,7 +3262,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                         # +++++++++++++++ Speed Probability density function ++++++++++++++
                         fig, ax = plt.subplots(tight_layout=True)
                         err = speedHistogram(dbFiles, labels, transports, actions,
-                                           unitIdxs, directions, ax, 15, siteName=site.capitalize())
+                                           unitIdxs, directions, ax, 15, siteName=site.capitalize(),
+                                             titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8,
+                                             yTickSize=8, legendFontSize=10)
                         if err == None:
                             plt.savefig(
                                 f'{transitSpeed_path}/{transport}/PDF_L-{unitIdx[0]}_Dir-{direction}_{transport}_{site.capitalize()}.pdf')
@@ -3045,7 +3273,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                         # +++++++++++++++++++++++++ Speed Box Plot ++++++++++++++++++++++++
                         fig, ax = plt.subplots(tight_layout=True)
                         err = speedBoxPlot(dbFiles, labels, transports, actions,
-                                             unitIdxs, directions, ax, 60, siteName=site.capitalize())
+                                             unitIdxs, directions, ax, 60, siteName=site.capitalize(),
+                                           titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=7, yTickSize=8,
+                                           legendFontSize=10)
                         if err == None:
                             plt.savefig(
                                 f'{transitSpeed_path}/{transport}/Box_L-{unitIdx[0]}_Dir-{direction}_{transport}_{site.capitalize()}.pdf')
@@ -3058,14 +3288,18 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
     # ================= Flow of users across all sites ============================
     fig, ax = plt.subplots(tight_layout=True)
-    err = sitesBAtransport(vehicleDbfileList, vehicleSiteNames, 'cardriver', vehicleDirections, ax=ax)
+    err = sitesBAtransport(vehicleDbfileList, vehicleSiteNames, 'cardriver', vehicleDirections, ax=ax,
+                           titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8,
+                           legendFontSize=10)
     if err == None:
         plt.savefig(f'{allSitesTransit_path}/Flow-vehicles_Before-after_All-sites.pdf')
     plt.close(fig)
 
     for transit in ['walking', 'cycling']:
         fig, ax = plt.subplots(tight_layout=True)
-        err = sitesBAtransport(walkCycDbfileList, walkCycSiteNames, transit, walkCycDirections, ax=ax)
+        err = sitesBAtransport(walkCycDbfileList, walkCycSiteNames, transit, walkCycDirections, ax=ax,
+                               titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8,
+                               legendFontSize=10)
         if err == None:
             plt.savefig(f'{allSitesTransit_path}/Flow-{transit}_Before-after_All-sites.pdf')
         plt.close(fig)
@@ -3077,7 +3311,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
     fig, ax = plt.subplots(tight_layout=True)
     err = tempDistHist(vehicleDbfilesBefore, vehicleSiteNames, ['cardriver']*len(vehicleSiteNames),
                        ['crossing line']*len(vehicleSiteNames), ['all_lines']*len(vehicleSiteNames),
-                       vehicleDirections, ax, 20, siteName='all sites', drawMean=False)
+                       vehicleDirections, ax, 20, siteName='all sites (Before)', drawMean=False,
+                       titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
 
     if err == None:
         plt.savefig(f'{allSitesTransit_path}/No-vehicles_Before_All-sites.pdf')
@@ -3086,7 +3321,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
     fig, ax = plt.subplots(tight_layout=True)
     err = tempDistHist(vehicleDbfilesAfter, vehicleSiteNames, ['cardriver'] * len(vehicleSiteNames),
                        ['crossing line'] * len(vehicleSiteNames), ['all_lines'] * len(vehicleSiteNames),
-                       vehicleDirections, ax, 20, siteName='all sites', drawMean=False)
+                       vehicleDirections, ax, 20, siteName='all sites (After)', drawMean=False,
+                       titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
     if err == None:
         plt.savefig(f'{allSitesTransit_path}/No-vehicles_After_All-sites.pdf')
     plt.close(fig)
@@ -3099,7 +3335,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig, ax = plt.subplots(tight_layout=True)
         err = tempDistHist(walkCycDbfileBefore, walkCycSiteNames, [transit] * len(walkCycSiteNames),
                            ['crossing line'] * len(walkCycSiteNames), ['all_lines'] * len(walkCycSiteNames),
-                           walkCycDirections, ax, 20, siteName='all sites', drawMean=False)
+                           walkCycDirections, ax, 20, siteName='all sites (Before)', drawMean=False,
+                           titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
         if err == None:
             plt.savefig(f'{allSitesTransit_path}/No-{transit}_Before_All-sites.pdf')
         plt.close(fig)
@@ -3108,7 +3345,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig, ax = plt.subplots(tight_layout=True)
         err = tempDistHist(walkCycDbfileAfter, walkCycSiteNames, [transit] * len(walkCycSiteNames),
                            ['crossing line'] * len(walkCycSiteNames), ['all_lines'] * len(walkCycSiteNames),
-                           walkCycDirections, ax, 20, siteName='all sites', drawMean=False)
+                           walkCycDirections, ax, 20, siteName='all sites (After)', drawMean=False,
+                           titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
         if err == None:
             plt.savefig(f'{allSitesTransit_path}/No-{transit}_After_All-sites.pdf')
         plt.close(fig)
@@ -3124,7 +3362,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             err = tempDistHist(dbFiles, ['South', 'North'], ['cardriver', 'cardriver'],
                                ['crossing line', 'crossing line'], ['all_lines', 'all_lines'],
                                ['Right to left', 'Left to right'],
-                               ax=ax, interval=30, siteName=site.capitalize())
+                               ax=ax, interval=30, siteName=site.capitalize(),
+                               titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
             if err == None:
                 plt.savefig(
                     f'{transit_path}/{site}/Number of users over time/cardriver/South-vs-North_{view}_Vehicles_{site.capitalize()}.pdf')
@@ -3137,7 +3376,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                                    ['Right to left', 'Left to right'],
                                    ax=ax,
                                    siteName=site.capitalize(),
-                                   colors=plotColors)
+                                   colors=plotColors,
+                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                   legendFontSize=10)
             if err == None:
                 plt.savefig(
                     f'{transit_path}/{site}/Number of users over time/cardriver/PDF_South-vs-North_{view}_Vehicles_{site.capitalize()}.pdf')
@@ -3156,7 +3397,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                                    [dir, dir],
                                    ax=ax,
                                    siteName=site.capitalize(),
-                                   colors=plotColors)
+                                   colors=plotColors,
+                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                   legendFontSize=10)
 
             if err == None:
                 if dir == 'Right to left':
