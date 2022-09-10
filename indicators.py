@@ -1940,7 +1940,7 @@ def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, e
         color_dict = {'walking':'springgreen', 'driving':'lightsalmon', 'cycling':'deepskyblue',
                       'motorcycle':'orange', 'car':'orange', 'bus':'yellow', 'truck':'silver', 'other':'violet',
                       'adult':'lightskyblue', 'child':'bisque', 'young_adult':'lightsteelblue',
-                      'teen':'lightcoral', 'senior':'plum', 'male':'deepskyblue', 'female':'lightpink',
+                      'teen':'lightcoral', 'senior':'plum', 'male':'navajowhite', 'female':'deepskyblue',
                       'unknown':'silver'}
         for pie_wedge in wedges:
             # pie_wedge.set_edgecolor('gray')
