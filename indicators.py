@@ -473,7 +473,8 @@ def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directi
 
 # ==============================================================
 def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, directions, attr,
-                 ax=None, interval=20, alpha=1, colors=plotColors, siteName=None):
+                         ax=None, interval=20, alpha=1, colors=plotColors, siteName=None,
+                         titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
     sessions = []
     first_obs_times = []
@@ -602,16 +603,16 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
     if bins_num >= 20:
         tick_rotation = 45
 
-    ax.tick_params(axis='x', labelsize=4, rotation=tick_rotation)
-    ax.tick_params(axis='y', labelsize=6)
-    ax.set_xlabel('Time of day', fontsize=7)
-    ax.set_ylabel(f'No. of {tm}s', fontsize=7)
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel('Time of day', fontsize=xLabelSize)
+    ax.set_ylabel(f'No. of {tm}s', fontsize=yLabelSize)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
     title = f'No. of {tm}s by {attr} every {interval} min.'
     if siteName != None:
         title = f'{title} in {siteName}'
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=titleSize)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
     # ax.legend(loc="upper right", fontsize=5)
 
@@ -622,7 +623,7 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
         if not label in label_list:
             handle_list.append(handles[i])
             label_list.append(label)
-    ax.legend(handle_list, label_list, loc='upper right', prop={'size': 5})
+    ax.legend(handle_list, label_list, loc='best', prop={'size': legendFontSize})
 
 
     watermark(ax)
@@ -750,14 +751,14 @@ def sitesBAtransport(dbFileList, siteNames, transport, directions, BAlabels=['Be
 
     ax.set_title(title, fontsize=titleSize)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
-    ax.legend(loc="upper right", fontsize=legendFontSize)
+    ax.legend(loc="best", fontsize=legendFontSize)
 
     watermark(ax)
 
 
 # ==============================================================
-def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'],
-                      ax=None, colors=plotColors):
+def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'], ax=None, colors=plotColors,
+                    titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=6, yTickSize=6, legendFontSize=6):
     sitesNo = len(dbFileList)
     sites_sessions = []
     obs_durations = []
@@ -815,24 +816,25 @@ def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'],
     if len(siteNames) >= 20:
         tick_rotation = 45
 
-    ax.tick_params(axis='x', labelsize=6, rotation=tick_rotation)
-    ax.tick_params(axis='y', labelsize=6)
-    ax.set_xlabel('Name of sites', fontsize=7)
-    ax.set_ylabel('Number of activities per hour', fontsize=7)
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel('Name of sites', fontsize=xLabelSize)
+    ax.set_ylabel('Number of activities per hour', fontsize=yLabelSize)
     # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
     title = 'Rate of activities in all sites'
 
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=titleSize)
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
-    ax.legend(loc="upper right", fontsize=5)
+    ax.legend(loc="best", fontsize=legendFontSize)
 
     watermark(ax)
 
 
 # ==============================================================
 def stackedHistActivity(dbFiles, labels, attribute,
-                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=plotColors, siteName=None):
+                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=plotColors, siteName=None,
+                        titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
     sessions = []
     first_obs_times = []
@@ -922,10 +924,10 @@ def stackedHistActivity(dbFiles, labels, attribute,
     if bins_num >= 20:
         tick_rotation = 45
 
-    ax.tick_params(axis='x', labelsize=4, rotation=tick_rotation)
-    ax.tick_params(axis='y', labelsize=6)
-    ax.set_xlabel('Time of day', fontsize=7)
-    ax.set_ylabel('No. of activities', fontsize=7)
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel('Time of day', fontsize=xLabelSize)
+    ax.set_ylabel('No. of activities', fontsize=yLabelSize)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
 
@@ -934,7 +936,7 @@ def stackedHistActivity(dbFiles, labels, attribute,
     title = f'Number of activities by {attribute} every {interval} minute'
     if siteName != None:
         title = f'{title} in {siteName}'
-    ax.set_title(title, fontsize=8)
+    ax.set_title(title, fontsize=titleSize)
 
     ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
 
@@ -945,7 +947,7 @@ def stackedHistActivity(dbFiles, labels, attribute,
         if not label in label_list:
             handle_list.append(handles[i])
             label_list.append(label)
-    ax.legend(handle_list, label_list, loc='upper right', prop={'size': 5})
+    ax.legend(handle_list, label_list, loc='best', prop={'size': legendFontSize})
 
 
     watermark(ax)
@@ -3087,7 +3089,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         for attr in attrActivityList:
             fig, ax = plt.subplots(tight_layout=True)
             err = stackedHistActivity(dbFiles, labels, attr, ax=ax, interval=60, colors=plotColors,
-                                      siteName=site.capitalize())
+                                      siteName=site.capitalize(),
+                                      titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
+                                      legendFontSize=10)
             if err == None:
                 plt.savefig(f'{activitiesCount_path}/Activities_by-{attr}_{site.capitalize()}.pdf')
             plt.close(fig)
@@ -3190,7 +3194,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                 fig, ax = plt.subplots(tight_layout=True)
                 err = stackedHistTransport(dbFiles, labels, transports, [actionType[0], actionType[0]],
                                    ['all_lines', 'all_lines'], ['both', 'both'], attr, ax=ax, interval=60,
-                                           colors=plotColors, siteName=site.capitalize())
+                                           colors=plotColors, siteName=site.capitalize(),
+                                           titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
+                                           legendFontSize=10)
                 if err == None:
                     plt.savefig(
                         f'{transitCount_path}/{transport}/Stacked_All-lines_{transport}_by-{attr}_{site.capitalize()}.pdf')
@@ -3352,7 +3358,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         plt.close(fig)
 
 
-    # ===================== Vehicles: R2L vs. L2R ==============================
+    # ===================== South v.s North in Before and After ==============================
     for site in site_camView.keys():
         for view in site_camView[site]:
             dbFiles = [str(site_camView[site][view]/f'{site}.sqlite'),
@@ -3362,7 +3368,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             err = tempDistHist(dbFiles, ['South', 'North'], ['cardriver', 'cardriver'],
                                ['crossing line', 'crossing line'], ['all_lines', 'all_lines'],
                                ['Right to left', 'Left to right'],
-                               ax=ax, interval=30, siteName=site.capitalize(),
+                               ax=ax, interval=30, siteName=f'{site.capitalize()} ({view.capitalize()})',
                                titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
             if err == None:
                 plt.savefig(
@@ -3375,7 +3381,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                                    ['crossing line', 'crossing line'], ['all_lines', 'all_lines'],
                                    ['Right to left', 'Left to right'],
                                    ax=ax,
-                                   siteName=site.capitalize(),
+                                   siteName=f'{site.capitalize()} ({view.capitalize()})',
                                    colors=plotColors,
                                    titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                    legendFontSize=10)
@@ -3413,7 +3419,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
     # ------------------- Activities ACROSS ALL SITES --------------------------
     fig, ax = plt.subplots(tight_layout=True)
-    err = sitesBAactivity(walkCycDbfileList, walkCycSiteNames, ax=ax)
+    err = sitesBAactivity(walkCycDbfileList, walkCycSiteNames, ax=ax,
+                          titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                          legendFontSize=10)
     if err == None:
         plt.savefig(f'{allSitesPlace_path}/Rate-activities_Before-after_All_sites.pdf')
     plt.close(fig)
