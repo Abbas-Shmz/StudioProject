@@ -313,7 +313,9 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         elif transports[0] == 'cycling':
             tm = 'cyclist'
 
-        ax.set_ylabel('No. of {}s'.format(tm), fontsize=yLabelSize)
+        if yLabelSize > 0:
+            ax.set_ylabel('No. of {}s'.format(tm), fontsize=yLabelSize)
+
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
         if unitIdxs[0].split('_')[0] == 'all':
@@ -3314,23 +3316,27 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
     vehicleDbfilesBefore = [i[0] for i in vehicleDbfileList]
     vehicleDbfilesAfter = [i[1] for i in vehicleDbfileList]
 
-    fig, ax = plt.subplots(tight_layout=True)
+    # fig, ax = plt.subplots(tight_layout=True)
+    fig = plt.figure(tight_layout=True)
+    fig.set_figheight(5)
+    fig.set_figwidth(15)
+    axs = fig.subplots(1, 2, sharey='row')
     err = tempDistHist(vehicleDbfilesBefore, vehicleSiteNames, ['cardriver']*len(vehicleSiteNames),
                        ['crossing line']*len(vehicleSiteNames), ['all_lines']*len(vehicleSiteNames),
-                       vehicleDirections, ax, 20, siteName='all sites (Before)', drawMean=False,
+                       vehicleDirections, axs[0], 20, siteName='all sites (Before)', drawMean=False,
                        titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
 
-    if err == None:
-        plt.savefig(f'{allSitesTransit_path}/No-vehicles_Before_All-sites.pdf')
-    plt.close(fig)
-
-    fig, ax = plt.subplots(tight_layout=True)
+    # if err == None:
+    #     plt.savefig(f'{allSitesTransit_path}/No-vehicles_Before_All-sites.pdf')
+    # plt.close(fig)
+    #
+    # fig, ax = plt.subplots(tight_layout=True)
     err = tempDistHist(vehicleDbfilesAfter, vehicleSiteNames, ['cardriver'] * len(vehicleSiteNames),
                        ['crossing line'] * len(vehicleSiteNames), ['all_lines'] * len(vehicleSiteNames),
-                       vehicleDirections, ax, 20, siteName='all sites (After)', drawMean=False,
-                       titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
+                       vehicleDirections, axs[1], 20, siteName='all sites (After)', drawMean=False,
+                       titleSize=14, xLabelSize=11, yLabelSize=0, xTickSize=8, yTickSize=8, legendFontSize=10)
     if err == None:
-        plt.savefig(f'{allSitesTransit_path}/No-vehicles_After_All-sites.pdf')
+        plt.savefig(f'{allSitesTransit_path}/No-vehicles_Before-After_All-sites.pdf')
     plt.close(fig)
 
     # =================== Number of pedestrians and cyclists over time across all sites =============
@@ -3338,24 +3344,33 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
     walkCycDbfileAfter = [i[1] for i in walkCycDbfileList]
 
     for transit in ['walking', 'cycling']:
-        fig, ax = plt.subplots(tight_layout=True)
+        # fig, ax = plt.subplots(tight_layout=True)
+        fig = plt.figure(tight_layout=True)
+        fig.set_figheight(5)
+        fig.set_figwidth(15)
+        axs = fig.subplots(1, 2, sharey='row')
         err = tempDistHist(walkCycDbfileBefore, walkCycSiteNames, [transit] * len(walkCycSiteNames),
                            ['crossing line'] * len(walkCycSiteNames), ['all_lines'] * len(walkCycSiteNames),
-                           walkCycDirections, ax, 20, siteName='all sites (Before)', drawMean=False,
+                           walkCycDirections, axs[0], 20, siteName='all sites (Before)', drawMean=False,
                            titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
-        if err == None:
-            plt.savefig(f'{allSitesTransit_path}/No-{transit}_Before_All-sites.pdf')
-        plt.close(fig)
 
-    for transit in ['walking', 'cycling']:
-        fig, ax = plt.subplots(tight_layout=True)
         err = tempDistHist(walkCycDbfileAfter, walkCycSiteNames, [transit] * len(walkCycSiteNames),
                            ['crossing line'] * len(walkCycSiteNames), ['all_lines'] * len(walkCycSiteNames),
-                           walkCycDirections, ax, 20, siteName='all sites (After)', drawMean=False,
-                           titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
+                           walkCycDirections, axs[1], 20, siteName='all sites (After)', drawMean=False,
+                           titleSize=14, xLabelSize=11, yLabelSize=0, xTickSize=8, yTickSize=8, legendFontSize=10)
         if err == None:
-            plt.savefig(f'{allSitesTransit_path}/No-{transit}_After_All-sites.pdf')
+            plt.savefig(f'{allSitesTransit_path}/No-{transit}_Before-After_All-sites.pdf')
         plt.close(fig)
+
+    # for transit in ['walking', 'cycling']:
+    #     fig, ax = plt.subplots(tight_layout=True)
+    #     err = tempDistHist(walkCycDbfileAfter, walkCycSiteNames, [transit] * len(walkCycSiteNames),
+    #                        ['crossing line'] * len(walkCycSiteNames), ['all_lines'] * len(walkCycSiteNames),
+    #                        walkCycDirections, ax, 20, siteName='all sites (After)', drawMean=False,
+    #                        titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
+    #     if err == None:
+    #         plt.savefig(f'{allSitesTransit_path}/No-{transit}_After_All-sites.pdf')
+    #     plt.close(fig)
 
 
     # ===================== South v.s North in Before and After ==============================
