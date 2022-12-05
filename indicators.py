@@ -429,19 +429,21 @@ def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directi
         y = density(x)
         ax.plot(mdates.num2date(x), y, label=labels[i], color=colors[i])
 
-    locator = mdates.AutoDateLocator()
-    ax.xaxis.set_major_locator(locator)
+    # locator = mdates.AutoDateLocator()
+    # ax.xaxis.set_major_locator(locator)
 
-    # ax.xaxis.set_major_locator(mdates.HourLocator())
+    ax.xaxis.set_major_locator(mdates.HourLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
 
     ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
 
     xLabel = 'Time of day'
 
-    # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
     ax.tick_params(axis='x', labelsize=xTickSize, rotation=0)
-    ax.tick_params(axis='y', labelsize=yTickSize)
+
+    # ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.tick_params(labelleft = False)
+
     ax.set_xlabel(xLabel, fontsize=xLabelSize)
 
     tm = transports[0]
@@ -455,8 +457,9 @@ def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directi
         elif transports[0] == 'cycling':
             tm = 'cyclist'
 
-    ax.set_ylabel(f'Pobability density', fontsize=yLabelSize)
-    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    if yLabelSize > 0:
+        ax.set_ylabel(f'Pobability density', fontsize=yLabelSize)
+    # ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     if unitIdxs[0].split('_')[0] == 'all':
         title = f'PDF of all observed {tm}s'
     else:
@@ -3070,21 +3073,29 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         walkCycSiteNames.append(site.capitalize())
 
         # ++++++++++++++++++++++ PDF all modes plots ++++++++++++++++++++++
+        fig = plt.figure(tight_layout=True)
+        fig.set_figheight(5)
+        fig.set_figwidth(15)
+        axs = fig.subplots(1, 2, sharey='row')
         for i, dbFile in enumerate(dbFiles):
-            fig, ax = plt.subplots(tight_layout=True)
+            # fig, ax = plt.subplots(tight_layout=True)
+            if i == 0:
+                YlabSize = 12
+            else:
+                YlabSize = 0
             err = transportModePDF([dbFile]*3, ['Vehicle', 'Pedestrian', 'Cyclist'],
                                    ['cardriver', 'walking', 'cycling'],
                                    [actionType[0], actionType[0], actionType[0]],
                                    ['all_lines', 'all_lines', 'all_lines'],
                                    ['both', 'both', 'both'],
-                                   ax=ax,
+                                   ax=axs[i],
                                    siteName=f'{site.capitalize()} ({labels[i]})',
                                    colors=[userTypeColors[1], userTypeColors[2], userTypeColors[4]],
-                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                   titleSize=14, xLabelSize=12, yLabelSize=YlabSize, xTickSize=8, yTickSize=8,
                                    legendFontSize=10)
-            if err == None:
-                plt.savefig(f'{transitCountAllmodes_path}/PDF_All-modes_{labels[i].capitalize()}_{site.capitalize()}.pdf')
-            plt.close(fig)
+        if err == None:
+            plt.savefig(f'{transitCountAllmodes_path}/PDF_All-modes_Before-After_{site.capitalize()}.pdf') #{labels[i].capitalize()}
+        plt.close(fig)
 
         # ========================== PLACE FUNCTION ==========================
         Path(activitiesCount_path).mkdir(parents=True, exist_ok=True)
@@ -4052,9 +4063,29 @@ def watermark(ax):
 
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':
-    from indicators import transportModePDF
-    dbFile1 = '/Users/abbas/Test_StudioProject/Hartland_2019.sqlite'
-    dbFile2 = '/Users/abbas/Test_StudioProject/Hartland_2020.sqlite'
-    transportModePDF([dbFile1, dbFile2], ['2019', '2020'], ['cardriver', 'cardriver'],
-                     ['crossing line', 'crossing line'], ['1', '1'], ['both', 'both'])
+    from indicators import batchPlots
+    import os, shutil
+
+    outputFolder = '/Users/abbas/Desktop/plots'
+    metaDataFile = '/Users/abbas/Documents/PhD/video_files/metadata.sqlite'
+
+    for filename in os.listdir(outputFolder):
+        file_path = os.path.join(outputFolder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+    batchPlots(metaDataFile, outputFolder, labelRtoL='south', labelLtoR='north')
+
+
+
+
+    # dbFile1 = '/Users/abbas/Test_StudioProject/Hartland_2019.sqlite'
+    # dbFile2 = '/Users/abbas/Test_StudioProject/Hartland_2020.sqlite'
+    # transportModePDF([dbFile1, dbFile2], ['2019', '2020'], ['cardriver', 'cardriver'],
+    #                  ['crossing line', 'crossing line'], ['1', '1'], ['both', 'both'])
 
