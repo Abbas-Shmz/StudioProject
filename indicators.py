@@ -4066,7 +4066,7 @@ if __name__ == '__main__':
     from indicators import batchPlots
     import os, shutil
 
-    outputFolder = '/Users/abbas/Desktop/plots'
+    outputFolder = '/Users/abbas/Documents/PhD/StudioProject/plots'
     metaDataFile = '/Users/abbas/Documents/PhD/video_files/metadata.sqlite'
 
     for filename in os.listdir(outputFolder):
