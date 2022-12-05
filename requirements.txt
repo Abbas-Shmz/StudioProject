@@ -1,0 +1,13 @@
+PyQt6
+trafficintelligence
+Pillow
+opencv-python
+sklearn
+pandas
+matplotlib
+numpy
+scipy
+scikit-learn
+pandas
+SQLAlchemy
+hachoir
