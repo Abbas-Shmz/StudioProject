@@ -15,7 +15,7 @@ import matplotlib.dates as mdates
 from matplotlib.ticker import MaxNLocator
 from sqlalchemy import func
 from sqlalchemy.inspection import inspect
-import sqlite3
+import sqlite3, os
 import ast
 from configparser import ConfigParser
 
@@ -24,6 +24,10 @@ from hachoir.metadata import extractMetadata
 from hachoir.core import config as HachoirConfig
 
 import pandas as pd
+
+from PyPDF2 import PdfFileMerger
+from fpdf import FPDF
+
 from matplotlib.patches import Polygon
 from trafficintelligence import storage, moving
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -4060,6 +4064,69 @@ def watermark(ax):
             ha='left', va='bottom',
             transform=ax.transAxes,
             weight="bold", alpha=.5)
+
+
+# =====================================================================
+def pdf_merge(pdfs_list):
+    merger = PdfFileMerger()
+    [merger.append(pdf) for pdf in pdfs_list]
+    with open(os.path.join(pdfs_dir, "All_plots.pdf"), "wb") as new_file:
+        merger.write(new_file)
+
+
+# =====================================================================
+def text_to_pdf(text, fontsize_pt, filename):
+    a4_width_mm = 121.92
+    pt_to_mm = 0.35
+    # fontsize_pt = 30
+    fontsize_mm = fontsize_pt * pt_to_mm
+    margin_bottom_mm = 10
+    character_width_mm = 7 * pt_to_mm
+    width_text = a4_width_mm / character_width_mm
+
+    pdf = FPDF(unit='mm', format=[162.56, 121.92])
+    pdf.set_auto_page_break(True, margin=margin_bottom_mm)
+    pdf.add_page()
+    pdf.set_font(family='Helvetica', size=fontsize_pt)
+    splitted = text.split('\n')
+
+    for line in splitted:
+        # lines = textwrap.wrap(line, width_text)
+
+        if len(line) == 0:
+            pdf.ln()
+
+        # for wrap in lines:
+        pdf.cell(0, fontsize_mm, line, ln=1, align = 'L')
+
+    pdf.output(filename, 'F')
+
+
+# =====================================================================
+def plots_compile(plots_dir):
+    pdfs_list = []
+    text_to_pdf('\n\n\nAll Plots\n[StudioProject]', 40, f'{plots_dir}/title_page.pdf')
+    pdfs_list.append(os.path.join(plots_dir, 'title_page.pdf'))
+    for path, subdirs, files in os.walk(plots_dir):
+        pdfs_sub_list = []
+        for name in files:
+            file_name, file_ext = os.path.splitext(name)
+            if file_ext == '.pdf' and (not file_name in ['All_plots', 'title_page']):
+                pdfs_sub_list.append(os.path.join(path, name))
+        if len(pdfs_sub_list) > 0:
+            title_page_text = ''
+            relative_paths = os.path.relpath(path, plots_dir)
+            for i, item in enumerate(relative_paths.split('/')):
+                title_page_text = title_page_text + '\n' + ' '*4*i + '-' + item.capitalize()
+            text_to_pdf(title_page_text, 25, f'{path}/title_page.pdf')
+            pdfs_list.append(os.path.join(path, 'title_page.pdf'))
+            pdfs_list.extend(pdfs_sub_list)
+
+    merger = PdfFileMerger()
+    [merger.append(pdf) for pdf in pdfs_list]
+    with open(os.path.join(plots_dir, "All_plots.pdf"), "wb") as new_file:
+        merger.write(new_file)
+    print('Done!......')
 
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':

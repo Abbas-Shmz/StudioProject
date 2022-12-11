@@ -11,3 +11,5 @@ scikit-learn
 pandas
 SQLAlchemy
 hachoir
+PyPDF2
+fpdf
