@@ -2826,7 +2826,8 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
         x = xy_arr[0]
         y = xy_arr[1]
         userType = traj.getUserType()
-        line, = ax.plot(x, y, color=userTypeColors[userType], lw=0.3, label=userTypeNames[userType])
+        line, = ax.plot(x, y, color=userTypeColors[userType], lw=0.3, label=userTypeNames[userType],
+                        marker = 'o', markersize=0.3)
         traj_line[str(traj.getNum())] = [traj, line]
 
     q_line = session.query(Line)
@@ -2853,6 +2854,10 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
             ec = np.array([0, 0, 0, 0.5])
             zone = Polygon(prj_xy, fc=fc, ec=ec, lw=0.3)
             ax.add_patch(zone)
+
+    # Invert the y-axis to convert to image coordinate system
+    ax.invert_yaxis()
+
     ax.axis('equal')
     ax.tick_params(axis='both', labelsize=3)
     handles, labels = ax.get_legend_handles_labels()
@@ -3674,6 +3679,167 @@ def modeShareCompChart(dbFiles, labels, interval, axs=None):
     # # ax[0].xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
 
 
+# ===================================================================
+def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, interval=20, alpha=1,
+                    colors=plotColors, siteName=None, drawMean=True, smooth=False,
+                    titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
+
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+        cls_obs = ZoneCrossing
+
+        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
+        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
+
+        first_obs_times.append(first_obs_time.time())
+        last_obs_times.append(last_obs_time.time())
+
+    entries_lists = []
+    exits_lists = []
+    for i in range(inputNo):
+        q = sessions[i].query(ZoneCrossing.instant).filter(ZoneCrossing.zoneIdx == unitIdxs[i])
+
+        q = q.join(Zone, Zone.idx == ZoneCrossing.lineIdx) \
+            .join(GroupBelonging, GroupBelonging.groupIdx == ZoneCrossing.groupIdx) \
+            .join(Person, Person.idx == GroupBelonging.personIdx) \
+            .join(Mode, Mode.personIdx == Person.idx)
+
+        if transports[i] != 'all':
+            q = q.filter(Mode.transport == transports[i])
+
+            if transports[i] != 'walking':
+                q = q.join(Vehicle, Vehicle.idx == Mode.vehicleIdx)
+
+            if transports[i] == 'cardriver':
+                q = q.filter(Zone.type == 'roadbed')
+                # .filter(Vehicle.category == 'car')
+
+        if unitIdxs[i] == 'all_zones':
+            q = q.group_by(Person.idx)
+
+        q_entry = q.filter(ZoneCrossing.entering == True)
+        q_exit = q.filter(ZoneCrossing.entering == False)
+
+        entries_lists.append([i[0] for i in q_entry.all()])
+        exits_lists.append([i[0] for i in q_exit.all()])
+
+    if all([i == [] for i in entries_lists]) or all([i == [] for i in exits_lists]):
+        return 'No observation!'
+
+    for entries in entries_lists:
+        if entries == []:
+            continue
+        i = 0
+        for time_ticks in entries:
+            entries[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
+            i += 1
+
+    for exits in exits_lists:
+        if exits == []:
+            continue
+        i = 0
+        for time_ticks in exits:
+            exits[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
+            i += 1
+
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
+        ax = fig.add_subplot(111)  # plt.subplots(1, 1)
+
+    to_timestamp = np.vectorize(lambda x: x.timestamp())
+
+    startTime = datetime.datetime.combine(datetime.datetime(2000, 1, 1), max(first_obs_times))
+    endTime = datetime.datetime.combine(datetime.datetime(2000, 1, 1), min(last_obs_times))
+
+    # if len(bins) < 3:
+    #     err = 'The observation duration is not enough for the selected interval!'
+    #     return err
+
+    for i in range(inputNo):
+        if entries_lists == [] or exits_lists == []:
+            continue
+
+        diff = []
+        current_time = startTime
+        while current_time <= endTime:
+            entry_count = sum(1 for entry_time in entries_lists[i] if entry_time <= current_time)
+            exit_count = sum(1 for exit_time in exits_lists[i] if exit_time <= current_time)
+            diff.append((current_time, entry_count - exit_count))
+            current_time += datetime.timedelta(minutes=time_lag)
+
+        if not smooth:
+            ax.plot(*zip(*diff), label=labels[l], color=plotColors[l])
+        else:
+            date_np = np.array([d[0] for d in diff])
+            date_num = mdates.date2num(date_np)
+            date_num_smooth = np.linspace(date_num.min(), date_num.max(), len([d[0] for d in diff])*10)
+            spl = make_interp_spline(date_num, [d[1] for d in diff], k=2)
+            value_np_smooth = spl(date_num_smooth)
+            ax.plot(mdates.num2date(date_num_smooth), value_np_smooth, label=labels[l], color=plotColors[l])
+        #------------------------
+        if drawMean:
+            ax.axhline(y=np.mean([d[1] for d in diff]), color=plotColors[l], linestyle='--',
+                      lw=1, label= 'Mean of {}'.format(labels[l]))
+        # ------------------------
+
+
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
+
+    # ax.xaxis.set_major_locator(mdates.HourLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+
+    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+
+    # if inputNo == 1:
+    #     xLabel = 'Time ({})'.format(bins_start.strftime('%A, %b %d, %Y'))
+    # else:
+    xLabel = 'Time of day'
+
+    # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=0)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel(xLabel, fontsize=xLabelSize)
+
+    tm = transports[0]
+    if transports[0] == 'cardriver':
+        tm = 'car'
+    elif transports[0] == 'walking':
+        tm = 'pedestrian'
+    elif transports[0] == 'cycling':
+        tm = 'cyclist'
+    elif transports[0] == 'all':
+        tm = 'all street users'
+
+    if yLabelSize > 0:
+        ax.set_ylabel('No. of {}s'.format(tm), fontsize=yLabelSize)
+
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+    if unitIdxs[0].split('_')[0] == 'all':
+        title = f'No. of {tm}s every {interval} min.'
+    else:
+        title = f'No. of {tm}s {actionTypes[0]} #{unitIdxs[0]} every {interval} min.'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=titleSize)
+
+    if not all(l == '' for l in labels):
+        ax.legend(loc='best', fontsize=legendFontSize)
+
+
+    ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
+
+    watermark(ax)
+
+
 # =========================================
 def image_to_ground(img_points, homography):
     n_points = img_points.shape[1]
@@ -4127,6 +4293,57 @@ def plots_compile(plots_dir):
     with open(os.path.join(plots_dir, "All_plots.pdf"), "wb") as new_file:
         merger.write(new_file)
     print('Done!......')
+
+
+
+# =====================================================================
+# def count_difference(entries, exits, startTime, endTime, time_interval):
+#     # Create a datetime object for the startTime and endTime
+#     start_time = datetime.datetime.strptime(startTime, '%Y-%m-%d %H:%M:%S')
+#     end_time = datetime.datetime.strptime(endTime, '%Y-%m-%d %H:%M:%S')
+#
+#     # Initialize a variable to keep track of the cumulative count difference
+#     cumulative_count_difference = 0
+#
+#     # Initialize a variable to keep track of the current time
+#     current_time = start_time
+#
+#     # Initialize a list to store the time-stamped cumulative count differences
+#     result = []
+#
+#     # Loop through the time range between the start and end time at the specified interval
+#     while current_time <= end_time:
+#         # Calculate the cumulative count of entries up to the current time
+#         entries_count = sum(
+#             [entry[1] for entry in entries if datetime.datetime.strptime(entry[0], '%Y-%m-%d %H:%M:%S') <= current_time])
+#
+#         # Calculate the cumulative count of exits up to the current time
+#         exits_count = sum(
+#             [exit[1] for exit in exits if datetime.datetime.strptime(exit[0], '%Y-%m-%d %H:%M:%S') <= current_time])
+#
+#         # Calculate the cumulative count difference up to the current time
+#         cumulative_count_difference = entries_count - exits_count
+#
+#         # Append the current time and cumulative count difference to the result list
+#         result.append((current_time, cumulative_count_difference))
+#
+#         # Increment the current time by the specified interval
+#         current_time += datetime.timedelta(minutes=time_interval)
+#
+#     return result
+
+
+# ======================================================================
+def entryExitDiff(entries, exits, startTime, endTime, time_lag):
+    diff = []
+    current_time = startTime
+    while current_time <= endTime:
+        entry_count = sum(1 for entry_time in entries if entry_time <= current_time)
+        exit_count = sum(1 for exit_time in exits if exit_time <= current_time)
+        diff.append((current_time, entry_count - exit_count))
+        current_time += datetime.timedelta(minutes=time_lag)
+    return diff
+
 
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':

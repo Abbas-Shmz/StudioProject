@@ -13,3 +13,4 @@ SQLAlchemy
 hachoir
 PyPDF2
 fpdf
+shapely

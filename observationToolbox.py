@@ -475,39 +475,69 @@ class ObsToolbox(QMainWindow):
         self.prevTrjBtn.setFixedWidth(35)
         self.prevTrjBtn.clicked.connect(self.prevTrajectory)
         # self.prevTrjBtn.setEnabled(False)
-        traj_tab_editLayout.addWidget(self.prevTrjBtn, 0, 1)
+        traj_tab_editLayout.addWidget(self.prevTrjBtn, 0, 0, Qt.AlignmentFlag.AlignRight)
 
         self.trjIdxLe = QLineEdit('-1')
         # self.trjIdxLe.setMinimumWidth(35)
         self.trjIdxLe.setReadOnly(True)
-        traj_tab_editLayout.addWidget(self.trjIdxLe, 0, 2)
+        traj_tab_editLayout.addWidget(self.trjIdxLe, 0, 1)
 
         self.noTrjLabel = QLabel('/--')
-        traj_tab_editLayout.addWidget(self.noTrjLabel, 0, 3)
+        traj_tab_editLayout.addWidget(self.noTrjLabel, 0, 2)
 
         self.nextTrjBtn = QPushButton('>>')
         self.nextTrjBtn.setFixedWidth(35)
         self.nextTrjBtn.clicked.connect(self.nextTrajectory)
         # self.nextTrjBtn.setEnabled(False)
-        traj_tab_editLayout.addWidget(self.nextTrjBtn, 0, 4)
+        traj_tab_editLayout.addWidget(self.nextTrjBtn, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
-        self.loadTrjBtn = QPushButton('Load traj')
-        self.loadTrjBtn.clicked.connect(self.loadTrajectory)
+        self.newUserBtn = QPushButton('New user')
+        self.newUserBtn.clicked.connect(self.newUser)
         # self.loadTrjBtn.setEnabled(False)
-        traj_tab_editLayout.addWidget(self.loadTrjBtn, 0, 5)
+        traj_tab_editLayout.addWidget(self.newUserBtn, 0, 4)
 
-        traj_tab_editLayout.addWidget(QLabel('Action:'), 2, 0)
+        traj_tab_editLayout.addWidget(QLabel('User type:'), 1, 0, Qt.AlignmentFlag.AlignRight)
+        self.userTypeCb = QComboBox()
+        self.userTypeCb.addItems(userTypeNames)
+        self.userTypeCb.currentIndexChanged.connect(self.userTypeChanged)
+        traj_tab_editLayout.addWidget(self.userTypeCb, 1, 1, 1, 2)
+
+        traj_tab_editLayout.addWidget(QLabel('Group size:'), 1, 3)
+        self.groupSizeCb = QComboBox()
+        self.groupSizeCb.addItems([str(i) for i in range(1, 16)])
+        # self.groupSizeCb.setToolTip('Group size')
+        self.groupSizeCb.currentIndexChanged.connect(self.groupSizeChanged)
+        traj_tab_editLayout.addWidget(self.groupSizeCb, 1, 4)
+
+        traj_tab_editLayout.addWidget(QLabel('Gender:'), 2, 0, Qt.AlignmentFlag.AlignRight)
+        self.userGenderCb = QComboBox()
+        self.userGenderCb.addItems(Person.gender.type.enums)
+        self.userGenderCb.setCurrentIndex(1)
+        traj_tab_editLayout.addWidget(self.userGenderCb, 2, 1)
+
+        traj_tab_editLayout.addWidget(QLabel('Age:'), 2, 2)
+        self.userAgeCb = QComboBox()
+        self.userAgeCb.addItems(Person.age.type.enums)
+        self.userGenderCb.setCurrentIndex(5)
+        traj_tab_editLayout.addWidget(self.userAgeCb, 2, 3, 1, 2)
+
+        traj_tab_editLayout.addWidget(QLabel('Action type:'), 3, 0, Qt.AlignmentFlag.AlignRight)
         self.actionTypeCmb = QComboBox()
         # self.actionTypeCmb.addItems(actionTypeList)
         # self.actionTypeCmb.setCurrentIndex(-1)
         self.actionTypeCmb.currentTextChanged.connect(self.trjActionTypeChanged)
-        traj_tab_editLayout.addWidget(self.actionTypeCmb, 2, 1, 1, 2)
+        traj_tab_editLayout.addWidget(self.actionTypeCmb, 3, 1, 1, 2)
 
-        traj_tab_editLayout.addWidget(QLabel('Units:'), 2, 3)
+        traj_tab_editLayout.addWidget(QLabel('Units:'), 3, 3)
         self.refLineLe = QLineEdit('--')
         # self.refLineLe.setFixedWidth(50)
         self.refLineLe.setReadOnly(True)
-        traj_tab_editLayout.addWidget(self.refLineLe, 2, 4, 1, 2)
+        traj_tab_editLayout.addWidget(self.refLineLe, 3, 4)
+
+        self.loadTrjBtn = QPushButton('Load ...')
+        self.loadTrjBtn.clicked.connect(self.loadTrajectory)
+        # self.loadTrjBtn.setEnabled(False)
+        traj_tab_editLayout.addWidget(self.loadTrjBtn, 4, 1, 1, 3)
 
         # traj_tab_editLayout.addWidget(QLabel('Speed:'), 1, 3)#, 1, 2)
         # self.userSpeedLe = QLineEdit('--')
@@ -520,17 +550,7 @@ class ObsToolbox(QMainWindow):
         # self.delTrjBtn.setEnabled(False)
         # traj_tab_editLayout.addWidget(self.delTrjBtn, 1, 5)
 
-        traj_tab_editLayout.addWidget(QLabel('User:'), 1, 0)
-        self.userTypeCb = QComboBox()
-        self.userTypeCb.addItems(userTypeNames)
-        self.userTypeCb.currentIndexChanged.connect(self.userTypeChanged)
-        traj_tab_editLayout.addWidget(self.userTypeCb, 1, 1, 1, 4)
 
-        self.groupSizeCb = QComboBox()
-        self.groupSizeCb.addItems(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-        self.groupSizeCb.setToolTip('Group size')
-        self.groupSizeCb.currentIndexChanged.connect(self.groupSizeChanged)
-        traj_tab_editLayout.addWidget(self.groupSizeCb, 1, 5)
 
         # self.saveTrjsBtn = QPushButton('Save')
         # self.saveTrjsBtn.clicked.connect(self.saveTrajectories)
@@ -590,6 +610,7 @@ class ObsToolbox(QMainWindow):
         self.cur.execute('SELECT name, startTime, idx From video_sequences WHERE databaseFilename=?',
                          (self.dateStr + '/' + trjDbName,))
         row = self.cur.fetchall()
+
         video_name = Path(row[0][0])
         video_start_0 = datetime.datetime.strptime(row[0][1], '%Y-%m-%d %H:%M:%S.%f')
         self.video_start = video_start_0.replace(microsecond=0)
@@ -622,7 +643,7 @@ class ObsToolbox(QMainWindow):
         self.traj_line = plotTrajectory(self.trjDBFile, self.intrinsicCameraMatrix, self.distortionCoefficients,
                                        self.homoFile, self.ax, session)
         for tl in self.traj_line.values():
-            tl.append([-1, [], [], [], [], 1, None, [], [], [], [], []])
+            tl.append([-1, [], [], [], [], 1, None, [], [], [], [], [], [], [], []])
             #[
             # userType,               0
             # [line],                 1
@@ -636,12 +657,32 @@ class ObsToolbox(QMainWindow):
             # [zoneCrossingInstants], 9
             # [zoneCrossingSecs],     10
             # [zoneEntering]          11
+            # [zoneCrossingSpeeds],   12
+            # [lineCrossingMarks],    13
+            # [zoneCrossingMarks],    14
             # ]
         self.noTrjLabel.setText('/' + str(list(self.traj_line.keys())[-1]))
         self.trjIdxLe.setText('-1')
         self.userTypeCb.setCurrentIndex(-1)
         self.refLineLe.setText('--')
+        self.userGenderCb.setCurrentIndex(1)
+        self.userAgeCb.setCurrentIndex(5)
         self.canvas.draw()
+
+    def newUser(self):
+        self.loadTrjBtn.setText('Load user(s)')
+        self.loadTrjBtn.setEnabled(True)
+        self.userTypeCb.setEnabled(True)
+        self.groupSizeCb.setEnabled(True)
+        self.userGenderCb.setEnabled(True)
+        self.userAgeCb.setEnabled(True)
+        self.actionTypeCmb.setEnabled(False)
+        self.refLineLe.setEnabled(False)
+
+        self.userGenderCb.setCurrentIndex(1)
+        self.userAgeCb.setCurrentIndex(5)
+        self.userTypeCb.setCurrentIndex(2)
+        self.groupSizeCb.setCurrentIndex(0)
 
     def nextTrajectory(self):
         if self.traj_line == None:
@@ -649,6 +690,9 @@ class ObsToolbox(QMainWindow):
         traj_ids = [k for k in self.traj_line.keys()]
         if traj_ids == []:
             return
+
+        self.loadTrjBtn.setText('Load trajectory')
+
         q_line = session.query(Line)
         q_zone = session.query(Zone)
         if q_line.all() == [] and q_zone.all() == []:
@@ -671,10 +715,20 @@ class ObsToolbox(QMainWindow):
             self.loadTrjBtn.setEnabled(False)
             self.userTypeCb.setEnabled(False)
             self.groupSizeCb.setEnabled(False)
+            self.userGenderCb.setEnabled(False)
+            self.userAgeCb.setEnabled(False)
+            self.actionTypeCmb.setEnabled(False)
+            self.refLineLe.setEnabled(False)
         else:
             self.loadTrjBtn.setEnabled(True)
             self.userTypeCb.setEnabled(True)
             self.groupSizeCb.setEnabled(True)
+            self.userGenderCb.setEnabled(True)
+            self.userAgeCb.setEnabled(True)
+            self.actionTypeCmb.setEnabled(True)
+            self.refLineLe.setEnabled(True)
+            self.userGenderCb.setCurrentIndex(1)
+            self.userAgeCb.setCurrentIndex(5)
 
         self.trjIdxLe.setText(next_idx)
         next_traj = self.traj_line[next_idx][0]
@@ -734,14 +788,15 @@ class ObsToolbox(QMainWindow):
                     intrs_mark.setPen(QPen(QColor(0, 255, 0), 0.5))
                     intrs_mark.setBrush(QBrush(QColor(255, 0, 0)))
                     intrs_mark.setToolTip('Intersection')
-                    gView.scene().addItem(intrs_mark)
+                    # gView.scene().addItem(intrs_mark)
+                    self.traj_line[next_idx][2][13].append(intrs_mark)
 
-            firstInst = next_traj.getFirstInstant()
-            lastInst = next_traj.getLastInstant()
-            firstPos = next_traj.getPositionAtInstant(firstInst)
-            lastPos = next_traj.getPositionAtInstant(lastInst)
-            firstSpeed = next_traj.getVelocityAtInstant(firstInst).norm2() * self.frameRate * 3.6
-            lastSpeed = next_traj.getVelocityAtInstant(lastInst).norm2() * self.frameRate * 3.6
+            # firstInst = next_traj.getFirstInstant()
+            # lastInst = next_traj.getLastInstant()
+            # firstPos = next_traj.getPositionAtInstant(firstInst)
+            # lastPos = next_traj.getPositionAtInstant(lastInst)
+            # firstSpeed = next_traj.getVelocityAtInstant(firstInst).norm2() * self.frameRate * 3.6
+            # lastSpeed = next_traj.getVelocityAtInstant(lastInst).norm2() * self.frameRate * 3.6
             for zone in q_zone.all():
                 polygon = None
                 for p in zone.points:
@@ -753,35 +808,95 @@ class ObsToolbox(QMainWindow):
                     else:
                         polygon = np.vstack([polygon, np.array([prj_point[0][0], prj_point[1][0]])])
 
-                if firstPos.inPolygon(polygon) and not lastPos.inPolygon(polygon) and firstSpeed < 5:
-                    secs = firstInst / self.frameRate
-                    instant = self.video_start + datetime.timedelta(seconds=round(secs))
-                    entering = False
+                for i in range(polygon.shape[0]):
+                    p1 = moving.Point(polygon[i][0], polygon[i][1])
+                    if i < polygon.shape[0] - 1:
+                        p2 = moving.Point(polygon[i + 1][0], polygon[i + 1][1])
+                    else:
+                        p2 = moving.Point(polygon[0][0], polygon[0][1])
 
-                    self.traj_line[next_idx][2][8].append(zone)
-                    self.traj_line[next_idx][2][9].append(instant)
-                    self.traj_line[next_idx][2][10].append(secs)
-                    self.traj_line[next_idx][2][11].append(entering)
+                    instants_list, intersections, rightToLefts = next_traj.getInstantsCrossingLine(p1, p2, True)
 
-                elif not firstPos.inPolygon(polygon) and lastPos.inPolygon(polygon) and lastSpeed < 5:
-                    secs = lastInst / self.frameRate
-                    instant = self.video_start + datetime.timedelta(seconds=round(secs))
-                    entering = True
+                    if len(instants_list) > 0:
+                        inters_inst = instants_list[0]
+                        secs = inters_inst / self.frameRate
+                        instant = self.video_start + datetime.timedelta(seconds=round(secs))
 
-                    self.traj_line[next_idx][2][8].append(zone)
-                    self.traj_line[next_idx][2][9].append(instant)
-                    self.traj_line[next_idx][2][10].append(secs)
-                    self.traj_line[next_idx][2][11].append(entering)
+                        prev_inst = round(inters_inst) - 1
+                        next_inst = round(inters_inst) + 1
+
+                        if next_traj.getPositionAtInstant(prev_inst).inPolygon(polygon) and \
+                                not next_traj.getPositionAtInstant(next_inst).inPolygon(polygon):
+                            entering = False
+                        elif not next_traj.getPositionAtInstant(prev_inst).inPolygon(polygon) and \
+                                next_traj.getPositionAtInstant(next_inst).inPolygon(polygon):
+                            entering = True
+                        else:
+                            continue
+
+                        inst_range = 5
+                        if (next_traj.getLastInstant() - instants_list[0]) < inst_range or \
+                                (instants_list[0] - next_traj.getFirstInstant()) < inst_range:
+                            inst_range = 0
+
+                        speed = round(np.mean([next_traj.getVelocityAtInstant(round(instants_list[0]) + i) \
+                                              .norm2() * self.frameRate * 3.6 for i in \
+                                               range(-inst_range, (inst_range + 1))]), 1)
+
+                        self.traj_line[next_idx][2][8].append(zone)
+                        self.traj_line[next_idx][2][9].append(instant)
+                        self.traj_line[next_idx][2][10].append(secs)
+                        self.traj_line[next_idx][2][11].append(entering)
+                        self.traj_line[next_idx][2][12].append(speed)
+
+                        img_inters_pnts = worldToImageProject(np.array([[intersections[0].x], [intersections[0].y]]),
+                                                              self.intrinsicCameraMatrix, self.distortionCoefficients,
+                                                              np.linalg.inv(homography))
+
+                        intrs_mark = QGraphicsEllipseItem(img_inters_pnts[0][0], img_inters_pnts[1][0],
+                                                          int(gView.labelSize / 3), int(gView.labelSize / 3))
+                        intrs_mark.setPen(QPen(QColor(0, 255, 0), 0.5))
+                        intrs_mark.setBrush(QBrush(QColor(255, 0, 0)))
+                        intrs_mark.setToolTip('Intersection')
+                        # gView.scene().addItem(intrs_mark)
+                        self.traj_line[next_idx][2][14].append(intrs_mark)
+
+                # if firstPos.inPolygon(polygon) and not lastPos.inPolygon(polygon) and firstSpeed < 5:
+                #     secs = firstInst / self.frameRate
+                #     instant = self.video_start + datetime.timedelta(seconds=round(secs))
+                #     entering = False
+                #
+                #     self.traj_line[next_idx][2][8].append(zone)
+                #     self.traj_line[next_idx][2][9].append(instant)
+                #     self.traj_line[next_idx][2][10].append(secs)
+                #     self.traj_line[next_idx][2][11].append(entering)
+                #
+                # elif not firstPos.inPolygon(polygon) and lastPos.inPolygon(polygon) and lastSpeed < 5:
+                #     secs = lastInst / self.frameRate
+                #     instant = self.video_start + datetime.timedelta(seconds=round(secs))
+                #     entering = True
+                #
+                #     self.traj_line[next_idx][2][8].append(zone)
+                #     self.traj_line[next_idx][2][9].append(instant)
+                #     self.traj_line[next_idx][2][10].append(secs)
+                #     self.traj_line[next_idx][2][11].append(entering)
+
+        for m in self.traj_line[next_idx][2][13] + self.traj_line[next_idx][2][14]:
+            gView.scene().addItem(m)
 
         if self.traj_line[next_idx][2][4] != [] and self.traj_line[next_idx][2][10] == []:
             secs = self.traj_line[next_idx][2][4][0]
         elif self.traj_line[next_idx][2][4] == [] and self.traj_line[next_idx][2][10] == []:
             secs = next_traj.getLastInstant() / self.frameRate
-        else:
-            if self.traj_line[next_idx][2][11][0]:
-                secs = next_traj.getLastInstant() / self.frameRate
-            else:
-                secs = next_traj.getFirstInstant() / self.frameRate
+        elif self.traj_line[next_idx][2][4] == [] and self.traj_line[next_idx][2][10] != []:
+            secs = self.traj_line[next_idx][2][10][0]
+        elif self.traj_line[next_idx][2][4] != [] and self.traj_line[next_idx][2][10] != []:
+            secs = self.traj_line[next_idx][2][10][0]
+        # else:
+        #     if self.traj_line[next_idx][2][11][0]:
+        #         secs = next_traj.getLastInstant() / self.frameRate
+        #     else:
+        #         secs = next_traj.getFirstInstant() / self.frameRate
 
         self.parent().mediaPlayer.setPosition(round(secs*1000))
 
@@ -862,14 +977,24 @@ class ObsToolbox(QMainWindow):
 
         prev_idx = traj_ids[traj_ids.index(current_idx) - 1]
 
+        self.loadTrjBtn.setText('Load trajectory')
+
         if not self.traj_line[prev_idx][2][6] in [None, -1]:
             self.loadTrjBtn.setEnabled(False)
             self.userTypeCb.setEnabled(False)
             self.groupSizeCb.setEnabled(False)
+            self.actionTypeCmb.setEnabled(False)
+            self.refLineLe.setEnabled(False)
+            self.userAgeCb.setEnabled(False)
+            self.userGenderCb.setEnabled(False)
         else:
             self.loadTrjBtn.setEnabled(True)
             self.userTypeCb.setEnabled(True)
             self.groupSizeCb.setEnabled(True)
+            self.actionTypeCmb.setEnabled(True)
+            self.refLineLe.setEnabled(True)
+            self.userAgeCb.setEnabled(True)
+            self.userGenderCb.setEnabled(True)
 
         self.trjIdxLe.setText(prev_idx)
         prev_traj = self.traj_line[prev_idx][0]
@@ -879,15 +1004,33 @@ class ObsToolbox(QMainWindow):
         self.groupSizeCb.setCurrentIndex(self.traj_line[prev_idx][2][5] - 1)
         self.canvas.draw()
 
+
         if self.traj_line[prev_idx][2][4] != [] and self.traj_line[prev_idx][2][10] == []:
             secs = self.traj_line[prev_idx][2][4][0]
+            for m in self.traj_line[prev_idx][2][13]:
+                gView.scene().addItem(m)
         elif self.traj_line[prev_idx][2][4] == [] and self.traj_line[prev_idx][2][10] == []:
-            secs = prev_traj.getLastInstant() / self.frameRate
-        else:
-            if self.traj_line[prev_idx][2][11][0]:
-                secs = prev_traj.getLastInstant() / self.frameRate
-            else:
-                secs = prev_traj.getFirstInstant() / self.frameRate
+            secs = prev_traj.getFirstInstant() / self.frameRate
+        elif self.traj_line[prev_idx][2][4] == [] and self.traj_line[prev_idx][2][10] != []:
+            secs = self.traj_line[prev_idx][2][10][0]
+            for m in self.traj_line[prev_idx][2][14]:
+                gView.scene().addItem(m)
+        elif self.traj_line[prev_idx][2][4] != [] and self.traj_line[prev_idx][2][10] != []:
+            secs = self.traj_line[prev_idx][2][10][0]
+            for m in self.traj_line[prev_idx][2][13]:
+                gView.scene().addItem(m)
+            for m in self.traj_line[prev_idx][2][14]:
+                gView.scene().addItem(m)
+
+        # if self.traj_line[prev_idx][2][4] != [] and self.traj_line[prev_idx][2][10] == []:
+        #     secs = self.traj_line[prev_idx][2][4][0]
+        # elif self.traj_line[prev_idx][2][4] == [] and self.traj_line[prev_idx][2][10] == []:
+        #     secs = prev_traj.getLastInstant() / self.frameRate
+        # else:
+        #     if self.traj_line[prev_idx][2][11][0]:
+        #         secs = prev_traj.getLastInstant() / self.frameRate
+        #     else:
+        #         secs = prev_traj.getFirstInstant() / self.frameRate
 
         self.parent().mediaPlayer.setPosition(round(secs * 1000))
 
@@ -937,26 +1080,41 @@ class ObsToolbox(QMainWindow):
         if self.mdbFileLedit.text() == '' or self.traj_line == None or self.trjIdxLe.text() == '-1':
             return
 
-        trj_idx = self.trjIdxLe.text()
-        userType = self.traj_line[trj_idx][2][0]
+        if self.loadTrjBtn.text() == 'Load trajectory':
+            trj_idx = self.trjIdxLe.text()
+            userType = self.traj_line[trj_idx][2][0]
+        else:
+            userType = self.userTypeCb.currentIndex()
+
         if userType == 0:
             return
 
         self.loadTrjBtn.setEnabled(False)
         self.userTypeCb.setEnabled(False)
         self.groupSizeCb.setEnabled(False)
+        self.userGenderCb.setEnabled(False)
+        self.userAgeCb.setEnabled(False)
+        self.actionTypeCmb.setEnabled(False)
+        self.refLineLe.setEnabled(False)
 
-        if userType != -1:# and lines != []:
+        if userType != -1 or self.loadTrjBtn.text() == 'Load user(s)':
             self.user_newGroup_click()
             group_idx = int(self.group_idx_cmbBox.currentText())
-            self.traj_line[trj_idx][2][6] = group_idx
-            groupSize = self.traj_line[trj_idx][2][5]
+            if self.loadTrjBtn.text() == 'Load trajectory':
+                self.traj_line[trj_idx][2][6] = group_idx
+                groupSize = self.traj_line[trj_idx][2][5]
+            else:
+                groupSize = int(self.groupSizeCb.currentText())
             group = self.groups[group_idx][0]
-            group.trajectoryDB = self.trjDbIdx
-            group.trajectoryIdx = trj_idx
+            if self.loadTrjBtn.text() == 'Load trajectory':
+                group.trajectoryDB = self.trjDbIdx
+                group.trajectoryIdx = trj_idx
             for i in range(groupSize):
                 self.user_newRecBtn_click()
                 person_idx = int(self.group_list_wdgt.currentItem().text())
+                person = self.groupPersons[person_idx][0]
+                person.gender = self.userGenderCb.currentText()
+                person.age = self.userAgeCb.currentText()
                 if userType == 10:
                     self.act_newRecBtn_click()
                     self.act_saveBtn_click()
@@ -995,7 +1153,7 @@ class ObsToolbox(QMainWindow):
             # self.group_list_wdgt.setCurrentRow(0)
             self.user_saveBtn_click()
 
-            if userType != 10:
+            if userType != 10 and self.loadTrjBtn.text() == 'Load trajectory':
                 if self.actionTypeCmb.currentText() == actionTypeList[0]:
                     lines = self.traj_line[trj_idx][2][1]
                     for i in range(len(lines)):
@@ -1024,10 +1182,12 @@ class ObsToolbox(QMainWindow):
                         zone = zones[i]
                         instant = self.traj_line[trj_idx][2][9][i]
                         entering = self.traj_line[trj_idx][2][11][i]
+                        speed = self.traj_line[trj_idx][2][12][i]
 
                         zonepass.zone = zone
                         zonepass.instant = instant
                         zonepass.entering = entering
+                        zonepass.speed = speed
                     # self.set_widget_values(self.linepass_grpBox, linepass)
                     # self.linepass_list_wdgt.setCurrentRow(-1)
                     # self.linepass_list_wdgt.setCurrentRow(0)
@@ -1078,7 +1238,7 @@ class ObsToolbox(QMainWindow):
 
     def userTypeChanged(self):
         current_idx = self.trjIdxLe.text()
-        if current_idx == '-1':
+        if current_idx == '-1' or self.loadTrjBtn.text() == 'Load user(s)':
             return
         user_indx = self.userTypeCb.currentIndex()
         current_traj = self.traj_line[current_idx][0]
@@ -1093,7 +1253,7 @@ class ObsToolbox(QMainWindow):
 
     def groupSizeChanged(self):
         current_idx = self.trjIdxLe.text()
-        if current_idx == '-1':
+        if current_idx == '-1' or self.loadTrjBtn.text() == 'Load user(s)':
             return
         self.traj_line[current_idx][2][5] = int(self.groupSizeCb.currentText())
 

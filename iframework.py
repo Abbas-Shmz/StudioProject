@@ -240,6 +240,7 @@ class ZoneCrossing(AbstractPassing, Base):
     groupIdx = Column(Integer, ForeignKey('groups.idx'))
     pointIdx = Column(Integer, ForeignKey('points.idx'))
     instant = Column(DateTime)
+    speed = Column(Float)
     entering = Column(Boolean)
 
     zone = relationship('Zone')
