@@ -822,8 +822,15 @@ class ObsToolbox(QMainWindow):
                         secs = inters_inst / self.frameRate
                         instant = self.video_start + datetime.timedelta(seconds=round(secs))
 
-                        prev_inst = round(inters_inst) - 1
-                        next_inst = round(inters_inst) + 1
+                        if round(inters_inst) == next_traj.getFirstInstant():
+                            prev_inst = round(inters_inst)
+                        else:
+                            prev_inst = round(inters_inst) - 1
+
+                        if round(inters_inst) == next_traj.getLastInstant():
+                            next_inst = round(inters_inst)
+                        else:
+                            next_inst = round(inters_inst) + 1
 
                         if next_traj.getPositionAtInstant(prev_inst).inPolygon(polygon) and \
                                 not next_traj.getPositionAtInstant(next_inst).inPolygon(polygon):
@@ -1115,10 +1122,10 @@ class ObsToolbox(QMainWindow):
                 person = self.groupPersons[person_idx][0]
                 person.gender = self.userGenderCb.currentText()
                 person.age = self.userAgeCb.currentText()
-                if userType == 10:
-                    self.act_newRecBtn_click()
-                    self.act_saveBtn_click()
-                else:
+                if userType != 10:
+                #     self.act_newRecBtn_click()
+                #     self.act_saveBtn_click()
+                # else:
                     self.mode_grpBox.setChecked(True)
                     mode = self.groupPersons[person_idx][1]
                     if userType != 2:
@@ -1192,6 +1199,9 @@ class ObsToolbox(QMainWindow):
                     # self.linepass_list_wdgt.setCurrentRow(-1)
                     # self.linepass_list_wdgt.setCurrentRow(0)
                     self.zonepass_saveBtn_click()
+            elif userType == 10 and self.loadTrjBtn.text() == 'Load trajectory':
+                self.act_newRecBtn_click()
+                self.act_saveBtn_click()
         self.group_idx_cmbBox.setCurrentIndex(-1)
         self.group_idx_cmbBox.setCurrentText(str(group_idx))
         self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
