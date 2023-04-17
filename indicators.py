@@ -3375,6 +3375,18 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                 f'{transitCountAllmodes_path}/Density_All-modes_' + '-'.join(labels) + f'_{site.capitalize()}.pdf')
         plt.close(fig)
 
+        # ++++++++++++++++++ Cumulative sum of all street users enter/exit in Zones ++++++++++++++++++++++
+        fig, ax = plt.subplots(tight_layout=True)
+        err = cumEnterExitPlot(dbFiles, labels, ['all_modes'] * len(dbFiles), ['1'] * len(dbFiles),
+                              ax=ax, siteName=site.capitalize(), colors=plotColors,
+                              titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                              legendFontSize=10)
+        if err == None:
+            plt.savefig(
+                f'{transitCountAllmodes_path}/Cumulative-sum_All-modes_' + '-'.join(labels) + f'_{site.capitalize()}.pdf')
+        plt.close(fig)
+
+
         #--------------------------------------------------------------------
         for transport in transportType:
             transports = [transport] * len(dbFiles)
@@ -3398,6 +3410,18 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             if err == None:
                 plt.savefig(
                     f'{transitCount_path}/{transport}/Density_' + '-'.join(
+                        labels) + f'_{transport}_{site.capitalize()}.pdf')
+            plt.close(fig)
+
+            # ++++++++++++++++++ Cumulative sum of pedestrians / cyclists in Zones ++++++++++++++++++++++
+            fig, ax = plt.subplots(tight_layout=True)
+            err = cumEnterExitPlot(dbFiles, labels, transports, ['1'] * len(dbFiles),
+                                  ax=ax, siteName=site.capitalize(), colors=plotColors,
+                                  titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                  legendFontSize=10)
+            if err == None:
+                plt.savefig(
+                    f'{transitCount_path}/{transport}/Cumulative-sum_' + '-'.join(
                         labels) + f'_{transport}_{site.capitalize()}.pdf')
             plt.close(fig)
 
@@ -4105,7 +4129,6 @@ def sankeyPlotTransit(dbFileName, actionType, unitIdx, outputFile, colors_dict=N
 
 # =======================================================================
 
-
 def create_sankey_diagram(df, outputFile, colors_dict=None):
 
     labels_0 = df.iloc[:, 0].unique().tolist()
@@ -4168,6 +4191,131 @@ def create_sankey_diagram(df, outputFile, colors_dict=None):
     pio.kaleido.scope.mathjax = None
     pio.write_image(fig, outputFile, scale=2)
     # fig.show()
+
+
+# =================================================================
+def cumEnterExitPlot(dbFiles, labels, transports, unitIdxs,
+                 ax=None, alpha=1, colors=plotColors, siteName=None,
+                 titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
+
+    # # Sample data
+    # date_times = ['2022-01-01 00:00:00', '2022-01-01 00:01:00', '2022-01-01 00:03:00', '2022-01-01 00:05:00',
+    #               '2022-01-01 00:06:00', '2022-01-01 00:09:00']
+    #
+    # # Convert date-times to pandas datetime object
+    # date_times = pd.to_datetime(date_times)
+
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+
+        fobst, lobst = getObsStartEnd(session)
+        first_obs_times.append(fobst.time())
+        last_obs_times.append(lobst.time())
+
+    actionTypes_entries = ['entering_zone'] * inputNo
+    query_list_entries = getQueryList(dbFiles, transports, actionTypes_entries, unitIdxs)
+    if isinstance(query_list_entries, str):
+        return query_list_entries
+    entries_lists = getTimeLists(query_list_entries, actionTypes_entries)
+
+    actionTypes_exits = ['exiting_zone'] * inputNo
+    query_list_exits = getQueryList(dbFiles, transports, actionTypes_exits, unitIdxs)
+    if isinstance(query_list_exits, str):
+        return query_list_exits
+    exits_lists = getTimeLists(query_list_exits, actionTypes_exits)
+
+    if all([i == [] for i in entries_lists]) or all([i == [] for i in exits_lists]):
+        return 'No observation!'
+
+    for entries in entries_lists:
+        if entries == []:
+            continue
+        i = 0
+        for time_ticks in entries:
+            entries[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
+            i += 1
+
+    for exits in exits_lists:
+        if exits == []:
+            continue
+        i = 0
+        for time_ticks in exits:
+            exits[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
+            i += 1
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
+        ax = fig.add_subplot(111)  # plt.subplots(1, 1)
+
+    to_timestamp = np.vectorize(lambda x: x.timestamp())
+
+    startTime = datetime.datetime.combine(datetime.datetime(2000, 1, 1), max(first_obs_times))
+    endTime = datetime.datetime.combine(datetime.datetime(2000, 1, 1), min(last_obs_times))
+
+    for i in range(inputNo):
+        entries = pd.to_datetime([ent for ent in entries_lists[i] if ent >= startTime and ent <= endTime]).sort_values()
+        exits = pd.to_datetime([ext for ext in exits_lists[i] if ext >= startTime and ext <= endTime]).sort_values()
+
+        # # Sort the dates in ascending order
+        # date_times = date_times.sort_values()
+
+        # Create a new DataFrame with a count of events at each time
+        df_entries = pd.DataFrame({'count': range(1, len(entries) + 1)}, index=entries)
+        df_exits = pd.DataFrame({'count': range(1, len(exits) + 1)}, index=exits)
+
+        # Compute the empirical cumulative sum of the counts
+        ecdf_entries = df_entries['count']
+        ecdf_exits = df_exits['count']
+
+        # Create an empirical cumulative plot
+        ax.step(ecdf_entries.index, ecdf_entries, label=f'Enter ({labels[i]})', where='post', lw=0.5)
+        ax.step(ecdf_exits.index, ecdf_exits, label=f'Exit ({labels[i]})', where='post', lw=0.5)
+
+    locator = mdates.AutoDateLocator()
+    ax.xaxis.set_major_locator(locator)
+
+    # ax.xaxis.set_major_locator(mdates.HourLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+
+    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=30))
+
+    # if inputNo == 1:
+    #     xLabel = 'Time ({})'.format(bins_start.strftime('%A, %b %d, %Y'))
+    # else:
+    xLabel = 'Time of day'
+
+    # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=0)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel(xLabel, fontsize=xLabelSize)
+
+    tm = getUserTitle(transports[0])
+
+    if yLabelSize > 0:
+        ax.set_ylabel('No. of {}s'.format(tm), fontsize=yLabelSize)
+
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+    if unitIdxs[0].split('_')[0] == 'all':
+        title = f'Cumulative sum of {tm}s enter/exit in all zones'
+    else:
+        title = f'Cumulative sum of {tm}s enter/exit in zone #{unitIdxs[0]}'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=titleSize)
+
+    if not all(l == '' for l in labels):
+        ax.legend(loc='best', fontsize=legendFontSize)
+
+    ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
+
+    watermark(ax)
 
 
 # =========================================
