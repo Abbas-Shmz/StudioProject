@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QGridLayout, QVBoxLayout, QH
                              QFileDialog, QToolBar, QMessageBox, QDialog, QLabel, QGraphicsItemGroup,
                              QGraphicsLineItem, QGraphicsEllipseItem,
                              QSizePolicy, QStatusBar, QTableWidget, QHeaderView, QTableWidgetItem,
-                             QAbstractItemView, QTableView, QListWidget, QListWidgetItem)
+                             QAbstractItemView, QTableView, QListWidget, QListWidgetItem, QCheckBox)
 from PyQt6.QtGui import QColor, QIcon, QFont, QCursor, QPen, QBrush, QAction
 from PyQt6.QtCore import QDateTime, QSize, QDir, Qt, QAbstractTableModel, QObject, QThread, pyqtSignal
 from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
@@ -44,8 +44,10 @@ session = None
 
 config_object = ConfigParser()
 cfg = config_object.read("config.ini")
-actionTypeList = ['crossing line', 'entering zone', 'exiting zone', 'crossing zone',
-                  'dwelling zone']
+
+actionTypeList = ['crossing_line', 'crossing_line_RL', 'crossing_line_LR',
+                  'crossing_zone', 'entering_zone', 'exiting_zone',
+                  'all_crossings']
 
 class ObsToolbox(QMainWindow):
     def __init__(self, parent=None):
@@ -169,37 +171,38 @@ class ObsToolbox(QMainWindow):
         group_newBtnsLayout = QHBoxLayout()
         group_saveBtnsLayout = QHBoxLayout()
 
-        self.user_newGroupButton = QPushButton(QIcon('icons/group.png'), 'New group')
-        self.user_newGroupButton.clicked.connect(self.user_newGroup_click)
-        group_grpBox_layout.addWidget(self.user_newGroupButton, 0, 0, 1, 3)
-
-        group_grpBox_layout.addWidget(QLabel('Group idx:'), 1, 0)
+        group_grpBox_layout.addWidget(QLabel('Group idx:'), 0, 0, Qt.AlignmentFlag.AlignRight)
         self.group_idx_cmbBox = QComboBox()
         self.group_idx_cmbBox.currentTextChanged.connect(self.group_idx_changed)
-        group_grpBox_layout.addWidget(self.group_idx_cmbBox, 1, 1)
+        group_grpBox_layout.addWidget(self.group_idx_cmbBox, 0, 1, Qt.AlignmentFlag.AlignLeft)
+
+        self.user_newGroupButton = QPushButton(QIcon('icons/group.png'), 'New group')
+        self.user_newGroupButton.clicked.connect(self.user_newGroup_click)
+        group_grpBox_layout.addWidget(self.user_newGroupButton, 0, 2)
+
+        group_grpBox_layout.addWidget(QLabel('Users idx:'), 2, 0, Qt.AlignmentFlag.AlignLeft)
 
         self.user_newRecButton = QPushButton(QIcon('icons/person.png'), 'New user')
         self.user_newRecButton.setEnabled(False)
         self.user_newRecButton.clicked.connect(self.user_newRecBtn_click)
-        group_grpBox_layout.addWidget(self.user_newRecButton, 1, 2)
+        group_grpBox_layout.addWidget(self.user_newRecButton, 2, 2)
         # user_tab_layout.addLayout(user_newBtnsLayout)
-
 
         self.group_list_wdgt = QListWidget()
         self.group_list_wdgt.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.group_list_wdgt.currentRowChanged.connect(self.rowChanged)
         # group_grid_layout.addWidget(self.group_list_wdgt)
-        group_grpBox_layout.addWidget(self.group_list_wdgt, 2, 0, 1, 3)
+        group_grpBox_layout.addWidget(self.group_list_wdgt, 3, 0, 1, 3)
 
         self.group_delFromListButton = QPushButton(QIcon('icons/delete.png'), 'Delete selected user')
         self.group_delFromListButton.setEnabled(False)
         self.group_delFromListButton.clicked.connect(self.group_delFromList_click)
-        group_grpBox_layout.addWidget(self.group_delFromListButton, 3, 0, 1, 2)
+        group_grpBox_layout.addWidget(self.group_delFromListButton, 4, 0, 1, 2)
 
         self.group_delGroupButton = QPushButton(QIcon('icons/delete.png'), 'Delete group')
         self.group_delGroupButton.setEnabled(False)
         self.group_delGroupButton.clicked.connect(self.group_delGroupBtn_click)
-        group_grpBox_layout.addWidget(self.group_delGroupButton, 3, 2)
+        group_grpBox_layout.addWidget(self.group_delGroupButton, 4, 2)
 
         # group_grpBox_wdgt.setLayout(group_grid_layout)
         # group_grpBox_layout.addWidget(group_grpBox_wdgt)
@@ -1413,13 +1416,46 @@ class ObsToolbox(QMainWindow):
         session.commit()
 
     def group_idx_changed(self):
-        if self.group_idx_cmbBox.currentText() == '':
+        if self.group_idx_cmbBox.currentText() == '' or self.group_idx_cmbBox.currentIndex() == -1:
             return
+
         group_idx = int(self.group_idx_cmbBox.currentText())
+
+        if not group_idx in self.groups.keys():
+            self.groups[group_idx] = [session.query(Group).filter(Group.idx == group_idx).first(), {}, {}, {}]
+            for linCr in session.query(LineCrossing).filter(LineCrossing.groupIdx == group_idx).all():
+                self.groups[group_idx][1][linCr.idx] = linCr
+
+            for zonCr in session.query(ZoneCrossing).filter(ZoneCrossing.groupIdx == group_idx).all():
+                self.groups[group_idx][2][zonCr.idx] = zonCr
+
+            for Act in session.query(Activity).filter(Activity.groupIdx == group_idx).all():
+                self.groups[group_idx][3][Act.idx] = Act
+
+            # person_ids = [str(i[0]) for i in session.query(GroupBelonging.personIdx) \
+            #     .filter(GroupBelonging.groupIdx == group_idx).all()]
+            #
+            # linepass_ids = [str(i[0]) for i in session.query(LineCrossing.idx) \
+            #     .filter(LineCrossing.groupIdx == group_idx).all()]
+            #
+            # zonepass_ids = [str(i[0]) for i in session.query(ZoneCrossing.idx) \
+            #     .filter(ZoneCrossing.groupIdx == group_idx).all()]
+            #
+            # act_ids = [str(i[0]) for i in session.query(Activity.idx) \
+            #     .filter(Activity.groupIdx == group_idx).all()]
+
         person_ids = [str(p.idx) for p in self.groups[group_idx][0].getPersons()]
         linepass_ids = [str(lp_id) for lp_id in self.groups[group_idx][1].keys()]
         zonepass_ids = [str(lp_id) for lp_id in self.groups[group_idx][2].keys()]
         act_ids = [str(lp_id) for lp_id in self.groups[group_idx][3].keys()]
+
+        for pers_id in person_ids:
+            if not int(pers_id) in self.groupPersons.keys():
+                self.groupPersons[int(pers_id)] = [session.query(Person).filter(Person.idx == int(pers_id)).first(),
+                                              session.query(Mode).filter(Mode.personIdx == int(pers_id)).first(),
+                                              session.query(Vehicle).join(Mode, Mode.vehicleIdx == Vehicle.idx) \
+                                                  .filter(Mode.personIdx == int(pers_id)).first()]
+
 
         self.group_list_wdgt.clear()
         if len(person_ids) > 0:
@@ -1565,6 +1601,7 @@ class ObsToolbox(QMainWindow):
 
         if self.sender() == self.group_list_wdgt:
             person_idx = int(current_item.text())
+
             person = self.groupPersons[person_idx][0]
             mode = self.groupPersons[person_idx][1]
             veh = self.groupPersons[person_idx][2]
@@ -1959,7 +1996,7 @@ class ObsToolbox(QMainWindow):
                 if len(getattr(class_, label.text()).foreign_keys) > 0:
                     fk_set = getattr(class_, label.text()).foreign_keys
                     fk = next(iter(fk_set))
-                    fk_items = [input_wdgt.itemText(i) for i in range(input_wdgt.count())]
+                    # fk_items = [input_wdgt.itemText(i) for i in range(input_wdgt.count())]
 
                     items = [i[0] for i in session.query(fk.column).all()]
                     items.sort(reverse=True)
@@ -1975,7 +2012,12 @@ class ObsToolbox(QMainWindow):
                 if self.parent() == None or self.parent().videoCurrentDatetime == None:
                     input_wdgt.setDateTime(QDateTime.currentDateTime())
                 else:
-                    input_wdgt.setDateTime(QDateTime(self.parent().videoCurrentDatetime))
+                    #input_wdgt.setDateTime(QDateTime(self.parent().videoCurrentDatetime))
+                    # --------------------------
+                    secs = self.parent().positionSlider.value() / 1000
+                    instant = self.video_start + datetime.timedelta(seconds=round(secs))
+                    input_wdgt.setDateTime(QDateTime(instant))
+                    # --------------------------
             i = i + 1
 
 
@@ -2092,6 +2134,8 @@ class ObsToolbox(QMainWindow):
     def wdgtValueChanged(self):
         if self.IsChangedManually == False:
             return
+        if self.group_idx_cmbBox.count() == 0:
+            return
         grpBox = self.sender().parentWidget()
         layout = grpBox.layout()
         wdgt_idx = layout.indexOf(self.sender())
@@ -2151,7 +2195,9 @@ class ObsToolbox(QMainWindow):
             return
 
         if isinstance(self.sender(), QLineEdit):
-            setattr(inst, attrib, self.sender().text())
+            new_val = self.sender().text()
+            if new_val != 'None':
+                setattr(inst, attrib, new_val)
         elif isinstance(self.sender(), QComboBox):
             new_val = self.sender().currentText()
             if new_val in ['True', 'False']:
@@ -2465,9 +2511,30 @@ class ObsToolbox(QMainWindow):
             if session is None:
                 session = connectDatabase(self.dbFilename)
 
-            # group_idx_list = [str(i[0]) for i in session.query(Group.idx).all()]
-            # self.group_idx_cmbBox.addItems(group_idx_list)
-            # self.group_idx_cmbBox.setCurrentIndex(-1)
+            group_idx_list = [str(i[0]) for i in session.query(Group.idx).all()]
+            if group_idx_list != []:
+                self.init_input_widgets(self.linepass_grpBox)
+                self.init_input_widgets(self.zonepass_grpBox)
+                self.init_input_widgets(self.act_grpBox)
+
+                self.group_idx_cmbBox.addItems(group_idx_list)
+                self.group_idx_cmbBox.setCurrentIndex(0)
+
+                btn_label = self.user_saveButton.text()
+                self.user_saveButton.setText(btn_label.replace(btn_label.split(' ')[0], 'Edit'))
+                self.user_saveButton.setIcon(QIcon('icons/edit.png'))
+                enable = False
+                # self.group_grpBox.setEnabled(enable)
+                self.user_saveButton.setEnabled(not enable)
+                self.person_grpBox.setEnabled(enable)
+                self.veh_grpBox.setEnabled(enable)
+                self.mode_grpBox.setEnabled(enable)
+                self.user_newGroupButton.setEnabled(not enable)
+                self.user_newRecButton.setEnabled(enable)
+                self.group_delFromListButton.setEnabled(enable)
+                self.group_delGroupButton.setEnabled(not enable)
+                self.group_idx_cmbBox.setEnabled(not enable)
+
 
     def tempHist(self):
         if session == None:
@@ -2738,7 +2805,12 @@ class TempHistWindow(QDialog):
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
+            idxItems.insert(0, 'all_zones')
+            self.unitIdxCombobx.addItems(idxItems)
+        elif actionType == 'all actions':
+            idxItems = ['all_lines', 'all_zones', 'all_units']
+            self.unitIdxCombobx.addItems(idxItems)
 
         self.plotBtn.setEnabled(True)
 
@@ -2925,7 +2997,12 @@ class StackHistWindow(QDialog):
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
+            idxItems.insert(0, 'all_zones')
+            self.unitIdxCombobx.addItems(idxItems)
+        elif actionType == 'all actions':
+            idxItems = ['all_lines', 'all_zones', 'all_units']
+            self.unitIdxCombobx.addItems(idxItems)
 
         self.plotBtn.setEnabled(True)
 
@@ -3145,7 +3222,12 @@ class SpeedPlotWindow(QDialog):
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
+            idxItems.insert(0, 'all_zones')
+            self.unitIdxCombobx.addItems(idxItems)
+        elif actionType == 'all actions':
+            idxItems = ['all_lines', 'all_zones', 'all_units']
+            self.unitIdxCombobx.addItems(idxItems)
 
         self.plotBtn.setEnabled(True)
 
@@ -3507,7 +3589,9 @@ class CompHistWindow(QDialog):
 
         gridLayout.addWidget(QLabel('Transport:'), 0, 2, Qt.AlignmentFlag.AlignRight)
         self.transportCombobx = QComboBox()
-        self.transportCombobx.addItems(inspect(Mode).columns['transport'].type.enums)
+        mode_items = inspect(Mode).columns['transport'].type.enums
+        mode_items.insert(0, 'all_modes')
+        self.transportCombobx.addItems(mode_items)
         gridLayout.addWidget(self.transportCombobx, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
         gridLayout.addWidget(QLabel('Action type:'), 0, 4, Qt.AlignmentFlag.AlignRight)
@@ -3661,12 +3745,17 @@ class CompHistWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
-        if 'line' in actionType.split(' '):
+        if 'line' in actionType.split('_'):
             idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
-        elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
+        elif 'zone' in actionType.split('_'):
+            idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
+            idxItems.insert(0, 'all_zones')
+            self.unitIdxCombobx.addItems(idxItems)
+        elif actionType == 'all_crossings':
+            idxItems = ['all_units']
+            self.unitIdxCombobx.addItems(idxItems)
 
         self.plotBtn.setEnabled(True)
 
@@ -3809,12 +3898,17 @@ class genReportWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
-        if 'line' in actionType.split(' '):
+        if 'line' in actionType.split('_'):
             idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
-        elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
+        elif 'zone' in actionType.split('_'):
+            idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
+            idxItems.insert(0, 'all_zones')
+            self.unitIdxCombobx.addItems(idxItems)
+        elif actionType == 'all_crossings':
+            idxItems = ['all_units']
+            self.unitIdxCombobx.addItems(idxItems)
 
         # self.genRepBtn.setEnabled(True)
     def opendbFile(self):
@@ -4006,7 +4100,12 @@ class compIndicatorsWindow(QDialog):
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
         elif 'zone' in actionType.split(' '):
-            self.unitIdxCombobx.addItems([str(id[0]) for id in current_session.query(Zone.idx).all()])
+            idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
+            idxItems.insert(0, 'all_zones')
+            self.unitIdxCombobx.addItems(idxItems)
+        elif actionType == 'all actions':
+            idxItems = ['all_lines', 'all_zones', 'all_units']
+            self.unitIdxCombobx.addItems(idxItems)
 
 
 class plotTrajWindow(QDialog):
@@ -4859,6 +4958,48 @@ class dfTableModel(QAbstractTableModel):
         if orientation == Qt.Orientation.Vertical and role == Qt.ItemDataRole.DisplayRole:
             return self._data.index[section]
         return None
+
+# ==============================================================
+class CheckableComboBox(QComboBox):
+    def __init__(self):
+        super(CheckableComboBox, self).__init__()
+
+        # Set the ComboBox to allow multiple selection
+        self.setInsertPolicy(QComboBox.InsertPolicy.InsertAlphabetically)
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.view().pressed.connect(self.handle_item_pressed)
+        self.currentIndexChanged.connect(self.handle_current_index_changed)
+
+    def handle_item_pressed(self, index):
+        item = self.model().itemFromIndex(index)
+        if item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked:
+            item.setData(Qt.CheckState.Unchecked, Qt.ItemDataRole.CheckStateRole)
+        else:
+            item.setData(Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
+
+    def handle_current_index_changed(self, index):
+        self.setCurrentIndex(index)
+
+    def item_checked(self, index):
+        item = self.model().item(index, self.modelColumn())
+        return item.data(Qt.ItemDataRole.CheckStateRole) == Qt.CheckState.Checked
+
+    def checked_items(self):
+        checked_items = []
+        for index in range(self.count()):
+            if self.item_checked(index):
+                checked_items.append(self.itemText(index))
+        return checked_items
+
+    def setCheckedItems(self, items):
+        for index in range(self.count()):
+            item = self.model().item(index, self.modelColumn())
+            if item.text() in items:
+                item.setData(Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
+            else:
+                item.setData(Qt.CheckState.Unchecked, Qt.ItemDataRole.CheckStateRole)
+
 
 
 if __name__ == '__main__':

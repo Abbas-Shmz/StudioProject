@@ -17,7 +17,7 @@ GenderEnum = Enum('GenderEnum', 'unknown male female')
 ModeEnum = Enum('ModeEnum', 'cardriver carpassenger transit taxi motorcycle cycling walking other')
 VehicleEnum = Enum('VehicleEnum', 'car bike van truck bus taxi motorcycle scooter skate rollers')
 ActivityEnum = Enum('ActivityEnum',
-                    'unknown strolling jogging shopping talking resting eating playing doing_exercise smoking using_cellphone observing reading_writing performing selling playing_with_pets taking_pet_for_walk')
+                    'unknown strolling jogging shopping sitting talking resting eating playing doing_exercise smoking using_cellphone observing reading_writing performing selling playing_with_pets taking_pet_for_walk')
 DisabilityEnum = Enum('DisabilityEnum', 'none Wheelchair Walker Cane While_cane')
 AgeEnum = Enum('AgeEnum', 'unknown infant toddler child teen young_adult adult senior')
 LineTypeEnum = Enum('LineTypeEnum', 'sidewalk roadbed cycling_path bus_lane adjoining_ZOI on_street_parking_lot')

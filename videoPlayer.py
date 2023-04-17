@@ -568,6 +568,7 @@ class VideoWindow(QMainWindow):
                     self.obsTb.siteNameCombobx.setCurrentIndex(int(item['site']))
                     self.obsTb.camViewCombobx.setCurrentIndex(int(item['cam_view']))
                     self.obsTb.trjDbCombobx.setCurrentIndex(int(item['traj_db']))
+                    self.obsTb.plotItems()
 
             elif key[0] == 'window':
                 item = key[1]
