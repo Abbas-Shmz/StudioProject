@@ -81,7 +81,7 @@ else:
 # ==============================================================
 def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=None,
                  ax=None, interval=20, plotType='Line plot', alpha=1, colors=plotColors, siteName=None,
-                 drawMean=True, smooth=False,
+                 drawMean=True, drawStd=0, smooth=False,
                  titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
 
     inputNo = len(dbFiles)
@@ -171,6 +171,10 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
 
             # ax.plot(time_ticks, hist, label=labels[l])
             #------------------------
+            if drawStd > 0:
+                ax.axhspan(np.mean(hist) - np.std(hist), np.mean(hist) + np.std(hist),
+                           label=f'Std. of {labels[l]}', alpha=0.1, color=plotColors[l])
+
             if not smooth:
                 ax.plot(time_ticks, hist, label=labels[l], color=plotColors[l])
             else:
@@ -3503,6 +3507,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     fig, ax = plt.subplots(tight_layout=True)
                     err = tempDistHist(dbFiles, labels, transports, actions,
                                        unitIdxs, ['both']*len(dbFiles), ax, 20, siteName=site.capitalize(),
+                                       drawStd=1,
                                        titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                        legendFontSize=10)
                     if err == None:
