@@ -30,7 +30,8 @@ import matplotlib.pyplot as plt
 from indicators import tempDistHist, stackedHistTransport, odMatrix, pieChart, generateReportTransit, \
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
     plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
-    modeShareCompChart, speedHistogram, speedOverSpacePlot, speedSpaceTimePlot, batchPlots
+    modeShareCompChart, speedHistogram, speedOverSpacePlot, speedSpaceTimePlot, batchPlots, \
+    stackedHistActivity
 import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -2937,8 +2938,13 @@ class StackHistWindow(QDialog):
         interval = int(self.intervaLe.text())
         attr = self.attribCmbx.currentText()
 
-        err = stackedHistTransport(inputs['Database file'], inputs['Label'], inputs['Transport'], inputs['Action type'],
-                                   inputs['Unit Idx'], inputs['Direction'], attr, ax, interval)
+        if inputs['Transport'][0] == 'Activity':
+            err = stackedHistActivity(inputs['Database file'], inputs['Label'], attr, inputs['Unit Idx'],
+                                      ax, interval)
+        else:
+            err = stackedHistTransport(inputs['Database file'], inputs['Label'], inputs['Transport'],
+                                       inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
+                                       attr, ax, interval)
 
         if err != None:
             msg = QMessageBox()
