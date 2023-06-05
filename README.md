@@ -9,4 +9,12 @@ Although the StudioProject is mainly developed to manipulate and analyze the out
 Some snapshots of the developed tools in Studio are presented below.
 ![Video player](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Video-player.jpg)
 
+![Panel_1](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Panel_01.jpg)
+
+![Panel_2](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Panel_02.jpg)
+
+![Plot](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Plot.jpg)
+
+![Table](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Table.jpg)
+
 Icons made by <a href="https://www.flaticon.com/authors/freepik" title="Freepik">Freepik</a> from <a href="https://www.flaticon.com/" title="Flaticon"> www.flaticon.com</a>
