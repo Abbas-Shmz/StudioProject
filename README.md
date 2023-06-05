@@ -6,4 +6,7 @@ StudioProject provides a suit of tools to evaluate a list of indicators pertaini
 
 Although the StudioProject is mainly developed to manipulate and analyze the output trajectories of TI, it also provides tools to collect data manually by reviewing video files. 
 
+Some snapshots of the developed tools in Studio are presented below.
+![Video player](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Video-player.jpg)
+
 Icons made by <a href="https://www.flaticon.com/authors/freepik" title="Freepik">Freepik</a> from <a href="https://www.flaticon.com/" title="Flaticon"> www.flaticon.com</a>
