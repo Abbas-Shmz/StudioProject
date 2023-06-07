@@ -10,7 +10,7 @@ TI uses video analytics to track and identify street users.
 The Studio application offers a set of tools for evaluating urban streets in terms of their three primary 
 functions: transit, access, and place. This evaluation is done through direct observation of street users. 
 To this end, the Studio application employs a comprehensive framework, detailed in this 
-[link](https://www.mdpi.com/2071-1050/14/12/7184&#41),
+[link](https://www.mdpi.com/2071-1050/14/12/7184),
 as its underlying scheme to analyze the trajectories extracted through TI. Based on the framework, 
 two spatial units including *screenline* and *zone* are applied in this application to capture the movement of 
 street users. 
