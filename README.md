@@ -35,10 +35,35 @@ The following image presents a snapshot of the video player window in the Studio
 
 ![Video player](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Video-player.jpg)
 
+## Observation panel
+The Studio application provides an observation panel, which includes multiple tabs and a side toolbar. 
+This panel enables the recording and analysis of observations related to street users. 
+The observations can be conducted by trained observers or by analyzing the trajectories obtained 
+from the IT system.
+
+### Trained observer
+This method involves conducting observations on street users by employing trained observers to collect 
+information. Observations can be recorded manually on the roadside or by reviewing videos. 
+The collected data can be stored in a database using the tools provided in the observation panel. 
+The database will be utilized to extract valuable information related to the main street functions. 
+The image below displays the manual observation recording tools offered by the Studio application.
+
 ![Panel_1](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Panel_01.jpg)
+
+### Analyzing the trajectories
+The trajectories obtained from TI provide valuable information about the position, speed, acceleration, 
+and type of street users. This information can be utilized to derive useful indicators that help in 
+understanding how people utilize streets. 
+To facilitate this analysis, the Studio application offers a set of tools for extracting the number of 
+street users crossing screenlines or entering/exiting specific zones. 
+These tools generate information that can be further utilized to derive indicators such as the count 
+of street users passing through over time, the density of people in a particular area, and the number 
+of accesses to specific zones, among others. The available tools are visually represented in the 
+accompanying image.
 
 ![Panel_2](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Panel_02.jpg)
 
+## Analysis toolbar
 ![Plot](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Plot.jpg)
 
 ![Table](https://github.com/Abbas-Shmz/StudioProject/blob/main/images/Studio_Table.jpg)
