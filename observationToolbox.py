@@ -31,7 +31,7 @@ from indicators import tempDistHist, stackedHistTransport, odMatrix, pieChart, g
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
     plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
     modeShareCompChart, speedHistogram, speedOverSpacePlot, speedSpaceTimePlot, batchPlots, \
-    stackedHistActivity
+    stackedHistActivity, generateReportPlace
 import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -3854,7 +3854,11 @@ class genReportWindow(QDialog):
         direction = self.directionCombobx.currentText()
         interval = int(self.intervalCombobx.currentText())
 
-        self.indicatorsDf = generateReportTransit(dbFileName, transport, actionType, unitIdx, direction, interval)
+        if actionType == 'Activity':
+            self.indicatorsDf = generateReportPlace(dbFileName, interval)
+        else:
+            self.indicatorsDf = generateReportTransit(dbFileName, transport, actionType, unitIdx,
+                                                      direction, interval)
 
         if isinstance(self.indicatorsDf, str):
             msg = QMessageBox()
