@@ -51,11 +51,17 @@ userTypeColors = ['gray',   'blue', 'orange',    'violet',       'green',  'yell
 plotColors = ['deepskyblue', 'salmon', 'gold', 'forestgreen', 'violet', 'cadetblue', 'saddlebrown', 'yellowgreen',
               'chocolate', 'navy', 'purple', 'aqua', 'blue', 'darkkhaki', 'green', 'black', 'cyan', 'brown', 'gray', 'olive']
 
-color_dict = {'walking':'bisque', 'driving':'lightsalmon', 'cycling':'lightskyblue',
+color_dict = {'walking':'mediumaquamarine', 'driving':'lightsalmon', 'cycling':'lightskyblue',
               'motorcycle':'darkred', 'car':'orange', 'bus':'yellow', 'truck':'silver', 'other':'burlywood',
-              'adult':'lightskyblue', 'child':'bisque', 'young_adult':'lightsteelblue',
-              'teen':'lightcoral', 'senior':'plum', 'male':'navajowhite', 'female':'deepskyblue',
-              'unknown':'silver', 'strolling':'palegoldenrod', 'jogging':'bisque', 'shopping':'cornflowerblue',
+
+              'adult':'goldenrod', 'child':'powderblue', 'young_adult':'lightsteelblue',
+              'teen':'lightcoral', 'senior':'plum', 'toddler':'mistyrose', 'infant':'lightyellow',
+
+              'male':'thistle', 'female':'lightskyblue',
+
+              'unknown':'silver',
+
+              'strolling':'palegoldenrod', 'jogging':'bisque', 'shopping':'cornflowerblue',
               'sitting':'lightsalmon', 'talking':'lightsteelblue', 'resting':'lightpink',
               'eating':'plum', 'playing':'deepskyblue', 'doing_exercise':'orange', 'smoking':'yellow',
               'using_cellphone':'powderblue', 'observing':'lightsteelblue',
@@ -560,7 +566,7 @@ def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directi
 
 # ==============================================================
 def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, directions, attr,
-                         ax=None, interval=20, alpha=1, colors=plotColors, siteName=None,
+                         ax=None, interval=20, alpha=1, colors=color_dict, siteName=None,
                          titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
     sessions = []
@@ -623,13 +629,13 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
 
         enum_list = field_.type.enums
 
-        for j, val in enumerate(enum_list):
+        for val in enum_list:
             q_val = q.filter(field_ == val)
 
             time_list = getTimeLists([q_val], [actionTypes[i]])[0] #[i[0] for i in q_val.all()]
             if time_list != []:
                 hist, _ = np.histogram(time_list, bins=bins[i])
-                ax.bar(x, hist, color=colors[j], bottom=y_offset,
+                ax.bar(x, hist, color=colors[val], bottom=y_offset,
                         width=width, label=val, edgecolor='grey', lw=0.5)
 
                 y_offset = y_offset + hist
@@ -906,7 +912,7 @@ def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'], ax=None
 
 # ==============================================================
 def stackedHistActivity(dbFiles, labels, attribute,
-                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=plotColors, siteName=None,
+                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=color_dict, siteName=None,
                         titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
     sessions = []
@@ -968,12 +974,12 @@ def stackedHistActivity(dbFiles, labels, attribute,
             .join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx)\
             .join(Person, Person.idx == GroupBelonging.personIdx)
 
-        for j, val in enumerate(enum_list):
+        for val in enum_list:
             q_val = q.filter(field_ == val)
             time_list = [i[0] for i in q_val.all()]
             if time_list != []:
                 hist, _ = np.histogram(time_list, bins=bins[i])
-                ax.bar(x, hist, color=plotColors[j], bottom=y_offset,
+                ax.bar(x, hist, color=colors[val], bottom=y_offset,
                         width=width, label=val, edgecolor='grey', lw=0.5)
 
                 y_offset = y_offset + hist
@@ -3378,7 +3384,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         Path(activitiesCount_path).mkdir(parents=True, exist_ok=True)
         for attr in attrActivityList:
             fig, ax = plt.subplots(tight_layout=True)
-            err = stackedHistActivity(dbFiles, labels, attr, ax=ax, interval=30, colors=plotColors,
+            err = stackedHistActivity(dbFiles, labels, attr, ax=ax, interval=30,
                                       siteName=site.capitalize(),
                                       titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
                                       legendFontSize=10)
@@ -3566,7 +3572,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                 fig, ax = plt.subplots(tight_layout=True)
                 err = stackedHistTransport(dbFiles, labels, transports, ['all_crossings', 'all_crossings'],
                                    ['all_units', 'all_units'], ['both', 'both'], attr, ax=ax, interval=60,
-                                           colors=plotColors, siteName=site.capitalize(),
+                                           siteName=site.capitalize(),
                                            titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
                                            legendFontSize=10)
                 if err == None:
