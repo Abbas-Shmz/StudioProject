@@ -566,7 +566,7 @@ def transportModePDF(dbFiles, labels, transports, actionTypes, unitIdxs, directi
 
 # ==============================================================
 def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, directions, attr,
-                         ax=None, interval=20, alpha=1, colors=color_dict, siteName=None,
+                         ax=None, interval=20, alpha=1, colors=color_dict, siteName=None, textRotation=90,
                          titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
     sessions = []
@@ -641,7 +641,8 @@ def stackedHistTransport(dbFiles, labels, transports, actionTypes, unitIdxs, dir
                 y_offset = y_offset + hist
 
         for k, t in enumerate(x):
-            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=90, fontsize=5)
+            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=textRotation,
+                    fontsize=5)
 
 
     # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
@@ -912,7 +913,7 @@ def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'], ax=None
 
 # ==============================================================
 def stackedHistActivity(dbFiles, labels, attribute,
-                        unitIdxs=None, ax=None, interval=20, alpha=1, colors=color_dict, siteName=None,
+                        ax=None, interval=20, alpha=1, colors=color_dict, siteName=None, textRotation=90,
                         titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
     sessions = []
@@ -985,7 +986,8 @@ def stackedHistActivity(dbFiles, labels, attribute,
                 y_offset = y_offset + hist
 
         for k, t in enumerate(x):
-            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=90, fontsize=5)
+            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=textRotation,
+                    fontsize=5)
 
 
     # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
@@ -1030,7 +1032,7 @@ def stackedHistActivity(dbFiles, labels, attribute,
 
 # ==============================================================
 def HistActivity(dbFiles, labels, activity,
-                 unitIdxs=None, ax=None, interval=20, alpha=1, colors=plotColors, siteName=None,
+                 ax=None, interval=20, alpha=1, colors=plotColors, siteName=None, textRotation=90,
                  titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
     sessions = []
@@ -1095,7 +1097,8 @@ def HistActivity(dbFiles, labels, activity,
             y_offset = y_offset + hist
 
         for k, t in enumerate(x):
-            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=90, fontsize=5)
+            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=textRotation,
+                    fontsize=5)
 
 
     # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
@@ -2166,20 +2169,25 @@ def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, e
 
         ax.set_title(chartLabels[i], fontsize=titleSize, y=-0.05, weight="bold")
         plt.setp(autotexts, size=labelSize, weight="normal")
-        if transport == 'all_modes':
-            suptitle = f'Mode share in {siteName}'
-        elif transport == 'cardriver':
-            suptitle = f'Vehicle types in {siteName}'
-        elif transport == 'walking':
-            suptitle = f'Pedestrians by {attr} in {siteName}'
-        elif transport == 'cycling':
-            suptitle = f'Cyclists by {attr} in {siteName}'
-        elif transport == 'Activity':
-            if attr == 'activity':
-                attr_str = 'activity type'
-            else:
-                attr_str = attr
-            suptitle = f'Activities by {attr_str} in {siteName}'
+
+    if transport == 'all_modes':
+        suptitle = f'Mode share'
+    elif transport == 'cardriver':
+        suptitle = f'Vehicle types'
+    elif transport == 'walking':
+        suptitle = f'Pedestrians by {attr}'
+    elif transport == 'cycling':
+        suptitle = f'Cyclists by {attr}'
+    elif transport == 'Activity':
+        if attr == 'activity':
+            attr_str = 'activity type'
+        else:
+            attr_str = attr
+        suptitle = f'Activities by {attr_str}'
+
+    if siteName != None:
+        suptitle = f'{suptitle} in {siteName}'
+
     plt.suptitle(suptitle, fontsize=titleSize, weight="bold")
 
     # watermark(axs[0])
@@ -3217,7 +3225,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
     plt.ioff()
     # fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
     # ax = fig.add_subplot(111)
-    transportType = ['walking', 'cycling']
+    transportType = ['driving', 'walking', 'cycling']
     actionType = ['crossing_line', 'crossing_line_RL', 'crossing_line_LR',
                   'crossing_zone', 'entering_zone', 'exiting_zone',
                   'all_crossings']
@@ -3384,8 +3392,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         Path(activitiesCount_path).mkdir(parents=True, exist_ok=True)
         for attr in attrActivityList:
             fig, ax = plt.subplots(tight_layout=True)
-            err = stackedHistActivity(dbFiles, labels, attr, ax=ax, interval=30,
-                                      siteName=site.capitalize(),
+            err = stackedHistActivity(dbFiles, labels, attr, ax=ax, interval=60, textRotation=0,
+                                      # siteName=site.capitalize(),
                                       titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
                                       legendFontSize=10)
             if err == None:
@@ -3394,10 +3402,10 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
         # +++++++++++++++ Histogram of each activity ++++++++++++++++
         fig, ax = plt.subplots(tight_layout=True)
-        err = HistActivity(dbFiles, labels, 'shopping', ax=ax, interval=30, colors=plotColors,
-                                  siteName=site.capitalize(),
+        err = HistActivity(dbFiles, labels, 'shopping', ax=ax, interval=60, colors=plotColors,
+                                  # siteName=site.capitalize(),
                                   titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
-                                  legendFontSize=10)
+                                  legendFontSize=10, textRotation=0)
         if err == None:
             plt.savefig(f'{activitiesCount_path}/Activities_Shopping_{site.capitalize()}.pdf')
         plt.close(fig)
@@ -3421,7 +3429,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             fig.set_figwidth(10)
             axs = fig.subplots(1, 2)
 
-            err = pieChart(dbFiles, labels, 'Activity', attr, axs=axs, siteName=site.capitalize(),
+            err = pieChart(dbFiles, labels, 'Activity', attr, axs=axs,
+                           # siteName=site.capitalize(),
                            titleSize=14, percTextSize=12, labelSize=12)
 
             if err == None:
@@ -3432,12 +3441,13 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         # ========================= Sankey Diagram, Activity ========================
         for dbFile, label in zip(dbFiles, labels):
             outFile = f'{activitiesCount_path}/Sankey_Activity_Age-Gender_{label}_{site.capitalize()}.pdf'
-            sankeyPlotActivity(dbFile, outFile, color_dict)
+            sankeyPlotActivity(dbFile, outFile) # siteName= f'{site.capitalize()} ({label})'
+
 
         # ========================== Sankey Diagram, Transit =========================
         for dbFile, label in zip(dbFiles, labels):
             outFile = f'{transitCountAllmodes_path}/Sankey_Transit_Age-Gender_{label}_{site.capitalize()}.pdf'
-            sankeyPlotTransit(dbFile, 'all_crossings', 'all_units', outFile, color_dict)
+            sankeyPlotTransit(dbFile, 'all_crossings', 'all_units', outFile) # siteName= f'{site.capitalize()} ({label})'
 
         # ========================== Pie chart, MODE SHARE  ==========================
         fig = plt.figure(tight_layout=True)
@@ -3445,7 +3455,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig.set_figwidth(10)
         axs = fig.subplots(1, 2)
 
-        err = pieChart(dbFiles, labels, 'all_modes', 'transport', axs=axs, siteName=site.capitalize(),
+        err = pieChart(dbFiles, labels, 'all_modes', 'transport', axs=axs,
+                       # siteName=site.capitalize(),
                        titleSize=14, percTextSize=12, labelSize=12)
 
         if err == None:
@@ -3472,7 +3483,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig.set_figwidth(10)
         axs = fig.subplots(1, 2)
 
-        err = pieChart(dbFiles, labels, 'walking', 'age', axs=axs, siteName=site.capitalize(),
+        err = pieChart(dbFiles, labels, 'walking', 'age', axs=axs,
+                       # siteName=site.capitalize(),
                        titleSize=14, percTextSize=12, labelSize=12)
         if err == None:
             plt.savefig(
@@ -3485,7 +3497,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig.set_figwidth(10)
         axs = fig.subplots(1, 2)
 
-        err = pieChart(dbFiles, labels, 'walking', 'gender', axs=axs, siteName=site.capitalize(),
+        err = pieChart(dbFiles, labels, 'walking', 'gender', axs=axs,
+                       # siteName=site.capitalize(),
                        titleSize=14, percTextSize=12, labelSize=12)
         if err == None:
             plt.savefig(
@@ -3495,7 +3508,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         # ++++++++++++++++++ Density of all street users in Zones ++++++++++++++++++++++
         fig, ax = plt.subplots(tight_layout=True)
         err = zoneDensityPlot(dbFiles, labels, ['all_modes']* len(dbFiles), ['1'] * len(dbFiles), zoneArea=345,
-                              ax=ax, interval=2, siteName=site.capitalize(), colors=plotColors,
+                              ax=ax, interval=1, colors=plotColors,
+                              # siteName=site.capitalize(),
                               titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                               legendFontSize=10)
         if err == None:
@@ -3532,8 +3546,9 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             # ++++++++++++++++++ Density of pedestrians / cyclists in Zones ++++++++++++++++++++++
             fig, ax = plt.subplots(tight_layout=True)
             err = zoneDensityPlot(dbFiles, labels, transports, ['1']*len(dbFiles), zoneArea=345,
-                                   ax=ax, interval=2, siteName=site.capitalize(), colors=plotColors,
-                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                                   ax=ax, interval=1, colors=plotColors,
+                                  # siteName=site.capitalize(),
+                                  titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                    legendFontSize=10)
             if err == None:
                 plt.savefig(
@@ -3559,7 +3574,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                                    ['all_crossings', 'all_crossings'],
                                    ['all_units', 'all_units'],
                                    ['both', 'both'],
-                                   ax=ax, siteName=site.capitalize(), colors=plotColors,
+                                   ax=ax, colors=plotColors,
+                                   # siteName=site.capitalize(),
                                    titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                    legendFontSize=10)
             if err == None:
@@ -3630,7 +3646,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     # --------------- Number of Users Over Time ------------------------
                     fig, ax = plt.subplots(tight_layout=True)
                     err = tempDistHist(dbFiles, labels, transports, actions,
-                                       unitIdxs, ['both']*len(dbFiles), ax, 20, siteName=site.capitalize(),
+                                       unitIdxs, ['both']*len(dbFiles), ax, 10,
+                                       # siteName=site.capitalize(),
                                        drawStd=1,
                                        titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                        legendFontSize=10)
@@ -3651,7 +3668,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     fig, ax = plt.subplots(tight_layout=True)
 
                     err = speedHistogram(dbFiles, labels, transports, actions,
-                                       unitIdxs, ['both']*len(dbFiles), ax, 15, siteName=site.capitalize(),
+                                       unitIdxs, ['both']*len(dbFiles), ax, 30,
+                                         # siteName=site.capitalize(),
                                          titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8,
                                          yTickSize=8, legendFontSize=10)
                     if err == None:
@@ -3662,7 +3680,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     # +++++++++++++++++++++++++ Speed Box Plot ++++++++++++++++++++++++
                     fig, ax = plt.subplots(tight_layout=True)
                     err = speedBoxPlot(dbFiles, labels, transports, actions,
-                                         unitIdxs, ['both']*len(dbFiles), ax, 60, siteName=site.capitalize(),
+                                         unitIdxs, ['both']*len(dbFiles), ax, 60,
+                                       # siteName=site.capitalize(),
                                        titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=7, yTickSize=8,
                                        legendFontSize=10)
                     if err == None:
@@ -4220,7 +4239,7 @@ def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, in
     watermark(ax)
 
 # ======================================================================
-def sankeyPlotActivity(dbFileName, outputFile, colors_dict=None):
+def sankeyPlotActivity(dbFileName, outputFile, siteName=None, colors_dict=color_dict):
     session = connectDatabase(dbFileName)
     q = session.query(Person.gender, Activity.activity, Person.age)\
         .join(GroupBelonging, GroupBelonging.personIdx == Person.idx)\
@@ -4234,11 +4253,15 @@ def sankeyPlotActivity(dbFileName, outputFile, colors_dict=None):
     for column in df.columns:
         df[column] = df[column].apply(lambda x: x.name)
 
-    create_sankey_diagram(df, outputFile, colors_dict=colors_dict)
+    title = 'Activities by age and gender'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+
+    create_sankey_diagram(df, outputFile, colors_dict, title)
 
 # =======================================================================
 
-def sankeyPlotTransit(dbFileName, actionType, unitIdx, outputFile, colors_dict=None):
+def sankeyPlotTransit(dbFileName, actionType, unitIdx, outputFile, siteName=None, colors_dict=color_dict):
 
     q = getQueryList([dbFileName], ['all_modes'], [actionType], [unitIdx])[0]
     results = q.all()
@@ -4254,11 +4277,15 @@ def sankeyPlotTransit(dbFileName, actionType, unitIdx, outputFile, colors_dict=N
     for column in df.columns:
         df[column] = df[column].apply(lambda x: x.name)
 
-    create_sankey_diagram(df, outputFile, colors_dict=colors_dict)
+    title = 'Transport modes by age and gender'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+
+    create_sankey_diagram(df, outputFile, colors_dict, title)
 
 # =======================================================================
 
-def create_sankey_diagram(df, outputFile, colors_dict=None):
+def create_sankey_diagram(df, outputFile, colors_dict=None, title=None):
 
     labels_0 = df.iloc[:, 0].unique().tolist()
     labels_1 = df.iloc[:, 1].unique().tolist()
@@ -4315,7 +4342,8 @@ def create_sankey_diagram(df, outputFile, colors_dict=None):
             color=link_color
         ))])
 
-    # fig.update_layout(title_text="Activities", font_size=10)
+    fig.update_layout(title_text=title, title_font_size=20, title_x=0.5, title_xanchor="center",
+                      margin_b=40, margin_r=40, margin_l=40, margin_t=60)
     # fig.write_image('sankey_diagram.pdf', engine='orca')
     pio.kaleido.scope.mathjax = None
     pio.write_image(fig, outputFile, scale=2)
