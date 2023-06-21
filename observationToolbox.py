@@ -2773,10 +2773,6 @@ class TempHistWindow(QDialog):
             return
         bins = calculateBinsEdges(start_obs_time, end_obs_time, interval)
 
-        # if len(bins) < 3:
-        #     QMessageBox.information(self, 'Error!',
-        #                             'The observation duration is not enough for the selected interval!')
-        #     return
         err = tempDistHist(transport, actionType, unitIdx, ax, session, bins=bins)
         if err != None:
             msg = QMessageBox()
@@ -2801,11 +2797,11 @@ class TempHistWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
-        if 'line' in actionType.split(' '):
+        if 'line' in actionType.split('_'):
             idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
-        elif 'zone' in actionType.split(' '):
+        elif 'zone' in actionType.split('_'):
             idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
             idxItems.insert(0, 'all_zones')
             self.unitIdxCombobx.addItems(idxItems)
@@ -2939,7 +2935,7 @@ class StackHistWindow(QDialog):
         attr = self.attribCmbx.currentText()
 
         if inputs['Transport'][0] == 'Activity':
-            err = stackedHistActivity(inputs['Database file'], inputs['Label'], attr, inputs['Unit Idx'],
+            err = stackedHistActivity(inputs['Database file'], inputs['Label'], attr,
                                       ax, interval)
         else:
             err = stackedHistTransport(inputs['Database file'], inputs['Label'], inputs['Transport'],
@@ -2998,16 +2994,16 @@ class StackHistWindow(QDialog):
         actionType = self.actionTypeCombobx.currentText()
 
         self.unitIdxCombobx.clear()
-        if 'line' in actionType.split(' '):
+        if 'line' in actionType.split('_'):
             idxItems = [str(id[0]) for id in current_session.query(Line.idx).all()]
             idxItems.insert(0, 'all_lines')
             self.unitIdxCombobx.addItems(idxItems)
-        elif 'zone' in actionType.split(' '):
+        elif 'zone' in actionType.split('_'):
             idxItems = [str(id[0]) for id in current_session.query(Zone.idx).all()]
             idxItems.insert(0, 'all_zones')
             self.unitIdxCombobx.addItems(idxItems)
-        elif actionType == 'all actions':
-            idxItems = ['all_lines', 'all_zones', 'all_units']
+        elif actionType == 'all_crossings':
+            idxItems = ['all_units']
             self.unitIdxCombobx.addItems(idxItems)
 
         self.plotBtn.setEnabled(True)

@@ -3535,6 +3535,19 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                 f'{transitCountAllmodes_path}/Cumulative-sum_All-modes_' + '-'.join(labels) + f'_{site.capitalize()}.pdf')
         plt.close(fig)
 
+        # ++++++++++++++++++ Number of all street users over time ++++++++++++++++++++++
+        fig, ax = plt.subplots(tight_layout=True)
+        err = tempDistHist(dbFiles, labels, ['all_modes'] * len(dbFiles), ['all_crossings'] * len(dbFiles),
+                           ['all_units'] * len(dbFiles),
+                           ax=ax, interval=10, drawStd=1,
+                              # siteName=site.capitalize(),
+                              titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
+                              legendFontSize=10)
+        if err == None:
+            plt.savefig(
+                f'{transitCountAllmodes_path}/Number_of_All-modes_' + '-'.join(labels) + f'_{site.capitalize()}.pdf')
+        plt.close(fig)
+
 
         #--------------------------------------------------------------------
         for transport in transportType:
