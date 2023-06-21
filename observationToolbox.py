@@ -3692,7 +3692,7 @@ class CompHistWindow(QDialog):
 
         err = tempDistHist(inputs['Database file'], inputs['Label'], inputs['Transport'],
                            inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
-                           ax, interval, plotType, alpha=0.7)
+                           ax, interval, plotType, drawStd=1, alpha=0.7)
 
         if err != None:
             msg = QMessageBox()

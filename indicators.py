@@ -115,10 +115,8 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
     for time_list in time_lists:
         if time_list == []:
             continue
-        i = 0
-        for time_ticks in time_list:
+        for i, time_ticks in enumerate(time_list):
             time_list[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
-            i += 1
 
 
     if ax == None:
@@ -147,23 +145,32 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
             time_stamps = to_timestamp(time_list)
 
             bins_stamps = to_timestamp(bins)
+            bins_stamps.sort()
 
             min_time_stamps = min(time_stamps)
             max_time_stamps = max(time_stamps)
 
             bins_idx_remove = []
-            for bs in bins_stamps[0:-1]:
-                if bs < min_time_stamps and bins_stamps[list(bins_stamps).index(bs) + 1] < max_time_stamps:
-                    bins_idx_remove.append(list(bins_stamps).index(bs))
-                elif bs > min_time_stamps and bins_stamps[list(bins_stamps).index(bs) + 1] > max_time_stamps:
-                    bins_idx_remove.append(list(bins_stamps).index(bs) + 1)
-                elif bs > min_time_stamps and bins_stamps[list(bins_stamps).index(bs) + 1] < max_time_stamps:
-                    continue
+            for i in range(len(bins_stamps) - 1):
+                if bins_stamps[i] < min_time_stamps and bins_stamps[i + 1] > min_time_stamps:
+                    bins_idx_remove.append(i)
+                elif bins_stamps[i] < max_time_stamps and bins_stamps[i + 1] > max_time_stamps:
+                    bins_idx_remove.append(i + 1)
+                elif bins_stamps[i] < min_time_stamps and bins_stamps[i + 1] < min_time_stamps:
+                    bins_idx_remove.append(i)
+                    bins_idx_remove.append(i + 1)
+                elif bins_stamps[i] > max_time_stamps and bins_stamps[i + 1] > max_time_stamps:
+                    bins_idx_remove.append(i)
+                    bins_idx_remove.append(i + 1)
                 else:
-                    err = 'The observation duration is not long enough for the selected interval!'
-                    return err
+                    continue
+
             if len(bins_idx_remove) > 0:
                 bins_stamps = np.delete(bins_stamps, bins_idx_remove)
+
+            if len(bins_stamps) < 3:
+                err = 'The observation duration is not enough for the selected interval!'
+                return err
 
             time_ticks = []
             for i in range(len(bins_stamps) - 1):
@@ -200,8 +207,8 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         if inputNo != 2:
             return 'The scatter plot is possible for only two datasets!'
 
-        bins_start = obs_start_time
-        bins_end = obs_end_time
+        bins_start = max(first_obs_times).time()
+        bins_end = min(last_obs_times).time()
 
         start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
         end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
@@ -262,8 +269,8 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         m, b = np.polyfit(hist1, hist2, 1)
         ax.plot(np.array(hist1), m * np.array(hist1) + b, ls='-', lw=.5, c='k', alpha=.5)
 
-        corrcoef = round(np.corrcoef(hist1, hist2)[0, 1], 3)
-        ax.text(0.9, 0.9, 'r = {}'.format(corrcoef),
+        # corrcoef = round(np.corrcoef(hist1, hist2)[0, 1], 2)
+        ax.text(0.85, 0.85, f'$\\frac{{{labels[1]}}}{{{labels[0]}}} = {round(m, 2)}$',
                 fontsize=7, color='k',
                 ha='left', va='bottom',
                 transform=ax.transAxes,
@@ -313,7 +320,7 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         # ax.set_xlim(0, max_val + 10)
         # ax.set_ylim(0, max_val + 10)
 
-        ax.tick_params(axis='both', labelsize=7)
+        ax.tick_params(axis='both', labelsize=xTickSize)
 
         tm1 = transports[0]
         tm2 = transports[1]
@@ -326,11 +333,11 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
         elif transports[1] == 'walking':
             tm2 = 'pedestrian'
 
-        ax.set_xlabel('No. of {}s ({})'.format(tm1, labels[0]), fontsize=8)
-        ax.set_ylabel('No. of {}s ({})'.format(tm2, labels[1]), fontsize=8)
-        ax.set_title('Scatter plot of {}s {} #{}'.format(tm1, actionTypes[0], unitIdxs[0]),
-                     fontsize=8)
-        ax.axis('equal')
+        ax.set_xlabel(f'No. of {tm1}s ({labels[0]})', fontsize=xLabelSize)
+        ax.set_ylabel(f'No. of {tm2}s ({labels[1]})', fontsize=yLabelSize)
+        ax.set_title(f'Scatter plot of {tm1}s {actionTypes[0]} #{unitIdxs[0]}',
+                     fontsize=titleSize)
+        # ax.axis('equal')
 
     ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
 
