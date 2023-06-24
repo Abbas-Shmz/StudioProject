@@ -1704,28 +1704,17 @@ def speedOverSpacePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
 def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions, metadataFile,
                  axs=None, interval_space=0.5, interval_time=10, colors=plotColors):
     inputNo = len(dbFiles)
-    sessions = []
     first_obs_times = []
     last_obs_times = []
 
     for i in range(inputNo):
         session = connectDatabase(dbFiles[i])
-        sessions.append(session)
+        fobst, lobst = getObsStartEnd(session)
+        first_obs_times.append(fobst)
+        last_obs_times.append(lobst)
 
-    for i in range(inputNo):
-        if 'line' in actionTypes[i].split(' '):
-            cls_obs = LineCrossing
-        elif 'zone' in actionTypes[i].split(' '):
-            cls_obs = ZoneCrossing
-
-        first_obs_time = session.query(func.min(cls_obs.instant)).first()[0]
-        last_obs_time = session.query(func.max(cls_obs.instant)).first()[0]
-
-        first_obs_times.append(first_obs_time.time())
-        last_obs_times.append(last_obs_time.time())
-
-    bins_start = max(first_obs_times)
-    bins_end = min(last_obs_times)
+    bins_start = max(first_obs_times).time()
+    bins_end = min(last_obs_times).time()
 
     start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_start)
     end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), bins_end)
@@ -1739,6 +1728,38 @@ def speedSpaceTimePlot(dbFiles, labels, transports, actionTypes, unitIdxs, direc
     for i in range(inputNo):
         date1 = getObsStartEnd(sessions[i])[0].date()
         time_bins.append([datetime.datetime.combine(date1, t) for t in times])
+
+
+
+    # ---------------
+    query_list = getQueryList(dbFiles, transports, actionTypes, unitIdxs)
+    if isinstance(query_list, str):
+        return query_list
+
+    time_lists = getTimeLists(query_list, actionTypes)
+
+    if all([i == [] for i in time_lists]):
+        return 'No observation!'
+
+    for time_list in time_lists:
+        if time_list == []:
+            continue
+        for i, time_ticks in enumerate(time_list):
+            time_list[i] = datetime.datetime(2000, 1, 1, time_ticks.hour, time_ticks.minute, time_ticks.second)
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
+        ax = fig.add_subplot(111)  # plt.subplots(1, 1)
+
+    # ------------------------------------
+
+
+
+
+
+
+
+
 
     all_x_arrays = []
     all_speed_arrays = []
@@ -2414,7 +2435,7 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                       f'No. of vehicles towards {labelRtoL}',  # 2
                       f'Flow of vehicles towards {labelLtoR} (veh/h)', # 3
                       f'Flow of vehicles towards {labelRtoL} (veh/h)',  # 4
-                      f'Flow of all vehicles (veh/h)', # 5
+                      'Flow of all vehicles (veh/h)', # 5
                       'Speed: average (km/h)',    # 6
                       'Speed: std (km/h)',  # 7
                       'Speed: median (km/h)',  # 8
@@ -2492,10 +2513,12 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                 elif 5 < i < 10:
                     rec_list = q_all_peaks.all()
                     if rec_list != []:
-                        if unitIdx == 'all_lines':
-                            speed_list = [i[2] for i in rec_list if i[2] != None]
+                        if actionType == 'all_crossings':
+                            speed_list = [r[3] for r in rec_list if not r[3] is None] + \
+                                         [r[4] for r in rec_list if not r[4] is None]
                         else:
-                            speed_list = [i[2] for i in rec_list if i[2] != None]
+                            speed_list = [r[2] for r in rec_list if not r[2] is None]
+                        # speed_list = [i[2] for i in rec_list if i[2] != None]
                         if i == 6:
                             stat_val = round(np.mean(speed_list), 1)
                         elif i == 7:
@@ -2516,7 +2539,12 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                       'Cyclists riding on sidewalk',  # 2
                       'Cyclists riding against traffic',  # 3
                       'No. of female cyclists',  #4
-                      'No. of children cycling'  # 5
+                      'No. of children cycling',  # 5
+                      'Speed: average (km/h)',   # 6
+                      'Speed: std (km/h)',       # 7
+                      'Speed: median (km/h)',    # 8
+                      'Speed: 85th percentile (km/h)',  # 9
+                      'Percent of cyclists comply with speed limit'  # 10
                       ]
 
         no_all_biks = q.count()
@@ -2550,14 +2578,14 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
 
             no_all_peak = q_all_peaks.count()
 
-            for ind in indicators:
+            for i, ind in enumerate(indicators):
 
                 if p == indDf.columns[0]:
                     noAll = no_all_biks
                 elif p != indDf.columns[0] and ind in list(indDf.index):
                     noAll = float(indDf.loc[ind].iloc[0].split(' ')[0])
 
-                i = indicators.index(ind)
+                # i = indicators.index(ind)
                 if i == 0:
                     if p == indDf.columns[0]:
                         indDf.loc[ind, p] = '{}'.format(no_all_biks)
@@ -2571,6 +2599,8 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                     indDf.loc[ind, p] = '{}'.format(flow_all_peak)
 
                 elif i == 2:
+                    if unitIdx != 'all_units':
+                        continue
                     if 'line' in actionType.split('_'):
                         q_lineType_peak = q_all_peaks.filter(Line.type == 'sidewalk')
                     elif 'zone' in actionType.split('_'):
@@ -2605,6 +2635,27 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                     no_childCylist_peak = q_childCyclist_peak.count()
                     pct = round((no_childCylist_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_childCylist_peak, pct)
+
+                elif 5 < i < 10:
+                    rec_list = q_all_peaks.all()
+                    if rec_list != []:
+                        if actionType == 'all_crossings':
+                            speed_list = [r[3] for r in rec_list if not r[3] is None] + \
+                                         [r[4] for r in rec_list if not r[4] is None]
+                        else:
+                            speed_list = [r[2] for r in rec_list if not r[2] is None]
+                        # speed_list = [i[2] for i in rec_list if i[2] != None]
+                        if i == 6:
+                            stat_val = round(np.mean(speed_list), 1)
+                        elif i == 7:
+                            stat_val = round(np.std(speed_list), 1)
+                        elif i == 8:
+                            stat_val = round(np.median(speed_list), 1)
+                        elif i == 9:
+                            stat_val = round(np.percentile(speed_list, 85), 1)
+                    else:
+                        stat_val = 0
+                    indDf.loc[ind, p] = '{}'.format(stat_val)
 
 
     indDf[indDf.isnull().values] = noDataSign
@@ -3618,14 +3669,32 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
             # ++++++++++++++++++++++ Transit indicator reports ++++++++++++++++++++++
             for i, dbFile in enumerate(dbFiles):
-                outputFile = f'{transitCount_path}/{transport}/Table_{labels[i]}_{transport}_{site.capitalize()}.pdf'
-                generateReportTransit(dbFile, transport, 'all_crossings', 'all_units', 'both', 60, outputFile=outputFile,
+                if transport == 'cycling':
+                    acType = 'crossing_zone'
+                    uId = 'all_zones'
+                elif transport == 'walking':
+                    acType = 'all_crossings'
+                    uId = 'all_units'
+                elif transport == 'driving':
+                    acType = 'crossing_line'
+                    uId = 'all_lines'
+                outputFile = f'{transitCount_path}/{transport}/Table_{labels[i]}_{transport}_{acType}_{uId}_{site.capitalize()}.pdf'
+                generateReportTransit(dbFile, transport, acType, uId, 'both', 60, outputFile=outputFile,
                                       mainDirection=mainDirections[site], labelRtoL='south', labelLtoR='north')
 
             # ------------------ Transit indicator Difference ----------------------
-            outputFile = f'{transitCount_path}/{transport}/Diff-Table_{transport}_{site.capitalize()}.pdf'
-            compareIndicators(dbFiles, labels, transports, ['all_crossings', 'all_crossings'],
-                              ['all_units', 'all_units'], ['both', 'both'], 60,
+            if transport == 'cycling':
+                acType = 'crossing_zone'
+                uId = 'all_zones'
+            elif transport == 'walking':
+                acType = 'all_crossings'
+                uId = 'all_units'
+            elif transport == 'driving':
+                acType = 'crossing_line'
+                uId = 'all_lines'
+            outputFile = f'{transitCount_path}/{transport}/Diff-Table_{transport}_{acType}_{uId}_{site.capitalize()}.pdf'
+            compareIndicators(dbFiles, labels, transports, [acType, acType],  [uId, uId],
+                              ['both', 'both'], 60,
                               outputFile=outputFile, mainDirection=mainDirections[site],
                               labelRtoL='south', labelLtoR='north')
 
