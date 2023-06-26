@@ -919,7 +919,7 @@ def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'], ax=None
 
 
 # ==============================================================
-def stackedHistActivity(dbFiles, labels, attribute,
+def stackedAllActivities(dbFiles, labels, attribute,
                         ax=None, interval=20, alpha=1, colors=color_dict, siteName=None, textRotation=90,
                         titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
     inputNo = len(dbFiles)
@@ -1122,11 +1122,11 @@ def HistActivity(dbFiles, labels, activity,
     ax.tick_params(axis='x', labelsize=xTickSize, rotation=tick_rotation)
     ax.tick_params(axis='y', labelsize=yTickSize)
     ax.set_xlabel('Time of day', fontsize=xLabelSize)
-    ax.set_ylabel('No. of activities', fontsize=yLabelSize)
+    ax.set_ylabel('No. of people', fontsize=yLabelSize)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_xticks(ind, xticks)
 
-    title = f'Number of people engaged in {activity} every {interval} minute'
+    title = f'No. of people engaged in {activity} every {interval} minute'
     if siteName != None:
         title = f'{title} in {siteName}'
     ax.set_title(title, fontsize=titleSize)
@@ -1147,6 +1147,124 @@ def HistActivity(dbFiles, labels, activity,
 
 
 # ==============================================================
+
+def stackedActivity(dbFiles, labels, activity, attribute,
+                        ax=None, interval=20, alpha=1, colors=color_dict, siteName=None, textRotation=90,
+                        titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=4, yTickSize=6, legendFontSize=6):
+    inputNo = len(dbFiles)
+    sessions = []
+    first_obs_times = []
+    last_obs_times = []
+
+    for i in range(inputNo):
+        session = connectDatabase(dbFiles[i])
+        sessions.append(session)
+        fobst, lobst = getObsStartEnd(session)
+        first_obs_times.append(fobst)
+        last_obs_times.append(lobst)
+
+    start_obs_time = max(first_obs_times).time()
+    end_obs_time = min(last_obs_times).time()
+
+    bins_start = datetime.datetime.combine(datetime.datetime(2000, 1, 1), start_obs_time)
+    bins_end = datetime.datetime.combine(datetime.datetime(2000, 1, 1), end_obs_time)
+
+    start = ceil_time(bins_start, interval)
+    end = ceil_time(bins_end, interval) - datetime.timedelta(minutes=interval)
+
+    bin_edges = calculateBinsEdges(start, end, interval)
+    # bin_edges.insert(0, bins_start)
+    # bin_edges.insert(-1, bins_end)
+
+    if len(bin_edges) < 3:
+        err = 'The observation duration is not enough for the selected interval!'
+        return err
+
+    times = [b.time() for b in bin_edges]
+
+    bins = []
+    for i in range(inputNo):
+        date1 = first_obs_times[i].date()
+        bins.append([datetime.datetime.combine(date1, t) for t in times])
+
+
+    if ax == None:
+        fig = plt.figure(tight_layout=True)
+        ax = fig.add_subplot(111)
+
+    bins_num = len(bins[i]) - 1
+    ind = np.arange(bins_num)
+    width = 0.5 / inputNo
+
+    if attribute in ['age', 'gender']:
+        field_ = getattr(Person, attribute)
+
+    enum_list = field_.type.enums
+
+    for i in range(inputNo):
+        x = (ind - 0.25 + width / 2) + (width * i)
+        y_offset = np.array([0] * bins_num)
+
+        q = sessions[i].query(Activity.startTime)\
+            .filter(Activity.activity == activity)\
+            .join(GroupBelonging, GroupBelonging.groupIdx == Activity.groupIdx)\
+            .join(Person, Person.idx == GroupBelonging.personIdx)
+
+        for val in enum_list:
+            q_val = q.filter(field_ == val)
+            time_list = [i[0] for i in q_val.all()]
+            if time_list != []:
+                hist, _ = np.histogram(time_list, bins=bins[i])
+                ax.bar(x, hist, color=colors[val], bottom=y_offset,
+                        width=width, label=val, edgecolor='grey', lw=0.5)
+
+                y_offset = y_offset + hist
+
+        for k, t in enumerate(x):
+            ax.text(t, y_offset[k] + 0.1, labels[i], ha='center', va='bottom', rotation=textRotation,
+                    fontsize=5)
+
+
+    # ax.set_xticklabels(fontsize = 6, rotation = 45)#'vertical')
+    xticks = []
+    for t in range(bins_num):
+        xticks.append('{}-{}'.format(bins[0][t].strftime('%H:%M'), bins[0][t + 1].strftime('%H:%M')))
+
+    ax.set_ylim((-0.03, int(ax.get_ylim()[1]) + 1))
+
+    tick_rotation = 0
+    if bins_num >= 20:
+        tick_rotation = 45
+
+    ax.tick_params(axis='x', labelsize=xTickSize, rotation=tick_rotation)
+    ax.tick_params(axis='y', labelsize=yTickSize)
+    ax.set_xlabel('Time of day', fontsize=xLabelSize)
+    ax.set_ylabel(f'No. of people', fontsize=yLabelSize)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_xticks(ind, xticks)
+
+    title = f'No. of {activity}s by {attribute} every {interval} minute'
+    if siteName != None:
+        title = f'{title} in {siteName}'
+    ax.set_title(title, fontsize=titleSize)
+
+    ax.grid(True, 'major', 'y', ls='--', lw=.5, c='k', alpha=.3)
+
+    handles, labels = ax.get_legend_handles_labels()
+    handle_list = []
+    label_list = []
+    for i, label in enumerate(labels):
+        if not label in label_list:
+            handle_list.append(handles[i])
+            label_list.append(label)
+    ax.legend(handle_list, label_list, loc='best', prop={'size': legendFontSize})
+
+
+    watermark(ax)
+
+
+# ==============================================================
+
 def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
                  ax=None, interval=20, alpha=1, colors=plotColors, ec='k', rwidth=0.9, siteName=None,
                    titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
@@ -3450,23 +3568,32 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         Path(activitiesCount_path).mkdir(parents=True, exist_ok=True)
         for attr in attrActivityList:
             fig, ax = plt.subplots(tight_layout=True)
-            err = stackedHistActivity(dbFiles, labels, attr, ax=ax, interval=60, textRotation=0,
-                                      # siteName=site.capitalize(),
-                                      titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
-                                      legendFontSize=10)
+            err = stackedAllActivities(dbFiles, labels, attr, ax=ax, interval=60, textRotation=0, titleSize=12,
+                                       xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8, legendFontSize=10)
             if err == None:
                 plt.savefig(f'{activitiesCount_path}/Activities_by-{attr}_{site.capitalize()}.pdf')
             plt.close(fig)
 
-        # +++++++++++++++ Histogram of each activity ++++++++++++++++
+        # +++++++++++++++ Histogram of each activity (shopping) ++++++++++++++++
         fig, ax = plt.subplots(tight_layout=True)
-        err = HistActivity(dbFiles, labels, 'shopping', ax=ax, interval=60, colors=plotColors,
-                                  # siteName=site.capitalize(),
+        err = HistActivity(dbFiles, labels, 'shopping', ax=ax, interval=30, colors=plotColors,
+                                  siteName=site.capitalize(),
                                   titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
                                   legendFontSize=10, textRotation=0)
         if err == None:
             plt.savefig(f'{activitiesCount_path}/Activities_Shopping_{site.capitalize()}.pdf')
         plt.close(fig)
+
+        # +++++++++++++++ Stacked Histogram of each activity (shopping) ++++++++++++++++
+        for attr in ['age', 'gender']:
+            fig, ax = plt.subplots(tight_layout=True)
+            err = stackedActivity(dbFiles, labels, 'shopping', attr, ax=ax, interval=30,
+                               siteName=site.capitalize(),
+                               titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
+                               legendFontSize=10, textRotation=0)
+            if err == None:
+                plt.savefig(f'{activitiesCount_path}/Activities_Shopping_By_{attr}_{site.capitalize()}.pdf')
+            plt.close(fig)
 
         # ++++++++++++++++++++++ Place indicator reports ++++++++++++++++++++++
         for i, dbFile in enumerate(dbFiles):

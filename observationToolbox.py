@@ -31,7 +31,7 @@ from indicators import tempDistHist, stackedHistTransport, odMatrix, pieChart, g
     calculateNoBins, getPeakHours, getObsStartEnd, compareIndicators, calculateBinsEdges, \
     plotTrajectory, importTrajectory, speedBoxPlot, userTypeNames, userTypeColors, creatStreetusers, \
     modeShareCompChart, speedHistogram, speedOverSpacePlot, speedSpaceTimePlot, batchPlots, \
-    stackedHistActivity, generateReportPlace
+    stackedAllActivities, generateReportPlace
 import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
@@ -2935,8 +2935,7 @@ class StackHistWindow(QDialog):
         attr = self.attribCmbx.currentText()
 
         if inputs['Transport'][0] == 'Activity':
-            err = stackedHistActivity(inputs['Database file'], inputs['Label'], attr,
-                                      ax, interval)
+            err = stackedAllActivities(inputs['Database file'], inputs['Label'], attr, ax, interval)
         else:
             err = stackedHistTransport(inputs['Database file'], inputs['Label'], inputs['Transport'],
                                        inputs['Action type'], inputs['Unit Idx'], inputs['Direction'],
