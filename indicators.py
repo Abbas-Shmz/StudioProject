@@ -61,8 +61,8 @@ color_dict = {'walking':'mediumaquamarine', 'driving':'lightsalmon', 'cycling':'
 
               'unknown':'silver',
 
-              'strolling':'palegoldenrod', 'jogging':'bisque', 'shopping':'cornflowerblue',
-              'sitting':'lightsalmon', 'talking':'lightsteelblue', 'resting':'lightpink',
+              'strolling':'palegoldenrod', 'jogging':'paleturquoise', 'shopping':'cornflowerblue',
+              'sitting':'rosybrown', 'talking':'lightsteelblue', 'resting':'mintcream',
               'eating':'plum', 'playing':'deepskyblue', 'doing_exercise':'orange', 'smoking':'yellow',
               'using_cellphone':'powderblue', 'observing':'lightsteelblue',
               'reading_writing':'violet', 'performing':'yellow', 'selling':'lightsteelblue',
@@ -3615,7 +3615,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             axs = fig.subplots(1, 2)
 
             err = pieChart(dbFiles, labels, 'Activity', attr, axs=axs,
-                           # siteName=site.capitalize(),
+                           siteName=site.capitalize(),
                            titleSize=14, percTextSize=12, labelSize=12)
 
             if err == None:
@@ -3626,13 +3626,13 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         # ========================= Sankey Diagram, Activity ========================
         for dbFile, label in zip(dbFiles, labels):
             outFile = f'{activitiesCount_path}/Sankey_Activity_Age-Gender_{label}_{site.capitalize()}.pdf'
-            sankeyPlotActivity(dbFile, outFile) # siteName= f'{site.capitalize()} ({label})'
+            sankeyPlotActivity(dbFile, outFile, siteName= f'{site.capitalize()} ({label})')
 
 
         # ========================== Sankey Diagram, Transit =========================
         for dbFile, label in zip(dbFiles, labels):
             outFile = f'{transitCountAllmodes_path}/Sankey_Transit_Age-Gender_{label}_{site.capitalize()}.pdf'
-            sankeyPlotTransit(dbFile, 'all_crossings', 'all_units', outFile) # siteName= f'{site.capitalize()} ({label})'
+            sankeyPlotTransit(dbFile, 'all_crossings', 'all_units', outFile, siteName= f'{site.capitalize()} ({label})')
 
         # ========================== Pie chart, MODE SHARE  ==========================
         fig = plt.figure(tight_layout=True)
@@ -3641,7 +3641,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         axs = fig.subplots(1, 2)
 
         err = pieChart(dbFiles, labels, 'all_modes', 'transport', axs=axs,
-                       # siteName=site.capitalize(),
+                       siteName=site.capitalize(),
                        titleSize=14, percTextSize=12, labelSize=12)
 
         if err == None:
@@ -3669,7 +3669,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         axs = fig.subplots(1, 2)
 
         err = pieChart(dbFiles, labels, 'walking', 'age', axs=axs,
-                       # siteName=site.capitalize(),
+                       siteName=site.capitalize(),
                        titleSize=14, percTextSize=12, labelSize=12)
         if err == None:
             plt.savefig(
@@ -3683,7 +3683,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         axs = fig.subplots(1, 2)
 
         err = pieChart(dbFiles, labels, 'walking', 'gender', axs=axs,
-                       # siteName=site.capitalize(),
+                       siteName=site.capitalize(),
                        titleSize=14, percTextSize=12, labelSize=12)
         if err == None:
             plt.savefig(
@@ -3694,7 +3694,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig, ax = plt.subplots(tight_layout=True)
         err = zoneDensityPlot(dbFiles, labels, ['all_modes']* len(dbFiles), ['1'] * len(dbFiles), zoneArea=345,
                               ax=ax, interval=1, colors=plotColors,
-                              # siteName=site.capitalize(),
+                              siteName=site.capitalize(),
                               titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                               legendFontSize=10)
         if err == None:
@@ -3718,7 +3718,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         err = tempDistHist(dbFiles, labels, ['all_modes'] * len(dbFiles), ['all_crossings'] * len(dbFiles),
                            ['all_units'] * len(dbFiles),
                            ax=ax, interval=10, drawStd=1,
-                              # siteName=site.capitalize(),
+                              siteName=site.capitalize(),
                               titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                               legendFontSize=10)
         if err == None:
@@ -3745,7 +3745,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             fig, ax = plt.subplots(tight_layout=True)
             err = zoneDensityPlot(dbFiles, labels, transports, ['1']*len(dbFiles), zoneArea=345,
                                    ax=ax, interval=1, colors=plotColors,
-                                  # siteName=site.capitalize(),
+                                  siteName=site.capitalize(),
                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                    legendFontSize=10)
             if err == None:
@@ -3773,7 +3773,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                                    ['all_units', 'all_units'],
                                    ['both', 'both'],
                                    ax=ax, colors=plotColors,
-                                   # siteName=site.capitalize(),
+                                   siteName=site.capitalize(),
                                    titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                    legendFontSize=10)
             if err == None:
@@ -3863,7 +3863,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     fig, ax = plt.subplots(tight_layout=True)
                     err = tempDistHist(dbFiles, labels, transports, actions,
                                        unitIdxs, ['both']*len(dbFiles), ax, 10,
-                                       # siteName=site.capitalize(),
+                                       siteName=site.capitalize(),
                                        drawStd=1,
                                        titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                        legendFontSize=10)
@@ -3885,7 +3885,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
                     err = speedHistogram(dbFiles, labels, transports, actions,
                                        unitIdxs, ['both']*len(dbFiles), ax, 30,
-                                         # siteName=site.capitalize(),
+                                         siteName=site.capitalize(),
                                          titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8,
                                          yTickSize=8, legendFontSize=10)
                     if err == None:
@@ -3897,7 +3897,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     fig, ax = plt.subplots(tight_layout=True)
                     err = speedBoxPlot(dbFiles, labels, transports, actions,
                                          unitIdxs, ['both']*len(dbFiles), ax, 60,
-                                       # siteName=site.capitalize(),
+                                       siteName=site.capitalize(),
                                        titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=7, yTickSize=8,
                                        legendFontSize=10)
                     if err == None:
