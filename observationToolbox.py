@@ -60,6 +60,7 @@ class ObsToolbox(QMainWindow):
         self.groups = {}  # {group_idx: [group, {lineCrossings}, {ZoneCrossings}, {Activities}]}
         self.IsChangedManually = True
         self.traj_line = None
+        self.video_start = None
         # self.session_trjDb = None
 
         # global session
@@ -616,8 +617,8 @@ class ObsToolbox(QMainWindow):
         row = self.cur.fetchall()
 
         video_name = Path(row[0][0])
-        video_start_0 = datetime.datetime.strptime(row[0][1], '%Y-%m-%d %H:%M:%S.%f')
-        self.video_start = video_start_0.replace(microsecond=0)
+        # video_start_0 = datetime.datetime.strptime(row[0][1], '%Y-%m-%d %H:%M:%S.%f')
+        # self.video_start = video_start_0.replace(microsecond=0)
         self.trjDbIdx = row[0][2]
 
         video_file = site_folder/video_name

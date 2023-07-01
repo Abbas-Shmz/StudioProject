@@ -5060,53 +5060,53 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
 
 # =====================================================================
-# def getVideoMetadata(filename):
-#     HachoirConfig.quiet = True
-#     parser = createParser(filename)
+def getVideoMetadata(filename):
+    HachoirConfig.quiet = True
+    parser = createParser(filename)
+
+    with parser:
+        try:
+            metadata = extractMetadata(parser, 7)
+        except Exception as err:
+            print("Metadata extraction error: %s" % err)
+            metadata = None
+    if not metadata:
+        print("Unable to extract metadata")
+
+    # creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
+    # creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
+
+    metadata_dict = metadata._Metadata__data
+    # for key in metadata_dict.keys():
+    #     if metadata_dict[key].values:
+    #         print(key, metadata_dict[key].values[0].value)
+    creationDatetime = metadata_dict['creation_date'].values[0].value
+    width = metadata_dict['width'].values[0].value
+    height = metadata_dict['height'].values[0].value
+
+    return creationDatetime, width, height
+
+
+# def getVideoMetadata(file_path):
+#     cmd = f"ffprobe -v error -select_streams v:0 -show_entries stream_tags=timecode,codec_type -show_entries stream=height,width -show_entries format_tags=creation_time -of json {file_path}"
+#     result = subprocess.check_output(cmd, shell=True)
+#     metadata = json.loads(result.decode('utf-8'))
 #
-#     with parser:
-#         try:
-#             metadata = extractMetadata(parser, 7)
-#         except Exception as err:
-#             print("Metadata extraction error: %s" % err)
-#             metadata = None
-#     if not metadata:
-#         print("Unable to extract metadata")
+#     timecode_str = metadata['streams'][0]['tags']['timecode']
+#     creation_time_str = metadata['format']['tags']['creation_time']
 #
-#     # creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
-#     # creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
+#     if 'height' in metadata['streams'][0]['tags']:
+#         height = metadata['streams'][0]['tags']['height']
+#         width = metadata['streams'][0]['tags']['width']
+#     else:
+#         height = metadata['streams'][0]['height']
+#         width = metadata['streams'][0]['width']
 #
-#     metadata_dict = metadata._Metadata__data
-#     # for key in metadata_dict.keys():
-#     #     if metadata_dict[key].values:
-#     #         print(key, metadata_dict[key].values[0].value)
-#     creationDatetime = metadata_dict['creation_date'].values[0].value
-#     width = metadata_dict['width'].values[0].value
-#     height = metadata_dict['height'].values[0].value
+#     creation_time = datetime.datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=None)
+#     timecode = datetime.datetime.strptime(timecode_str, "%H:%M:%S:%f").replace(tzinfo=None)
+#     timecode = timecode.replace(year=creation_time.year, month=creation_time.month, day=creation_time.day)
 #
-#     return creationDatetime, width, height
-
-
-def getVideoMetadata(file_path):
-    cmd = f"ffprobe -v error -select_streams v:0 -show_entries stream_tags=timecode,codec_type -show_entries stream=height,width -show_entries format_tags=creation_time -of json {file_path}"
-    result = subprocess.check_output(cmd, shell=True)
-    metadata = json.loads(result.decode('utf-8'))
-
-    timecode_str = metadata['streams'][0]['tags']['timecode']
-    creation_time_str = metadata['format']['tags']['creation_time']
-
-    if 'height' in metadata['streams'][0]['tags']:
-        height = metadata['streams'][0]['tags']['height']
-        width = metadata['streams'][0]['tags']['width']
-    else:
-        height = metadata['streams'][0]['height']
-        width = metadata['streams'][0]['width']
-
-    creation_time = datetime.datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=None)
-    timecode = datetime.datetime.strptime(timecode_str, "%H:%M:%S:%f").replace(tzinfo=None)
-    timecode = timecode.replace(year=creation_time.year, month=creation_time.month, day=creation_time.day)
-
-    return timecode, width, height
+#     return timecode, width, height
 
 
 

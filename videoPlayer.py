@@ -385,8 +385,13 @@ class VideoWindow(QMainWindow):
             # self.drawZoneAction.setEnabled(True)
 
             creation_datetime, width, height = getVideoMetadata(self.videoFile)
-            self.videoStartDatetime = self.videoCurrentDatetime = creation_datetime
+            self.videoStartDatetime = self.videoCurrentDatetime = self.obsTb.video_start = creation_datetime
             self.dateLabel.setText(creation_datetime.strftime('%a, %b %d, %Y'))
+
+            self.timerLabel.setText('{:02d}:{:02d}:{:02d}'.format(
+                creation_datetime.time().hour,
+                creation_datetime.time().minute,
+                creation_datetime.time().second))
 
             self.gView.setSceneRect(0, 0, width, height)
 
