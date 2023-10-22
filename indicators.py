@@ -2431,6 +2431,13 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
 
         no_all_peds = q.count()
 
+        groups_list = [i[0] for i in q.all()]
+        groups_count = {i: groups_list.count(i) for i in set(groups_list)}
+        sizes_list = list(groups_count.values())
+        counts_list_all = {i: sizes_list.count(i) for i in set(sizes_list)}
+
+        n_all_groups = len(sizes_list)
+
         for p in entP_peakHours.keys():
             if entP_peakHours[p] is None:
                 continue
@@ -2510,24 +2517,31 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
 
                 elif 7 < i < 13:
                     rec_list = q_all_peaks.all()
-                    if rec_list != []:
-                        groups_dict = {i[0]: rec_list.count(i) for i in rec_list}
+                    groups_list = [i[0] for i in rec_list]
+                    if groups_list != []:
+                        groups_dict = {i: groups_list.count(i) for i in set(groups_list)}
                         sizes_list = list(groups_dict.values())
-                        groups_count = {i: sizes_list.count(i) for i in sizes_list}
+                        groups_count = {i: sizes_list.count(i) for i in set(sizes_list)}
+
+                        if p == indDf.columns[0]:
+                            noAllGr = n_all_groups
+                        elif p != indDf.columns[0] and ind in list(indDf.index):
+                            noAllGr = float(indDf.loc[ind].iloc[0].split(' ')[0])
+
                         if i == 8:
-                            indDf.loc[ind, p] = '{}'.format(len(sizes_list))
+                            indDf.loc[ind, p] = '{}'.format(n_all_groups)
                         elif i == 9 and 1 in groups_count:
-                            pct = round((groups_count[1] / len(sizes_list)) * 100, 1)
+                            pct = round((groups_count[1] / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(groups_count[1], pct)
                         elif i == 10 and 2 in groups_count:
-                            pct = round((groups_count[2] / len(sizes_list)) * 100, 1)
+                            pct = round((groups_count[2] / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(groups_count[2], pct)
                         elif i == 11 and 3 in groups_count:
-                            pct = round((groups_count[3] / len(sizes_list)) * 100, 1)
+                            pct = round((groups_count[3] / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(groups_count[3], pct)
                         elif i == 12 and 4 in groups_count:
                             n = sum([groups_count[i] for i in groups_count.keys() if i > 3])
-                            pct = round((n / len(sizes_list)) * 100, 1)
+                            pct = round((n / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(n, pct)
                         else:
                             indDf.loc[ind, p] = '{} ({}%)'.format(0, 0)
@@ -3303,7 +3317,7 @@ def plotTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, hom
             ax.add_patch(zone)
 
     # Invert the y-axis to convert to image coordinate system
-    ax.invert_yaxis()
+    # ax.invert_yaxis()
 
     ax.axis('equal')
     ax.tick_params(axis='both', labelsize=3)
@@ -5060,53 +5074,53 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
 
 # =====================================================================
-def getVideoMetadata(filename):
-    HachoirConfig.quiet = True
-    parser = createParser(filename)
-
-    with parser:
-        try:
-            metadata = extractMetadata(parser, 7)
-        except Exception as err:
-            print("Metadata extraction error: %s" % err)
-            metadata = None
-    if not metadata:
-        print("Unable to extract metadata")
-
-    # creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
-    # creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
-
-    metadata_dict = metadata._Metadata__data
-    # for key in metadata_dict.keys():
-    #     if metadata_dict[key].values:
-    #         print(key, metadata_dict[key].values[0].value)
-    creationDatetime = metadata_dict['creation_date'].values[0].value
-    width = metadata_dict['width'].values[0].value
-    height = metadata_dict['height'].values[0].value
-
-    return creationDatetime, width, height
-
-
-# def getVideoMetadata(file_path):
-#     cmd = f"ffprobe -v error -select_streams v:0 -show_entries stream_tags=timecode,codec_type -show_entries stream=height,width -show_entries format_tags=creation_time -of json {file_path}"
-#     result = subprocess.check_output(cmd, shell=True)
-#     metadata = json.loads(result.decode('utf-8'))
+# def getVideoMetadata(filename):
+#     HachoirConfig.quiet = True
+#     parser = createParser(filename)
 #
-#     timecode_str = metadata['streams'][0]['tags']['timecode']
-#     creation_time_str = metadata['format']['tags']['creation_time']
+#     with parser:
+#         try:
+#             metadata = extractMetadata(parser, 7)
+#         except Exception as err:
+#             print("Metadata extraction error: %s" % err)
+#             metadata = None
+#     if not metadata:
+#         print("Unable to extract metadata")
 #
-#     if 'height' in metadata['streams'][0]['tags']:
-#         height = metadata['streams'][0]['tags']['height']
-#         width = metadata['streams'][0]['tags']['width']
-#     else:
-#         height = metadata['streams'][0]['height']
-#         width = metadata['streams'][0]['width']
+#     # creationDatetime_text = metadata.exportDictionary()['Metadata']['Creation date']
+#     # creationDatetime = datetime.strptime(creationDatetime_text, '%Y-%m-%d %H:%M:%S')
 #
-#     creation_time = datetime.datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=None)
-#     timecode = datetime.datetime.strptime(timecode_str, "%H:%M:%S:%f").replace(tzinfo=None)
-#     timecode = timecode.replace(year=creation_time.year, month=creation_time.month, day=creation_time.day)
+#     metadata_dict = metadata._Metadata__data
+#     # for key in metadata_dict.keys():
+#     #     if metadata_dict[key].values:
+#     #         print(key, metadata_dict[key].values[0].value)
+#     creationDatetime = metadata_dict['creation_date'].values[0].value
+#     width = metadata_dict['width'].values[0].value
+#     height = metadata_dict['height'].values[0].value
 #
-#     return timecode, width, height
+#     return creationDatetime, width, height
+
+
+def getVideoMetadata(file_path):
+    cmd = f"ffprobe -v error -select_streams v:0 -show_entries stream_tags=timecode,codec_type -show_entries stream=height,width -show_entries format_tags=creation_time -of json {file_path}"
+    result = subprocess.check_output(cmd, shell=True)
+    metadata = json.loads(result.decode('utf-8'))
+
+    timecode_str = metadata['streams'][0]['tags']['timecode']
+    creation_time_str = metadata['format']['tags']['creation_time']
+
+    if 'height' in metadata['streams'][0]['tags']:
+        height = metadata['streams'][0]['tags']['height']
+        width = metadata['streams'][0]['tags']['width']
+    else:
+        height = metadata['streams'][0]['height']
+        width = metadata['streams'][0]['width']
+
+    creation_time = datetime.datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=None)
+    timecode = datetime.datetime.strptime(timecode_str, "%H:%M:%S:%f").replace(tzinfo=None)
+    timecode = timecode.replace(year=creation_time.year, month=creation_time.month, day=creation_time.day)
+
+    return timecode, width, height
 
 
 

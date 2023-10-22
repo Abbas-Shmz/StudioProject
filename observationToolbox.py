@@ -930,8 +930,11 @@ class ObsToolbox(QMainWindow):
                     self.actionTypeCmb.setCurrentText(actionTypeList[1])
                 else:
                     self.actionTypeCmb.addItem(actionTypeList[2])
-                    self.actionTypeCmb.setCurrentText(actionTypeList[2])
+
             self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+
+        self.actionTypeCmb.addItem('all')
+        self.actionTypeCmb.setCurrentText('all')
 
 
         if self.traj_line[next_idx][2][6] == -1:
@@ -1065,6 +1068,9 @@ class ObsToolbox(QMainWindow):
             self.refLineLe.setText(str([rl.idx for rl in self.traj_line[prev_idx][2][1]]))
             self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
+        self.actionTypeCmb.addItem('all')
+        self.actionTypeCmb.setCurrentText('all')
+
         if prev_idx != '-1':
             if self.traj_line[prev_idx][2][6] == -1:
                 self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(245, 215, 215); }")
@@ -1166,7 +1172,7 @@ class ObsToolbox(QMainWindow):
             self.user_saveBtn_click()
 
             if userType != 10 and self.loadTrjBtn.text() == 'Load trajectory':
-                if self.actionTypeCmb.currentText() == actionTypeList[0]:
+                if self.actionTypeCmb.currentText() == 'all':
                     lines = self.traj_line[trj_idx][2][1]
                     for i in range(len(lines)):
                         self.linepass_newRecBtn_click()
@@ -1185,7 +1191,7 @@ class ObsToolbox(QMainWindow):
                     # self.linepass_list_wdgt.setCurrentRow(-1)
                     # self.linepass_list_wdgt.setCurrentRow(0)
                     self.linepass_saveBtn_click()
-                elif self.actionTypeCmb.currentText() in [actionTypeList[1], actionTypeList[2]]:
+                # if self.actionTypeCmb.currentText() == 'all':
                     zones = self.traj_line[trj_idx][2][8]
                     for i in range(len(zones)):
                         self.zonepass_newRecBtn_click()

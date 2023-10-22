@@ -15,7 +15,7 @@ Base = declarative_base()
 
 GenderEnum = Enum('GenderEnum', 'unknown male female')
 ModeEnum = Enum('ModeEnum', 'cardriver carpassenger transit taxi motorcycle cycling walking other')
-VehicleEnum = Enum('VehicleEnum', 'car bike van truck bus taxi motorcycle scooter skate rollers')
+VehicleEnum = Enum('VehicleEnum', 'car bike van truck bus taxi motorcycle scooter skate rollers mobility_scooter')
 ActivityEnum = Enum('ActivityEnum',
                     'unknown strolling jogging shopping sitting talking resting eating playing doing_exercise smoking using_cellphone observing reading_writing performing selling playing_with_pets taking_pet_for_walk')
 DisabilityEnum = Enum('DisabilityEnum', 'none Wheelchair Walker Cane While_cane')
