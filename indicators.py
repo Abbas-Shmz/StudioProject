@@ -2419,6 +2419,7 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                       'No. of children',  # 3
                       'No. of elderly people',  # 4
                       'No. of people with pet',  # 5
+                      'No. of people with stroller',  # 6
                       'No. of disabled people',  # 6
                       'Flow of pedestrians (ped/h)',  # 7
                       'No. of all groups',  # 8
@@ -2430,6 +2431,9 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                       ]
 
         no_all_peds = q.count()
+
+        if no_all_peds == 0:
+            return indDf
 
         groups_list = [i[0] for i in q.all()]
         groups_count = {i: groups_list.count(i) for i in set(groups_list)}
@@ -2505,17 +2509,22 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_pet_peak, pct)
 
                 elif i == 6:
+                    no_pet_peak = q_all_peaks.filter(Person.stroller == 1).count()
+                    pct = round((no_pet_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_pet_peak, pct)
+
+                elif i == 7:
                     no_dis_peak = q_all_peaks.filter(Person.disability != 'no')\
                                              .filter(Person.disability != '')\
                                              .filter(Person.disability != False).count()
                     pct = round((no_dis_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_dis_peak, pct)
 
-                elif i == 7:
+                elif i == 8:
                     flow_all_peak = round(no_all_peak / duration_hours, 1)
                     indDf.loc[ind, p] = '{}'.format(flow_all_peak)
 
-                elif 7 < i < 13:
+                elif 8 < i < 14:
                     rec_list = q_all_peaks.all()
                     groups_list = [i[0] for i in rec_list]
                     if groups_list != []:
@@ -2528,18 +2537,18 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                         elif p != indDf.columns[0] and ind in list(indDf.index):
                             noAllGr = float(indDf.loc[ind].iloc[0].split(' ')[0])
 
-                        if i == 8:
+                        if i == 9:
                             indDf.loc[ind, p] = '{}'.format(n_all_groups)
-                        elif i == 9 and 1 in groups_count:
+                        elif i == 10 and 1 in groups_count:
                             pct = round((groups_count[1] / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(groups_count[1], pct)
-                        elif i == 10 and 2 in groups_count:
+                        elif i == 11 and 2 in groups_count:
                             pct = round((groups_count[2] / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(groups_count[2], pct)
-                        elif i == 11 and 3 in groups_count:
+                        elif i == 12 and 3 in groups_count:
                             pct = round((groups_count[3] / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(groups_count[3], pct)
-                        elif i == 12 and 4 in groups_count:
+                        elif i == 13 and 4 in groups_count:
                             n = sum([groups_count[i] for i in groups_count.keys() if i > 3])
                             pct = round((n / noAllGr) * 100, 1) if noAllGr != 0 else 0
                             indDf.loc[ind, p] = '{} ({}%)'.format(n, pct)
@@ -2548,7 +2557,7 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                     else:
                         indDf.loc[ind, p] = '{}'.format(0)
 
-                elif i == 13:
+                elif i == 14:
                     if 'line' in actionType.split('_'):
                         no_road_peak = q_all_peaks.filter(Line.type == 'roadbed').count()
                     elif 'zone' in actionType.split('_'):
