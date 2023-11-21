@@ -51,8 +51,9 @@ userTypeColors = ['gray',   'blue', 'orange',    'violet',       'green',  'yell
 plotColors = ['deepskyblue', 'salmon', 'gold', 'forestgreen', 'violet', 'cadetblue', 'saddlebrown', 'yellowgreen',
               'chocolate', 'navy', 'purple', 'aqua', 'blue', 'darkkhaki', 'green', 'black', 'cyan', 'brown', 'gray', 'olive']
 
-color_dict = {'walking':'mediumaquamarine', 'driving':'lightsalmon', 'cycling':'lightskyblue',
+color_dict = {'walking':'mediumaquamarine', 'cardriver':'lightsalmon', 'cycling':'lightskyblue',
               'motorcycle':'darkred', 'car':'orange', 'bus':'yellow', 'truck':'silver', 'other':'burlywood',
+              'driving':'lightsalmon',
 
               'adult':'goldenrod', 'child':'powderblue', 'young_adult':'lightsteelblue',
               'teen':'lightcoral', 'senior':'plum', 'toddler':'mistyrose', 'infant':'lightyellow',
@@ -711,20 +712,35 @@ def sitesBAtransport(dbFileList, siteNames, transport, directions='both', BAlabe
                       actionType='all_crossings', unitIdxs='all_units', ax=None, colors=plotColors,
                      titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=6, yTickSize=6, legendFontSize=5):
     sitesNo = len(dbFileList)
+    camViewNo = len(dbFileList[0])
     sites_sessions = []
     obs_durations = []
 
     for site_dbFiles in dbFileList:
-        session_before = connectDatabase(site_dbFiles[0])
-        session_after = connectDatabase(site_dbFiles[1])
-        sites_sessions.append([session_before, session_after])
+        site_sessions = []
+        for i in range(camViewNo):
+            site_sessions.append(connectDatabase(site_dbFiles[i]))
+        # session_before = connectDatabase(site_dbFiles[0])
+        # session_after = connectDatabase(site_dbFiles[1])
+        sites_sessions.append(site_sessions)
         # if 'line' in actionType.split(' '):
         #     cls_obs = LineCrossing
         # elif 'zone' in actionType.split(' '):
         #     cls_obs = ZoneCrossing
 
-        first_obs_before, last_obs_before = getObsStartEnd(session_before)
-        first_obs_after, last_obs_after = getObsStartEnd(session_after)
+        site_durations = []
+        for s_session in site_sessions:
+            first_obs, last_obs = getObsStartEnd(s_session)
+            duration = last_obs - first_obs
+            duration_in_s = duration.total_seconds()
+            duration_hours = duration_in_s / 3600
+
+            site_durations.append(duration_hours)
+
+        obs_durations.append(site_durations)
+
+        # first_obs_before, last_obs_before = getObsStartEnd(session_before)
+        # first_obs_after, last_obs_after = getObsStartEnd(session_after)
 
         # first_obs_before = session_before.query(func.min(cls_obs.instant)).first()[0]
         # last_obs_before = session_before.query(func.max(cls_obs.instant)).first()[0]
@@ -732,15 +748,15 @@ def sitesBAtransport(dbFileList, siteNames, transport, directions='both', BAlabe
         # first_obs_after = session_after.query(func.min(cls_obs.instant)).first()[0]
         # last_obs_after = session_after.query(func.max(cls_obs.instant)).first()[0]
 
-        duration_before = last_obs_before - first_obs_before
-        duration_before_in_s = duration_before.total_seconds()
-        duration_before_hours = duration_before_in_s / 3600
+        # duration_before = last_obs_before - first_obs_before
+        # duration_before_in_s = duration_before.total_seconds()
+        # duration_before_hours = duration_before_in_s / 3600
 
-        duration_after = last_obs_after - first_obs_after
-        duration_after_in_s = duration_after.total_seconds()
-        duration_after_hours = duration_after_in_s / 3600
+        # duration_after = last_obs_after - first_obs_after
+        # duration_after_in_s = duration_after.total_seconds()
+        # duration_after_hours = duration_after_in_s / 3600
 
-        obs_durations.append([duration_before_hours, duration_after_hours])
+        # obs_durations.append([duration_before_hours, duration_after_hours])
 
     if ax == None:
         fig = plt.figure(tight_layout=True)
@@ -847,37 +863,59 @@ def sitesBAtransport(dbFileList, siteNames, transport, directions='both', BAlabe
 def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'], ax=None, colors=plotColors,
                     titleSize=8, xLabelSize=7, yLabelSize=7, xTickSize=6, yTickSize=6, legendFontSize=6):
     sitesNo = len(dbFileList)
+    camViewNo = len(dbFileList[0])
     sites_sessions = []
     obs_durations = []
 
     for site_dbFiles in dbFileList:
-        session_before = connectDatabase(site_dbFiles[0])
-        session_after = connectDatabase(site_dbFiles[1])
-        sites_sessions.append([session_before, session_after])
-        cls_obs = LineCrossing
+        site_sessions = []
+        for i in range(camViewNo):
+            site_sessions.append(connectDatabase(site_dbFiles[i]))
+        sites_sessions.append(site_sessions)
 
-        first_obs_before = session_before.query(func.min(cls_obs.instant)).first()[0]
-        last_obs_before = session_before.query(func.max(cls_obs.instant)).first()[0]
+        site_durations = []
+        for s_session in site_sessions:
+            first_obs, last_obs = getObsStartEnd(s_session)
+            duration = last_obs - first_obs
+            duration_in_s = duration.total_seconds()
+            duration_hours = duration_in_s / 3600
 
-        first_obs_after = session_after.query(func.min(cls_obs.instant)).first()[0]
-        last_obs_after = session_after.query(func.max(cls_obs.instant)).first()[0]
+            site_durations.append(duration_hours)
 
-        duration_before = last_obs_before - first_obs_before
-        duration_before_in_s = duration_before.total_seconds()
-        duration_before_hours = duration_before_in_s / 3600
+        obs_durations.append(site_durations)
 
-        duration_after = last_obs_after - first_obs_after
-        duration_after_in_s = duration_after.total_seconds()
-        duration_after_hours = duration_after_in_s / 3600
+    # sitesNo = len(dbFileList)
+    # sites_sessions = []
+    # obs_durations = []
 
-        obs_durations.append([duration_before_hours, duration_after_hours])
+    # for site_dbFiles in dbFileList:
+    #     session_before = connectDatabase(site_dbFiles[0])
+    #     session_after = connectDatabase(site_dbFiles[1])
+    #     sites_sessions.append([session_before, session_after])
+    #     cls_obs = LineCrossing
+    #
+    #     first_obs_before = session_before.query(func.min(cls_obs.instant)).first()[0]
+    #     last_obs_before = session_before.query(func.max(cls_obs.instant)).first()[0]
+    #
+    #     first_obs_after = session_after.query(func.min(cls_obs.instant)).first()[0]
+    #     last_obs_after = session_after.query(func.max(cls_obs.instant)).first()[0]
+    #
+    #     duration_before = last_obs_before - first_obs_before
+    #     duration_before_in_s = duration_before.total_seconds()
+    #     duration_before_hours = duration_before_in_s / 3600
+    #
+    #     duration_after = last_obs_after - first_obs_after
+    #     duration_after_in_s = duration_after.total_seconds()
+    #     duration_after_hours = duration_after_in_s / 3600
+    #
+    #     obs_durations.append([duration_before_hours, duration_after_hours])
 
     if ax == None:
         fig = plt.figure(tight_layout=True)
         ax = fig.add_subplot(111)
 
     y_list = []
-    for i in range(2):
+    for i in range(camViewNo):
         y_list.append([0] * sitesNo)
         for j, sessions in enumerate(sites_sessions):
 
@@ -892,7 +930,7 @@ def sitesBAactivity(dbFileList, siteNames, BAlabels=['before', 'after'], ax=None
 
     ind = np.arange(len(y_list[0]))
     width = 0.5 / 2
-    for i in range(2):
+    for i in range(camViewNo):
         x = (ind - 0.25 + width / 2) + (width * i)
         ax.bar(x, y_list[i], color=colors[i], width=width, label=BAlabels[i], edgecolor='grey', lw=0.5)
 
@@ -1327,7 +1365,7 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
         ax = fig.add_subplot(111)
 
     for i in range(inputNo):
-        if speed_lists[i] == []:
+        if speed_lists[i] == [] or len(speed_lists[i]) < 2:
             continue
         speed_mean = np.mean(speed_lists[i])
         speed_std = np.std(speed_lists[i])
@@ -2280,8 +2318,9 @@ def pieChart(dbFiles, chartLabels, transport, attr, axs=None, startTimes=None, e
 
     if axs is None:
         fig = plt.figure(tight_layout=True)
-        fig.set_figheight(5)
-        fig.set_figwidth(10)
+        if inputNo > 1:
+            fig.set_figheight(5)
+            fig.set_figwidth(10)
         axs = fig.subplots(1, inputNo)#, sharex=True, sharey=True)
 
 
@@ -2754,12 +2793,12 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_sdwk_peak, pct)
 
                 elif i ==3:
-                    if mainDirection == 'both':
-                        continue
-                    elif mainDirection == 'right-to-left':
+                    if mainDirection == 'right-to-left':
                         against_tf = False
                     elif mainDirection == 'left-to-right':
                         against_tf = True
+                    else:
+                        continue
                     q_against = q_all_peaks.filter(LineCrossing.rightToLeft == against_tf)
                     no_agst_peak = q_against.count()
                     pct = round((no_agst_peak / noAll) * 100, 1) if noAll != 0 else 0
@@ -3420,11 +3459,12 @@ def importTrajectory(trjDBFile, intrinsicCameraMatrix, distortionCoefficients, h
     return log
 
 # =====================================================================
-def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelRtoL=None, labelLtoR=None):
+def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', histInterval=30, repInterval=60,
+               speedInerval=15, densInterval=1, labelRtoL=None, labelLtoR=None):
     plt.ioff()
     # fig = plt.figure(tight_layout=True)  # figsize=(5, 5), dpi=200, tight_layout=True)
     # ax = fig.add_subplot(111)
-    transportType = ['driving', 'walking', 'cycling']
+    transportType = ['cardriver', 'walking', 'cycling']
     actionType = ['crossing_line', 'crossing_line_RL', 'crossing_line_LR',
                   'crossing_zone', 'entering_zone', 'exiting_zone',
                   'all_crossings']
@@ -3467,6 +3507,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             view = [[v[0], v[1]] for v in views]
 
             for v in view:
+                if v[1] is None:
+                    continue
                 site_camView[s][v[0]] = Path(metaDataFile).parent/s/Path(v[1]).parent
         else:
             cur.execute('SELECT idx FROM sites WHERE name=?', (s,))
@@ -3555,30 +3597,42 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         if dbFiles == []:
             continue
 
-        for dir in ['South', 'North']:
+        for d_indx, dir in enumerate([labelRtoL, labelLtoR]):
             vehicleDbfileList.append(dbFiles)
-            vehicleSiteNames.append(site.capitalize() + f' ({dir[0]})')
+            if labelRtoL is not None and labelLtoR is not None:
+                v_s_name = site.capitalize() + f' ({dir})'
+            else:
+                if d_indx == 0:
+                    v_s_name = site.capitalize() + f' (RL)'
+                elif d_indx == 1:
+                    v_s_name = site.capitalize() + f' (LR)'
+            vehicleSiteNames.append(v_s_name)
 
         walkCycDbfileList.append(dbFiles)
         walkCycSiteNames.append(site.capitalize())
 
         # ++++++++++++++++++++++ PDF all modes plots ++++++++++++++++++++++
         fig = plt.figure(tight_layout=True)
-        fig.set_figheight(5)
-        fig.set_figwidth(15)
-        axs = fig.subplots(1, 2, sharey='row')
+        if len(dbFiles) > 1:
+            fig.set_figheight(5)
+            fig.set_figwidth(15)
+        axs = fig.subplots(1, len(dbFiles), sharey='row')
         for i, dbFile in enumerate(dbFiles):
             # fig, ax = plt.subplots(tight_layout=True)
             if i == 0:
                 YlabSize = 12
             else:
                 YlabSize = 0
+            if len(dbFiles) == 1:
+                ax = axs
+            else:
+                ax = axs[i]
             err = transportModePDF([dbFile]*2, ['Pedestrian', 'Cyclist'],
                                    ['walking', 'cycling'],
                                    ['all_crossings', 'all_crossings'],
                                    ['all_units', 'all_units'],
                                    ['both', 'both'],
-                                   ax=axs[i],
+                                   ax=ax,
                                    siteName=f'{site.capitalize()} ({labels[i]})',
                                    colors=[userTypeColors[2], userTypeColors[4]],
                                    titleSize=14, xLabelSize=12, yLabelSize=YlabSize, xTickSize=8, yTickSize=8,
@@ -3591,7 +3645,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         Path(activitiesCount_path).mkdir(parents=True, exist_ok=True)
         for attr in attrActivityList:
             fig, ax = plt.subplots(tight_layout=True)
-            err = stackedAllActivities(dbFiles, labels, attr, ax=ax, interval=60, textRotation=0, titleSize=12,
+            err = stackedAllActivities(dbFiles, labels, attr, ax=ax, interval=histInterval, textRotation=0, titleSize=12,
                                        xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8, legendFontSize=10)
             if err == None:
                 plt.savefig(f'{activitiesCount_path}/Activities_by-{attr}_{site.capitalize()}.pdf')
@@ -3599,7 +3653,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
         # +++++++++++++++ Histogram of each activity (shopping) ++++++++++++++++
         fig, ax = plt.subplots(tight_layout=True)
-        err = HistActivity(dbFiles, labels, 'shopping', ax=ax, interval=30, colors=plotColors,
+        err = HistActivity(dbFiles, labels, 'shopping', ax=ax, interval=histInterval, colors=plotColors,
                                   siteName=site.capitalize(),
                                   titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
                                   legendFontSize=10, textRotation=0)
@@ -3610,7 +3664,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         # +++++++++++++++ Stacked Histogram of each activity (shopping) ++++++++++++++++
         for attr in ['age', 'gender']:
             fig, ax = plt.subplots(tight_layout=True)
-            err = stackedActivity(dbFiles, labels, 'shopping', attr, ax=ax, interval=30,
+            err = stackedActivity(dbFiles, labels, 'shopping', attr, ax=ax, interval=histInterval,
                                siteName=site.capitalize(),
                                titleSize=12, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
                                legendFontSize=10, textRotation=0)
@@ -3621,21 +3675,23 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         # ++++++++++++++++++++++ Place indicator reports ++++++++++++++++++++++
         for i, dbFile in enumerate(dbFiles):
             outputFile = f'{activitiesCount_path}/Table_{labels[i]}_Activities_{site.capitalize()}.pdf'
-            generateReportPlace(dbFile, 60, outputFile=outputFile)
+            generateReportPlace(dbFile, interval=repInterval, outputFile=outputFile)
 
         # -------------------- Place indicator Difference ---------------------
-        outputFile = f'{activitiesCount_path}/Diff-Table_Activities_{site.capitalize()}.pdf'
-        compareIndicators(dbFiles, labels, ['Activity', 'Activity'], [actionType[0], actionType[0]],
-                          ['all_lines', 'all_lines'], ['both', 'both'], 60,
-                          outputFile=outputFile, mainDirection=mainDirections[site],
-                          labelRtoL='south', labelLtoR='north', streetFunction='place')
+        if len(dbFiles) == 2:
+            outputFile = f'{activitiesCount_path}/Diff-Table_Activities_{site.capitalize()}.pdf'
+            compareIndicators(dbFiles, labels, ['Activity', 'Activity'], [actionType[0], actionType[0]],
+                              ['all_lines', 'all_lines'], ['both', 'both'], interval=repInterval,
+                              outputFile=outputFile, mainDirection=mainDirections[site],
+                              labelRtoL='south', labelLtoR='north', streetFunction='place')
 
         # ====================== Pie chart, Activity TYPE, AGE, GENDER  ==========================
         for attr in ['activity', 'age', 'gender']:
             fig = plt.figure(tight_layout=True)
-            fig.set_figheight(5)
-            fig.set_figwidth(10)
-            axs = fig.subplots(1, 2)
+            if len(dbFiles) > 1:
+                fig.set_figheight(5)
+                fig.set_figwidth(10)
+            axs = fig.subplots(1, len(dbFiles))
 
             err = pieChart(dbFiles, labels, 'Activity', attr, axs=axs,
                            siteName=site.capitalize(),
@@ -3659,9 +3715,10 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
         # ========================== Pie chart, MODE SHARE  ==========================
         fig = plt.figure(tight_layout=True)
-        fig.set_figheight(5)
-        fig.set_figwidth(10)
-        axs = fig.subplots(1, 2)
+        if len(dbFiles) > 1:
+            fig.set_figheight(5)
+            fig.set_figwidth(10)
+        axs = fig.subplots(1, len(dbFiles))
 
         err = pieChart(dbFiles, labels, 'all_modes', 'transport', axs=axs,
                        siteName=site.capitalize(),
@@ -3674,9 +3731,10 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
         # ========================== Pie chart, VEHICLE Type  ==========================
         fig = plt.figure(tight_layout=True)
-        fig.set_figheight(5)
-        fig.set_figwidth(10)
-        axs = fig.subplots(1, 2)
+        if len(dbFiles) > 1:
+            fig.set_figheight(5)
+            fig.set_figwidth(10)
+        axs = fig.subplots(1, len(dbFiles))
 
         err = pieChart(dbFiles, labels, 'cardriver', 'category', axs=axs, siteName=site.capitalize(),
                        titleSize=14, percTextSize=12, labelSize=12)
@@ -3687,9 +3745,10 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
         # ========================== Pie chart, PEDESTRIAN age  ==========================
         fig = plt.figure(tight_layout=True)
-        fig.set_figheight(5)
-        fig.set_figwidth(10)
-        axs = fig.subplots(1, 2)
+        if len(dbFiles) > 1:
+            fig.set_figheight(5)
+            fig.set_figwidth(10)
+        axs = fig.subplots(1, len(dbFiles))
 
         err = pieChart(dbFiles, labels, 'walking', 'age', axs=axs,
                        siteName=site.capitalize(),
@@ -3701,9 +3760,10 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
         # ========================== Pie chart, PEDESTRIAN gender  ==========================
         fig = plt.figure(tight_layout=True)
-        fig.set_figheight(5)
-        fig.set_figwidth(10)
-        axs = fig.subplots(1, 2)
+        if len(dbFiles) > 1:
+            fig.set_figheight(5)
+            fig.set_figwidth(10)
+        axs = fig.subplots(1, len(dbFiles))
 
         err = pieChart(dbFiles, labels, 'walking', 'gender', axs=axs,
                        siteName=site.capitalize(),
@@ -3716,7 +3776,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         # ++++++++++++++++++ Density of all street users in Zones ++++++++++++++++++++++
         fig, ax = plt.subplots(tight_layout=True)
         err = zoneDensityPlot(dbFiles, labels, ['all_modes']* len(dbFiles), ['1'] * len(dbFiles), zoneArea=345,
-                              ax=ax, interval=1, colors=plotColors,
+                              ax=ax, interval=densInterval, colors=plotColors,
                               siteName=site.capitalize(),
                               titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                               legendFontSize=10)
@@ -3740,7 +3800,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         fig, ax = plt.subplots(tight_layout=True)
         err = tempDistHist(dbFiles, labels, ['all_modes'] * len(dbFiles), ['all_crossings'] * len(dbFiles),
                            ['all_units'] * len(dbFiles),
-                           ax=ax, interval=10, drawStd=1,
+                           ax=ax, interval=histInterval, drawStd=1,
                               siteName=site.capitalize(),
                               titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                               legendFontSize=10)
@@ -3767,7 +3827,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             # ++++++++++++++++++ Density of pedestrians / cyclists in Zones ++++++++++++++++++++++
             fig, ax = plt.subplots(tight_layout=True)
             err = zoneDensityPlot(dbFiles, labels, transports, ['1']*len(dbFiles), zoneArea=345,
-                                   ax=ax, interval=1, colors=plotColors,
+                                   ax=ax, interval=densInterval, colors=plotColors,
                                   siteName=site.capitalize(),
                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
                                    legendFontSize=10)
@@ -3808,7 +3868,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             for attr in attrTransitList:
                 fig, ax = plt.subplots(tight_layout=True)
                 err = stackedHistTransport(dbFiles, labels, transports, ['all_crossings', 'all_crossings'],
-                                   ['all_units', 'all_units'], ['both', 'both'], attr, ax=ax, interval=60,
+                                   ['all_units', 'all_units'], ['both', 'both'], attr, ax=ax, interval=histInterval,
                                            siteName=site.capitalize(),
                                            titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=5, yTickSize=8,
                                            legendFontSize=10)
@@ -3825,11 +3885,11 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                 elif transport == 'walking':
                     acType = 'all_crossings'
                     uId = 'all_units'
-                elif transport == 'driving':
+                elif transport == 'cardriver':
                     acType = 'crossing_line'
                     uId = 'all_lines'
                 outputFile = f'{transitCount_path}/{transport}/Table_{labels[i]}_{transport}_{acType}_{uId}_{site.capitalize()}.pdf'
-                generateReportTransit(dbFile, transport, acType, uId, 'both', 60, outputFile=outputFile,
+                generateReportTransit(dbFile, transport, acType, uId, 'both', interval=repInterval, outputFile=outputFile,
                                       mainDirection=mainDirections[site], labelRtoL='south', labelLtoR='north')
 
             # ------------------ Transit indicator Difference ----------------------
@@ -3842,11 +3902,12 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             elif transport == 'driving':
                 acType = 'crossing_line'
                 uId = 'all_lines'
-            outputFile = f'{transitCount_path}/{transport}/Diff-Table_{transport}_{acType}_{uId}_{site.capitalize()}.pdf'
-            compareIndicators(dbFiles, labels, transports, [acType, acType],  [uId, uId],
-                              ['both', 'both'], 60,
-                              outputFile=outputFile, mainDirection=mainDirections[site],
-                              labelRtoL='south', labelLtoR='north')
+            if len(dbFiles) == 2:
+                outputFile = f'{transitCount_path}/{transport}/Diff-Table_{transport}_{acType}_{uId}_{site.capitalize()}.pdf'
+                compareIndicators(dbFiles, labels, transports, [acType, acType],  [uId, uId],
+                                  ['both', 'both'], interval=repInterval,
+                                  outputFile=outputFile, mainDirection=mainDirections[site],
+                                  labelRtoL='south', labelLtoR='north')
 
                 # elif transport == 'cardriver':
                 #     for direction in directionTypes:
@@ -3872,7 +3933,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     if 'zone' in action.split('_') and transport == 'cardriver' and unitIdx[0] == 'on_street_parking_lot':
                         fig, ax = plt.subplots(tight_layout=True)
                         err = tempDistHist(dbFiles, labels, transports, actions,
-                                           unitIdxs, ax=ax, interval=30, siteName=site.capitalize())
+                                           unitIdxs, ax=ax, interval=histInterval, siteName=site.capitalize())
                         if err == None:
                             plt.savefig(
                                 f'{accessCount_path}/{transport}/Zone_{unitIdx[0]}_{unitIdx[1]}_{action}_{transport}_{site.capitalize()}.pdf')
@@ -3885,7 +3946,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     # --------------- Number of Users Over Time ------------------------
                     fig, ax = plt.subplots(tight_layout=True)
                     err = tempDistHist(dbFiles, labels, transports, actions,
-                                       unitIdxs, ['both']*len(dbFiles), ax, 10,
+                                       unitIdxs, ['both']*len(dbFiles), ax, interval=histInterval,
                                        siteName=site.capitalize(),
                                        drawStd=1,
                                        titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
@@ -3907,7 +3968,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     fig, ax = plt.subplots(tight_layout=True)
 
                     err = speedHistogram(dbFiles, labels, transports, actions,
-                                       unitIdxs, ['both']*len(dbFiles), ax, 30,
+                                       unitIdxs, ['both']*len(dbFiles), ax, interval=histInterval,
                                          siteName=site.capitalize(),
                                          titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8,
                                          yTickSize=8, legendFontSize=10)
@@ -3919,7 +3980,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
                     # +++++++++++++++++++++++++ Speed Box Plot ++++++++++++++++++++++++
                     fig, ax = plt.subplots(tight_layout=True)
                     err = speedBoxPlot(dbFiles, labels, transports, actions,
-                                         unitIdxs, ['both']*len(dbFiles), ax, 60,
+                                         unitIdxs, ['both']*len(dbFiles), ax, interval=histInterval,
                                        siteName=site.capitalize(),
                                        titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=7, yTickSize=8,
                                        legendFontSize=10)
@@ -3934,6 +3995,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         walkCycDirections.append('both')
 
     # ================= Flow of users across all sites ============================
+    # if len(vehicleDbfileList[0]) > 1:
     fig, ax = plt.subplots(tight_layout=True)
     err = sitesBAtransport(vehicleDbfileList, vehicleSiteNames, 'cardriver', vehicleDirections, ax=ax,
                            titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8,
@@ -3952,51 +4014,75 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
         plt.close(fig)
 
     # =================== Number of vehicles over time across all sites =============
-    vehicleDbfilesBefore = [i[0] for i in vehicleDbfileList]
-    vehicleDbfilesAfter = [i[1] for i in vehicleDbfileList]
+    vehicleDbfilesBAlist = []
+    for j in range(len(vehicleDbfileList[0])):
+        vehicleDbfilesBAlist.append([i[j] for i in vehicleDbfileList])
+    # vehicleDbfilesBefore = [i[0] for i in vehicleDbfileList]
+    # vehicleDbfilesAfter = [i[1] for i in vehicleDbfileList]
 
     # fig, ax = plt.subplots(tight_layout=True)
     fig = plt.figure(tight_layout=True)
-    fig.set_figheight(5)
-    fig.set_figwidth(15)
-    axs = fig.subplots(1, 2, sharey='row')
-    err = tempDistHist(vehicleDbfilesBefore, vehicleSiteNames, ['cardriver']*len(vehicleSiteNames),
-                       ['crossing_line']*len(vehicleSiteNames), ['all_lines']*len(vehicleSiteNames),
-                       vehicleDirections, axs[0], 20, siteName=f'all sites ({labels[0]})', drawMean=False,
-                       titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
+    if len(vehicleDbfileList[0]) > 1:
+        fig.set_figheight(5)
+        fig.set_figwidth(15)
+    axs = fig.subplots(1, len(vehicleDbfileList[0]), sharey='row')
+
+    if len(vehicleDbfileList[0]) == 1:
+        axs = [axs]
+
+    for v_db_indx, vehicleDbfilesBA in enumerate(vehicleDbfilesBAlist):
+        err = tempDistHist(vehicleDbfilesBA, vehicleSiteNames, ['cardriver'] * len(vehicleSiteNames),
+                           ['crossing_line'] * len(vehicleSiteNames), ['all_lines'] * len(vehicleSiteNames),
+                           vehicleDirections, ax=axs[v_db_indx], interval=histInterval,
+                           siteName=f'all sites ({labels[v_db_indx]})', drawMean=False, titleSize=14,
+                           xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
+
+    # err = tempDistHist(vehicleDbfilesBefore, vehicleSiteNames, ['cardriver']*len(vehicleSiteNames),
+    #                    ['crossing_line']*len(vehicleSiteNames), ['all_lines']*len(vehicleSiteNames),
+    #                    vehicleDirections, axs[0], interval=histInterval, siteName=f'all sites ({labels[0]})', drawMean=False,
+    #                    titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
 
     # if err == None:
     #     plt.savefig(f'{allSitesTransit_path}/No-vehicles_Before_All-sites.pdf')
     # plt.close(fig)
     #
     # fig, ax = plt.subplots(tight_layout=True)
-    err = tempDistHist(vehicleDbfilesAfter, vehicleSiteNames, ['cardriver'] * len(vehicleSiteNames),
-                       ['crossing_line'] * len(vehicleSiteNames), ['all_lines'] * len(vehicleSiteNames),
-                       vehicleDirections, axs[1], 20, siteName=f'all sites ({labels[1]})', drawMean=False,
-                       titleSize=14, xLabelSize=11, yLabelSize=0, xTickSize=8, yTickSize=8, legendFontSize=10)
+    # err = tempDistHist(vehicleDbfilesAfter, vehicleSiteNames, ['cardriver'] * len(vehicleSiteNames),
+    #                    ['crossing_line'] * len(vehicleSiteNames), ['all_lines'] * len(vehicleSiteNames),
+    #                    vehicleDirections, axs[1], interval=histInterval, siteName=f'all sites ({labels[1]})', drawMean=False,
+    #                    titleSize=14, xLabelSize=11, yLabelSize=0, xTickSize=8, yTickSize=8, legendFontSize=10)
     if err == None:
         plt.savefig(f'{allSitesTransit_path}/No-vehicles_' + '-'.join(labels) + f'_All-sites.pdf')
     plt.close(fig)
 
     # =================== Number of pedestrians and cyclists over time across all sites =============
-    walkCycDbfileBefore = [i[0] for i in walkCycDbfileList]
-    walkCycDbfileAfter = [i[1] for i in walkCycDbfileList]
+    walkCycDbfilesBAlist = []
+    for j in range(len(walkCycDbfileList[0])):
+        walkCycDbfilesBAlist.append([i[j] for i in walkCycDbfileList])
+
+    # walkCycDbfileBefore = [i[0] for i in walkCycDbfileList]
+    # walkCycDbfileAfter = [i[1] for i in walkCycDbfileList]
 
     for transit in ['walking', 'cycling']:
         # fig, ax = plt.subplots(tight_layout=True)
         fig = plt.figure(tight_layout=True)
-        fig.set_figheight(5)
-        fig.set_figwidth(15)
-        axs = fig.subplots(1, 2, sharey='row')
-        err = tempDistHist(walkCycDbfileBefore, walkCycSiteNames, [transit] * len(walkCycSiteNames),
-                           ['all_crossings'] * len(walkCycSiteNames), ['all_units'] * len(walkCycSiteNames),
-                           walkCycDirections, axs[0], 20, siteName=f'all sites ({labels[0]})', drawMean=False,
-                           titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
+        if len(walkCycDbfileList[0]) > 1:
+            fig.set_figheight(5)
+            fig.set_figwidth(15)
+        axs = fig.subplots(1, len(walkCycDbfileList[0]), sharey='row')
+        if len(walkCycDbfileList[0]) == 1:
+            axs = [axs]
+        for w_db_indx, walkCycDbfilesBA in enumerate(walkCycDbfilesBAlist):
+            err = tempDistHist(walkCycDbfilesBA, walkCycSiteNames, [transit] * len(walkCycSiteNames),
+                               ['all_crossings'] * len(walkCycSiteNames), ['all_units'] * len(walkCycSiteNames),
+                               walkCycDirections, axs[w_db_indx], interval=histInterval,
+                               siteName=f'all sites ({labels[w_db_indx]})', drawMean=False, titleSize=14,
+                               xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
 
-        err = tempDistHist(walkCycDbfileAfter, walkCycSiteNames, [transit] * len(walkCycSiteNames),
-                           ['all_crossings'] * len(walkCycSiteNames), ['all_units'] * len(walkCycSiteNames),
-                           walkCycDirections, axs[1], 20, siteName=f'all sites ({labels[1]})', drawMean=False,
-                           titleSize=14, xLabelSize=11, yLabelSize=0, xTickSize=8, yTickSize=8, legendFontSize=10)
+        # err = tempDistHist(walkCycDbfileAfter, walkCycSiteNames, [transit] * len(walkCycSiteNames),
+        #                    ['all_crossings'] * len(walkCycSiteNames), ['all_units'] * len(walkCycSiteNames),
+        #                    walkCycDirections, axs[1], interval=histInterval, siteName=f'all sites ({labels[1]})', drawMean=False,
+        #                    titleSize=14, xLabelSize=11, yLabelSize=0, xTickSize=8, yTickSize=8, legendFontSize=10)
         if err == None:
             plt.savefig(f'{allSitesTransit_path}/No-{transit}_' + '-'.join(labels) + f'_All-sites.pdf')
         plt.close(fig)
@@ -4025,7 +4111,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
             err = tempDistHist(dbFiles, ['South', 'North'], ['cardriver', 'cardriver'],
                                ['crossing_line', 'crossing_line'], ['all_lines', 'all_lines'],
                                ['Right to left', 'Left to right'],
-                               ax=ax, interval=30, siteName=f'{site.capitalize()} ({view.capitalize()})',
+                               ax=ax, interval=histInterval, siteName=f'{site.capitalize()} ({view.capitalize()})',
                                titleSize=14, xLabelSize=11, yLabelSize=11, xTickSize=8, yTickSize=8, legendFontSize=10)
             if err == None:
                 plt.savefig(
@@ -4091,6 +4177,7 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', labelR
 
 
     print('Done! .....')
+    return 'All reports are generated successfully!'
 
 # from indicators import batchPlots
 # from pathlib import Path
@@ -4308,7 +4395,7 @@ def modeShareCompChart(dbFiles, labels, interval, axs=None):
 
 
 # ===================================================================
-def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, interval=20, alpha=1,
+def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, interval=5, alpha=1,
                     colors=plotColors, siteName=None, drawMean=True, smooth=False,
                     titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
 
@@ -5264,8 +5351,8 @@ if __name__ == '__main__':
     from indicators import batchPlots
     import os, shutil
 
-    outputFolder = '/Users/abbas/Desktop/plots_Bernard'
-    metaDataFile = '/Users/abbas/Documents/PhD/video_files/metadata-ped-streets.sqlite'
+    outputFolder = '/Users/abbas/Desktop/plots'
+    metaDataFile = '/Users/abbas/Documents/PostDoc/Pedestrian_street_project/video_files/metadata.sqlite'
 
     for filename in os.listdir(outputFolder):
         file_path = os.path.join(outputFolder, filename)
@@ -5277,7 +5364,8 @@ if __name__ == '__main__':
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-    batchPlots(metaDataFile, outputFolder, site='bernard-outremont')
+    batchPlots(metaDataFile, outputFolder, site='wellington-hickson', histInterval=10, repInterval=15,
+               densInterval=1)
 
 
 

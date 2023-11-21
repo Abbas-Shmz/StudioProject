@@ -4828,17 +4828,37 @@ class batchPlotsWindow(QDialog):
         # self.camViewCombobx.currentTextChanged.connect(self.viewChanged)
         gridLayout.addWidget(self.camViewCombobx, 0, 3)#, Qt.AlignmentFlag.AlignLeft)
 
+        gridLayout.addWidget(QLabel('Hist. Interval:'), 1, 0, Qt.AlignmentFlag.AlignRight)
+        self.histInterval = QLineEdit()
+        self.histInterval.setText('15')
+        gridLayout.addWidget(self.histInterval, 1, 1)  # , Qt.AlignmentFlag.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Rep. Interval:'), 1, 2, Qt.AlignmentFlag.AlignRight)
+        self.repInterval = QLineEdit()
+        self.repInterval.setText('30')
+        gridLayout.addWidget(self.repInterval, 1, 3)  # , Qt.AlignmentFlag.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Speed Interval:'), 2, 0, Qt.AlignmentFlag.AlignRight)
+        self.speedInterval = QLineEdit()
+        self.speedInterval.setText('15')
+        gridLayout.addWidget(self.speedInterval, 2, 1)  # , Qt.AlignmentFlag.AlignLeft)
+
+        gridLayout.addWidget(QLabel('Density Interval:'), 2, 2, Qt.AlignmentFlag.AlignRight)
+        self.densityInterval = QLineEdit()
+        self.densityInterval.setText('1')
+        gridLayout.addWidget(self.densityInterval, 2, 3)  # , Qt.AlignmentFlag.AlignLeft)
+
         self.summary_list_wdgt = QListWidget()
-        gridLayout.addWidget(self.summary_list_wdgt, 2, 0, 1, 4)
+        gridLayout.addWidget(self.summary_list_wdgt, 3, 0, 1, 4)
 
         self.closeBtn = QPushButton('Close')
         self.closeBtn.clicked.connect(self.closeImportWin)
-        gridLayout.addWidget(self.closeBtn, 3, 0, 1, 2)
+        gridLayout.addWidget(self.closeBtn, 4, 0, 1, 2)
 
         self.genPlotsBtn = QPushButton('Generate')
         self.genPlotsBtn.clicked.connect(self.genPlots)
         # self.importBtn.setEnabled(False)
-        gridLayout.addWidget(self.genPlotsBtn, 3, 2, 1, 2)
+        gridLayout.addWidget(self.genPlotsBtn, 4, 2, 1, 2)
 
 
         winLayout.addLayout(mdbLayout)
@@ -4855,7 +4875,10 @@ class batchPlotsWindow(QDialog):
         outputFolder = self.outputFileLedit.text()
         site = self.siteNameCombobx.currentText()
         camView = self.camViewCombobx.currentText()
-        batchPlots(mdFile, outputFolder, site, camView)
+        histInterval = int(self.histInterval.text())
+        repInterval = int(self.repInterval.text())
+        msg = batchPlots(mdFile, outputFolder, site, camView, histInterval=histInterval, repInterval=repInterval)
+        self.summary_list_wdgt.addItem(msg)
 
     def openMdbFile(self):
         mdbFilename, _ = QFileDialog.getOpenFileName(self, "Open metadata file",
