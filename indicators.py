@@ -1365,10 +1365,11 @@ def speedHistogram(dbFiles, labels, transports, actionTypes, unitIdxs, direction
         ax = fig.add_subplot(111)
 
     for i in range(inputNo):
-        if speed_lists[i] == [] or len(speed_lists[i]) < 2:
+        if speed_lists[i] == [] or len(speed_lists[i]) < 2 or all(sl == speed_lists[i][0] for sl in speed_lists[i]):
             continue
         speed_mean = np.mean(speed_lists[i])
         speed_std = np.std(speed_lists[i])
+        # print(speed_lists[i])
         density = gaussian_kde(speed_lists[i])
         x = np.linspace(min(speed_lists[i]), max(speed_lists[i]), 300)
         y = density(x)
@@ -4499,6 +4500,10 @@ def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, in
         if entries_lists == [] or exits_lists == []:
             continue
 
+        # -------- Calculating Zone Area ---------------
+        if zoneArea is None:
+            zone_points_img = sessions[i].query(Zone.points).filter(Zone.idx == unitIdxs[i])
+
         diff = []
         current_time = startTime
         while current_time <= endTime:
@@ -4563,6 +4568,8 @@ def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, in
     ax.grid(True, 'major', 'both', ls='--', lw=.5, c='k', alpha=.3)
 
     watermark(ax)
+
+
 
 # ======================================================================
 def sankeyPlotActivity(dbFileName, outputFile, siteName=None, colors_dict=color_dict):

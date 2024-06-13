@@ -36,7 +36,7 @@ import iframework
 from trafficintelligence.storage import ProcessParameters, moving, saveTrajectoriesToSqlite
 from trafficintelligence.cvutils import imageToWorldProject, worldToImageProject
 
-from sqlalchemy import Enum, Boolean, DateTime
+from sqlalchemy import Enum, Boolean, DateTime, create_engine, MetaData, select, update, delete
 from sqlalchemy.inspection import inspect
 from sqlalchemy import func
 
@@ -478,7 +478,7 @@ class ObsToolbox(QMainWindow):
 
         self.prevTrjBtn = QPushButton('<<')
         self.prevTrjBtn.setFixedWidth(35)
-        self.prevTrjBtn.clicked.connect(self.prevTrajectory)
+        self.prevTrjBtn.clicked.connect(self.prevTrajectory_click)
         # self.prevTrjBtn.setEnabled(False)
         traj_tab_editLayout.addWidget(self.prevTrjBtn, 0, 0, Qt.AlignmentFlag.AlignRight)
 
@@ -492,7 +492,7 @@ class ObsToolbox(QMainWindow):
 
         self.nextTrjBtn = QPushButton('>>')
         self.nextTrjBtn.setFixedWidth(35)
-        self.nextTrjBtn.clicked.connect(self.nextTrajectory)
+        self.nextTrjBtn.clicked.connect(self.nextTrajectory_click)
         # self.nextTrjBtn.setEnabled(False)
         traj_tab_editLayout.addWidget(self.nextTrjBtn, 0, 3, Qt.AlignmentFlag.AlignLeft)
 
@@ -540,9 +540,14 @@ class ObsToolbox(QMainWindow):
         traj_tab_editLayout.addWidget(self.refLineLe, 3, 4)
 
         self.loadTrjBtn = QPushButton('Load ...')
-        self.loadTrjBtn.clicked.connect(self.loadTrajectory)
+        self.loadTrjBtn.clicked.connect(self.loadTrajectory_click)
         # self.loadTrjBtn.setEnabled(False)
         traj_tab_editLayout.addWidget(self.loadTrjBtn, 4, 1, 1, 3)
+
+        self.deleteTrjBtn = QPushButton('Delete trajectory')
+        self.deleteTrjBtn.clicked.connect(self.deleteTrajectory_click)
+        # self.loadTrjBtn.setEnabled(False)
+        traj_tab_editLayout.addWidget(self.deleteTrjBtn, 4, 4)
 
         # traj_tab_editLayout.addWidget(QLabel('Speed:'), 1, 3)#, 1, 2)
         # self.userSpeedLe = QLineEdit('--')
@@ -666,6 +671,7 @@ class ObsToolbox(QMainWindow):
             # [lineCrossingMarks],    13
             # [zoneCrossingMarks],    14
             # ]
+        # self.all_trai_nums = list(self.traj_line.keys()).sort()
         self.noTrjLabel.setText('/' + str(list(self.traj_line.keys())[-1]))
         self.trjIdxLe.setText('-1')
         self.userTypeCb.setCurrentIndex(-1)
@@ -689,7 +695,7 @@ class ObsToolbox(QMainWindow):
         self.userTypeCb.setCurrentIndex(2)
         self.groupSizeCb.setCurrentIndex(0)
 
-    def nextTrajectory(self):
+    def nextTrajectory_click(self):
         if self.traj_line == None:
             return
         traj_ids = [k for k in self.traj_line.keys()]
@@ -957,7 +963,7 @@ class ObsToolbox(QMainWindow):
                                         if not e ]))
         self.refLineLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
 
-    def prevTrajectory(self):
+    def prevTrajectory_click(self):
         if self.traj_line == None:
             return
         traj_ids = [k for k in self.traj_line.keys()]
@@ -1094,7 +1100,97 @@ class ObsToolbox(QMainWindow):
         self.ax.lines.remove(delete_line)
         self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
 
-    def loadTrajectory(self):
+    @staticmethod
+    def updateTraj_in_database(sqlite_file_path, obj_id, user_type, n_obj):
+        try:
+            # Connect to the SQLite database
+            conn = sqlite3.connect(sqlite_file_path)
+            cursor = conn.cursor()
+
+            # SQL query to update the record
+            update_query = '''
+            UPDATE objects
+            SET road_user_type = ?, n_objects = ?
+            WHERE object_id = ?
+            '''
+
+            # Execute the update query with provided values
+            cursor.execute(update_query, (user_type, n_obj, obj_id))
+
+            # Commit the changes
+            conn.commit()
+
+            # Check if the update was successful
+            if cursor.rowcount == 0:
+                print(f"No record found with object_id = {obj_id}")
+            else:
+                print(f"Record updated successfully for object_id = {obj_id}")
+
+        except sqlite3.Error as error:
+            print(f"Error while connecting to sqlite: {error}")
+
+        finally:
+            if conn:
+                # Close the database connection
+                conn.close()
+
+    @staticmethod
+    def deleteTraj_from_database(sqlite_file_path, obj_id):
+        engine = create_engine(f'sqlite:///{sqlite_file_path}')
+        metadata = MetaData()
+        metadata.reflect(bind=engine)
+        positions = metadata.tables['positions']
+        objects = metadata.tables['objects']
+        objects_features = metadata.tables['objects_features']
+        velocities = metadata.tables['velocities']
+
+        with engine.connect() as connection:
+            query = select(objects_features).where(objects_features.c.object_id == obj_id)
+            traj_id = connection.execute(query).first()[0]
+
+            delete_pos = delete(positions).where(positions.c.trajectory_id == traj_id)
+            connection.execute(delete_pos)
+
+            delete_vel = delete(velocities).where(velocities.c.trajectory_id == traj_id)
+            connection.execute(delete_vel)
+
+            delete_feat = delete(objects_features).where(objects_features.c.object_id == obj_id)
+            connection.execute(delete_feat)
+
+            delete_obj = delete(objects).where(objects.c.object_id == obj_id)
+            connection.execute(delete_obj)
+
+            connection.commit()
+
+    def deleteTrajectory_click(self):
+        delete_traj_num = self.trjIdxLe.text()
+
+        if delete_traj_num == -1:
+            return
+
+        msg = QMessageBox()
+        rep = msg.question(self, 'Delete trajectory',
+                           'Are you sure to DELETE the current trajectory?',
+                           msg.StandardButton.Yes | msg.StandardButton.No)
+        if rep == msg.StandardButton.No:
+            return
+
+        delete_line = self.traj_line[delete_traj_num][1]
+
+        if delete_traj_num == list(self.traj_line.keys())[-1]:
+            self.prevTrajectory_click()
+            self.noTrjLabel.setText('/' + str(list(self.traj_line.keys())[-2]))
+        else:
+            self.nextTrajectory_click()
+
+        # self.all_trai_nums.remove(delete_traj_num)
+        self.traj_line.pop(delete_traj_num)
+        self.ax.lines.remove(delete_line)
+
+        self.deleteTraj_from_database(self.trjDBFile, delete_traj_num)
+        # self.noTrjLabel.setText('/' + str(len(self.traj_line) - 1))
+
+    def loadTrajectory_click(self):
         if self.mdbFileLedit.text() == '' or self.traj_line == None or self.trjIdxLe.text() == '-1':
             return
 
@@ -1123,6 +1219,10 @@ class ObsToolbox(QMainWindow):
                 groupSize = self.traj_line[trj_idx][2][5]
             else:
                 groupSize = int(self.groupSizeCb.currentText())
+
+            #------ Update the traj database -------
+            self.updateTraj_in_database(self.trjDBFile, trj_idx, userType, groupSize)
+
             group = self.groups[group_idx][0]
             if self.loadTrjBtn.text() == 'Load trajectory':
                 group.trajectoryDB = self.trjDbIdx
@@ -2062,6 +2162,30 @@ class ObsToolbox(QMainWindow):
             return True
         else:
             return False
+
+    @staticmethod
+    def calculate_zone_area(vertices):
+        """
+        Calculate the area of a polygon using the Shoelace formula.
+
+        Parameters:
+        vertices (list of tuples): A list of (x, y) coordinates of the polygon's vertices.
+        Example: vertices = [(1, 0), (4, 0), (4, 3), (1, 3)]
+
+        Returns:
+        float: The area of the polygon.
+        """
+        n = len(vertices)  # Number of vertices
+        area = 0.0
+
+        for i in range(n):
+            j = (i + 1) % n  # Next vertex index, wrapping around
+            area += vertices[i][0] * vertices[j][1]
+            area -= vertices[j][0] * vertices[i][1]
+
+        area = abs(area) / 2.0
+        return area
+
 
     @staticmethod
     def getTableColumns(TableCls):
@@ -4308,27 +4432,31 @@ class plotTrajWindow(QDialog):
             QMessageBox.information(self, 'Warning!', 'At least one screenline is required!')
             return
 
-        current_idx = int(self.trjIdxLe.text())
-        if current_idx == len(self.traj_line) -1:
+        current_traj_num = int(self.trjIdxLe.text())
+        current_traj_idx = self.all_trai_nums.index(current_traj_num)
+
+        if current_traj_num == self.all_trai_nums[-1]:
             return
+
         if current_idx == -1:
             for line in [tl[1] for tl in self.traj_line]:
                 line.set_visible(False)
+        else:
+            current_line = self.traj_line[current_traj_num][1]
+            current_line.set_visible(False)
 
-        current_line = self.traj_line[current_idx][1]
-        current_line.set_visible(False)
 
-        next_idx = current_idx + 1
-        self.trjIdxLe.setText(str(next_idx))
-        next_traj = self.traj_line[next_idx][0]
-        next_line = self.traj_line[next_idx][1]
+        next_traj_num = self.all_trai_nums[current_traj_idx + 1]
+        self.trjIdxLe.setText(str(next_traj_num))
+        next_traj = self.traj_line[next_traj_num][0]
+        next_line = self.traj_line[next_traj_num][1]
         next_line.set_visible(True)
         self.userTypeCb.setCurrentIndex(next_traj.userType)
-        self.groupSizeCb.setCurrentIndex(self.traj_line[next_idx][2][5] - 1)
+        self.groupSizeCb.setCurrentIndex(self.traj_line[next_traj_num][2][5] - 1)
         self.canvas.draw()
 
-        if self.traj_line[next_idx][2][0] == -1:
-            self.traj_line[next_idx][2][0] = next_traj.userType
+        if self.traj_line[next_traj_num][2][0] == -1:
+            self.traj_line[next_traj_num][2][0] = next_traj.userType
             homography = np.loadtxt(self.homoFile, delimiter=' ')
             for line in q_line.all():
                 points = np.array([[line.points[0].x, line.points[1].x],
@@ -4345,21 +4473,21 @@ class plotTrajWindow(QDialog):
                     speed = round(next_traj.getVelocityAtInstant(int(instants_list[0]))
                                   .norm2() * self.frameRate * 3.6, 1)  # km/h
 
-                    self.traj_line[next_idx][2][1].append(line)
-                    self.traj_line[next_idx][2][2].append(instant)
-                    self.traj_line[next_idx][2][3].append(speed)
-                    self.traj_line[next_idx][2][4].append(secs)
+                    self.traj_line[next_traj_num][2][1].append(line)
+                    self.traj_line[next_traj_num][2][2].append(instant)
+                    self.traj_line[next_traj_num][2][3].append(speed)
+                    self.traj_line[next_traj_num][2][4].append(secs)
                     # screenLine_Id = str(line.idx)
-            if self.traj_line[next_idx][2][1] == []:
+            if self.traj_line[next_traj_num][2][1] == []:
                 secs = (next_traj.getLastInstant() / self.frameRate)
-                # self.traj_line[next_idx][2][1].append('None')
-                self.traj_line[next_idx][2][4].append(secs)
+                # self.traj_line[next_traj_num][2][1].append('None')
+                self.traj_line[next_traj_num][2][4].append(secs)
 
-        self.parent().parent().mediaPlayer.setPosition(round(self.traj_line[next_idx][2][4][0]*1000))
-        if self.traj_line[next_idx][2][1] == []:
+        self.parent().parent().mediaPlayer.setPosition(round(self.traj_line[next_traj_num][2][4][0]*1000))
+        if self.traj_line[next_traj_num][2][1] == []:
             self.refLineLe.setText('None')
         else:
-            self.refLineLe.setText(str(self.traj_line[next_idx][2][1][0].idx))
+            self.refLineLe.setText(str(self.traj_line[next_traj_num][2][1][0].idx))
 
     def prevTrajectory(self):
         if self.traj_line == None:
