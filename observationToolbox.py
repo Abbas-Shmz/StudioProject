@@ -809,6 +809,8 @@ class ObsToolbox(QMainWindow):
             # firstSpeed = next_traj.getVelocityAtInstant(firstInst).norm2() * self.frameRate * 3.6
             # lastSpeed = next_traj.getVelocityAtInstant(lastInst).norm2() * self.frameRate * 3.6
             for zone in q_zone.all():
+                # enter_sec_pos_list = []
+                # exit_sec_pos_list = []
                 polygon = None
                 for p in zone.points:
                     prj_point = imageToWorldProject(np.array([[p.x], [p.y]]),
@@ -846,9 +848,11 @@ class ObsToolbox(QMainWindow):
                         if next_traj.getPositionAtInstant(prev_inst).inPolygon(polygon) and \
                                 not next_traj.getPositionAtInstant(next_inst).inPolygon(polygon):
                             entering = False
+                            # exit_sec_pos_list.append([secs, intersections[0]])
                         elif not next_traj.getPositionAtInstant(prev_inst).inPolygon(polygon) and \
                                 next_traj.getPositionAtInstant(next_inst).inPolygon(polygon):
                             entering = True
+                            # enter_sec_pos_list.append([secs, intersections[0]])
                         else:
                             continue
 
@@ -878,6 +882,24 @@ class ObsToolbox(QMainWindow):
                         intrs_mark.setToolTip('Intersection')
                         # gView.scene().addItem(intrs_mark)
                         self.traj_line[next_idx][2][14].append(intrs_mark)
+
+                # ----- Calculate speed based on the entering and exiting point ----------
+                # if enter_sec_pos_list and exit_sec_pos_list:
+                #     enter_point = enter_sec_pos_list[0][1]
+                #     exit_point = exit_sec_pos_list[0][1]
+                #     enter_sec = enter_sec_pos_list[0][0]
+                #     exit_sec = exit_sec_pos_list[0][0]
+                #     dist = np.sqrt((enter_point.x - exit_point.x) ** 2 + (enter_point.y - exit_point.y) ** 2)
+                #     speed = round((dist / (exit_sec -enter_sec)) * 3.6, 1)  # km/h
+                #
+                #     self.traj_line[next_idx][2][12].append(speed)  # for entering point
+                #     self.traj_line[next_idx][2][12].append(speed)  # for exiting point
+                # else:
+                #     if enter_sec_pos_list == [] and exit_sec_pos_list != []:
+                #         self.traj_line[next_idx][2][12].append(None)
+                #     elif enter_sec_pos_list != [] and exit_sec_pos_list == []:
+                #         self.traj_line[next_idx][2][12].append(None)
+                # ----------------------------------------------------------------
 
                 # if firstPos.inPolygon(polygon) and not lastPos.inPolygon(polygon) and firstSpeed < 5:
                 #     secs = firstInst / self.frameRate
@@ -1194,6 +1216,8 @@ class ObsToolbox(QMainWindow):
         if self.mdbFileLedit.text() == '' or self.traj_line == None or self.trjIdxLe.text() == '-1':
             return
 
+        trj_idx = None
+
         if self.loadTrjBtn.text() == 'Load trajectory':
             trj_idx = self.trjIdxLe.text()
             userType = self.traj_line[trj_idx][2][0]
@@ -1220,8 +1244,9 @@ class ObsToolbox(QMainWindow):
             else:
                 groupSize = int(self.groupSizeCb.currentText())
 
-            #------ Update the traj database -------
-            self.updateTraj_in_database(self.trjDBFile, trj_idx, userType, groupSize)
+            # -------- Update the traj in database -------
+            if trj_idx:
+                self.updateTraj_in_database(self.trjDBFile, trj_idx, userType, groupSize)
 
             group = self.groups[group_idx][0]
             if self.loadTrjBtn.text() == 'Load trajectory':
@@ -1316,6 +1341,8 @@ class ObsToolbox(QMainWindow):
         self.group_idx_cmbBox.setCurrentIndex(-1)
         self.group_idx_cmbBox.setCurrentText(str(group_idx))
         self.trjIdxLe.setStyleSheet("QLineEdit { background: rgb(215, 245, 215); }")
+
+        self.nextTrajectory_click()
 
 
     def saveTrajectories(self):
@@ -2162,29 +2189,6 @@ class ObsToolbox(QMainWindow):
             return True
         else:
             return False
-
-    @staticmethod
-    def calculate_zone_area(vertices):
-        """
-        Calculate the area of a polygon using the Shoelace formula.
-
-        Parameters:
-        vertices (list of tuples): A list of (x, y) coordinates of the polygon's vertices.
-        Example: vertices = [(1, 0), (4, 0), (4, 3), (1, 3)]
-
-        Returns:
-        float: The area of the polygon.
-        """
-        n = len(vertices)  # Number of vertices
-        area = 0.0
-
-        for i in range(n):
-            j = (i + 1) % n  # Next vertex index, wrapping around
-            area += vertices[i][0] * vertices[j][1]
-            area -= vertices[j][0] * vertices[i][1]
-
-        area = abs(area) / 2.0
-        return area
 
 
     @staticmethod

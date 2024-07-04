@@ -190,7 +190,8 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
                            label=f'Std. of {labels[l]}', alpha=0.1, color=plotColors[l])
 
             if not smooth:
-                ax.plot(time_ticks, hist, label=labels[l], color=plotColors[l])
+                ax.plot(time_ticks, hist, label=labels[l], color=plotColors[l], marker='o',
+                        markersize=5, markerfacecolor='white', markeredgewidth=1, markeredgecolor=plotColors[l])
             else:
                 date_np = np.array(time_ticks)
                 date_num = mdates.date2num(date_np)
@@ -198,6 +199,8 @@ def tempDistHist(dbFiles, labels, transports, actionTypes, unitIdxs, directions=
                 spl = make_interp_spline(date_num, hist, k=2)
                 value_np_smooth = spl(date_num_smooth)
                 ax.plot(mdates.num2date(date_num_smooth), value_np_smooth, label=labels[l], color=plotColors[l])
+                ax.plot(time_ticks, hist, marker='o', markersize=5, markerfacecolor='white', markeredgewidth=1,
+                        markeredgecolor=plotColors[l], linestyle='none')
             #------------------------
             if drawMean:
                 ax.axhline(y=np.mean(hist), color=plotColors[l], linestyle='--',
@@ -1594,7 +1597,7 @@ def speedBoxPlot(dbFiles, labels, transports, actionTypes, unitIdxs, directions,
 
     userTitle = getUserTitle(transports[0])
 
-    if unitIdxs[0] == 'all_lines':
+    if unitIdxs[0] in ['all_lines', 'all_units'] or actionTypes[0] == 'all_crossings':
         title = f'Speed of all observed {userTitle}s every {interval} min.'
     else:
         title = f'Speed of {userTitle}s {actionTypes[0]} #{unitIdxs[0]} every {interval} min.'
@@ -2453,21 +2456,22 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
 
     if transport == 'walking':
         # if 'line' in actionType.split('_'):
-        indicators = ['No. of all pedestrians',  # 0
-                      'No. of females',  # 1
-                      'No. of males',  # 2
-                      'No. of children',  # 3
-                      'No. of elderly people',  # 4
-                      'No. of people with pet',  # 5
-                      'No. of people with stroller',  # 6
-                      'No. of disabled people',  # 6
-                      'Flow of pedestrians (ped/h)',  # 7
-                      'No. of all groups',  # 8
-                      'No. of pedestrians alone',  # 9
-                      'No. of groups with size = 2',  # 10
-                      'No. of groups with size = 3',  # 11
-                      'No. of groups with size > 3',  # 12
-                      'People walking on roadbed'    # 13
+        indicators = ['No. of all pedestrians',      # 0
+                      'No. of females',              # 1
+                      'No. of males',                # 2
+                      'No. of children',             # 3
+                      'No. of elderly people',       # 4
+                      'No. of people with pet',      # 5
+                      'No. of people with stroller', # 6
+                      'No. of disabled people',      # 7
+                      'Flow of pedestrians (ped/h)', # 8
+                      'No. of all groups',           # 9
+                      'No. of pedestrians alone',    # 10
+                      'No. of groups with size = 2', # 11
+                      'No. of groups with size = 3', # 12
+                      'No. of groups with size > 3', # 13
+                      'People walking on roadbed',   # 14
+                      'People walking on sidewalk'   # 15
                       ]
 
         no_all_peds = q.count()
@@ -2523,37 +2527,37 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                         pct = round((no_all_peak / noAll) * 100, 1) if noAll != 0 else 0
                         indDf.loc[ind, p] = '{} ({}%)'.format(no_all_peak, pct)
 
-                elif i == 1:
+                elif i == 101:
                     no_fem_peak = q_all_peaks.filter(Person.gender == 'female').count()
                     pct = round((no_fem_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_fem_peak, pct)
 
-                elif i == 2:
+                elif i == 102:
                     no_mal_peak = q_all_peaks.filter(Person.gender == 'male').count()
                     pct = round((no_mal_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_mal_peak, pct)
 
-                elif i == 3:
+                elif i == 103:
                     no_chd_peak = q_all_peaks.filter(Person.age == 'child').count()
                     pct = round((no_chd_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_chd_peak, pct)
 
-                elif i == 4:
+                elif i == 104:
                     no_eld_peak = q_all_peaks.filter(Person.age == 'senior').count()
                     pct = round((no_eld_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_eld_peak, pct)
 
-                elif i == 5:
+                elif i == 105:
                     no_pet_peak = q_all_peaks.filter(Person.animal == 1).count()
                     pct = round((no_pet_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_pet_peak, pct)
 
-                elif i == 6:
+                elif i == 106:
                     no_pet_peak = q_all_peaks.filter(Person.stroller == 1).count()
                     pct = round((no_pet_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_pet_peak, pct)
 
-                elif i == 7:
+                elif i == 107:
                     no_dis_peak = q_all_peaks.filter(Person.disability != 'no')\
                                              .filter(Person.disability != '')\
                                              .filter(Person.disability != False).count()
@@ -2604,6 +2608,16 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                         no_road_peak = q_all_peaks.filter(Zone.type == 'roadbed').count()
                     elif actionType == 'all_crossings':
                         no_road_peak = q_all_peaks.filter(or_(Line.type == 'roadbed', Zone.type == 'roadbed')).count()
+                    pct = round((no_road_peak / noAll) * 100, 1) if noAll != 0 else 0
+                    indDf.loc[ind, p] = '{} ({}%)'.format(no_road_peak, pct)
+
+                elif i == 15:
+                    if 'line' in actionType.split('_'):
+                        no_road_peak = q_all_peaks.filter(Line.type == 'sidewalk').count()
+                    elif 'zone' in actionType.split('_'):
+                        no_road_peak = q_all_peaks.filter(Zone.type == 'sidewalk').count()
+                    elif actionType == 'all_crossings':
+                        no_road_peak = q_all_peaks.filter(or_(Line.type == 'sidewalk', Zone.type == 'sidewalk')).count()
                     pct = round((no_road_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_road_peak, pct)
 
@@ -2715,17 +2729,18 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
 
     elif transport == 'cycling':
         # if 'line' in actionType.split('_'):
-        indicators = ['No. of all cyclists',  # 0
-                      'Flow of cyclists (bik/h)',  # 1
-                      'Cyclists riding on sidewalk',  # 2
-                      'Cyclists riding against traffic',  # 3
-                      'No. of female cyclists',  #4
-                      'No. of children cycling',  # 5
-                      'Speed: average (km/h)',   # 6
-                      'Speed: std (km/h)',       # 7
-                      'Speed: median (km/h)',    # 8
-                      'Speed: 85th percentile (km/h)',  # 9
-                      'Percent of cyclists comply with speed limit'  # 10
+        indicators = ['No. of all cyclists',             # 0
+                      'Flow of cyclists (bik/h)',        # 1
+                      'Cyclists riding on sidewalk',     # 2
+                      'Cyclists riding against traffic', # 3
+                      'No. of female cyclists',          # 4
+                      'No. of children cycling',         # 5
+                      'Speed: average (km/h)',           # 6
+                      'Speed: std (km/h)',               # 7
+                      'Speed: median (km/h)',            # 8
+                      'Speed: 85th percentile (km/h)',   # 9
+                      'Percent of cyclists comply with speed limit',  # 10
+                      'No. of dismounted cyclists'       # 11
                       ]
 
         no_all_biks = q.count()
@@ -2805,13 +2820,13 @@ def generateReportTransit(dbFileName, transport, actionType, unitIdx, direction,
                     pct = round((no_agst_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_agst_peak, pct)
 
-                elif i == 4:
+                elif i == 104:
                     q_femaleCyclist_peak = q_all_peaks.filter(Person.gender == 'female')
                     no_femCylist_peak = q_femaleCyclist_peak.count()
                     pct = round((no_femCylist_peak / noAll) * 100, 1) if noAll != 0 else 0
                     indDf.loc[ind, p] = '{} ({}%)'.format(no_femCylist_peak, pct)
 
-                elif i == 5:
+                elif i == 105:
                     q_childCyclist_peak = q_all_peaks.filter(Person.age == 'child')
                     no_childCylist_peak = q_childCyclist_peak.count()
                     pct = round((no_childCylist_peak / noAll) * 100, 1) if noAll != 0 else 0
@@ -2966,6 +2981,8 @@ def generateReportPlace(dbFileName, interval,start_time=None, end_time=None,
     q = session.query(Activity.activity) \
                .filter(Activity.startTime >= start_obs_time)\
                .filter(Activity.startTime < end_obs_time).distinct()
+    if q.count() == 0:
+        return 'No observation for activities.'
 
     activity_dict = {}
     for rec in q.all():
@@ -3500,20 +3517,19 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', histIn
 
     for s in site:
         site_camView[s] = {}
+
+        cur.execute('SELECT idx FROM sites WHERE name=?', (s,))
+        siteIdx = cur.fetchall()[0][0]
+
         if camView == 'all':
-            cur.execute('SELECT idx FROM sites WHERE name=?', (s,))
-            siteIdx = cur.fetchall()[0][0]
             cur.execute('SELECT description, homographyFilename FROM camera_views WHERE siteIdx=?', (siteIdx,))
             views = cur.fetchall()
             view = [[v[0], v[1]] for v in views]
 
             for v in view:
-                if v[1] is None:
-                    continue
-                site_camView[s][v[0]] = Path(metaDataFile).parent/s/Path(v[1]).parent
+                if v[1]:
+                    site_camView[s][v[0]] = Path(metaDataFile).parent/s/Path(v[1]).parent
         else:
-            cur.execute('SELECT idx FROM sites WHERE name=?', (s,))
-            siteIdx = cur.fetchall()[0][0]
             cur.execute('SELECT homographyFilename FROM camera_views WHERE siteIdx=? AND description=?',
                         (siteIdx, camView))
             homoFile = cur.fetchall()
@@ -3544,6 +3560,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', histIn
     walkCycDirections = []
 
     for site in site_camView.keys():
+        cur.execute('SELECT idx FROM sites WHERE name=?', (site,))
+        site_idx = cur.fetchall()[0][0]
 
         # ======================== Making TRANSIT Folders ========================
         transitCount_path = f'{transit_path}/{site}/Number of users over time'
@@ -3572,7 +3590,28 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', histIn
 
         dbFiles = []
         labels = []
+        intr_Cam_Matrx_list = []
+        distor_Coeffs_list = []
+        homography_list = []
         for view in site_camView[site].keys():
+            cur.execute('SELECT cameraTypeIdx, homographyFilename FROM camera_views WHERE description=? AND siteIdx=?',
+                        (view,site_idx))
+            row = cur.fetchall()
+            cam_type_idx = row[0][0]
+            homoFile = row[0][1]
+            cur.execute(
+                'SELECT intrinsicCameraMatrixStr, distortionCoefficientsStr, frameRate FROM camera_types WHERE idx=?',
+                (cam_type_idx,))
+            row = cur.fetchall()
+            intr_Cam_Matrx_list.append(np.array(ast.literal_eval(row[0][0])))
+            distor_Coeffs_list.append(np.array(ast.literal_eval(row[0][1])))
+            # frameRate = row[0][2]
+
+            mdbPath = Path(metaDataFile).parent
+            site_folder = mdbPath / site
+            homographyFile = site_folder / homoFile
+            homography_list.append(np.loadtxt(homographyFile, delimiter=' '))
+
             dbFilePath = site_camView[site][view]/f'{site}.sqlite'
             if dbFilePath.exists():
                 # Path(outputFolder + '/' + site).mkdir(exist_ok=True)
@@ -3776,7 +3815,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', histIn
 
         # ++++++++++++++++++ Density of all street users in Zones ++++++++++++++++++++++
         fig, ax = plt.subplots(tight_layout=True)
-        err = zoneDensityPlot(dbFiles, labels, ['all_modes']* len(dbFiles), ['1'] * len(dbFiles), zoneArea=345,
+        err = zoneDensityPlot(dbFiles, labels, ['all_modes']* len(dbFiles), ['1'] * len(dbFiles), None,
+                              intr_Cam_Matrx_list, distor_Coeffs_list, homography_list,
                               ax=ax, interval=densInterval, colors=plotColors,
                               siteName=site.capitalize(),
                               titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
@@ -3827,7 +3867,8 @@ def batchPlots(metaDataFile, outputFolder, site = 'all', camView = 'all', histIn
 
             # ++++++++++++++++++ Density of pedestrians / cyclists in Zones ++++++++++++++++++++++
             fig, ax = plt.subplots(tight_layout=True)
-            err = zoneDensityPlot(dbFiles, labels, transports, ['1']*len(dbFiles), zoneArea=345,
+            err = zoneDensityPlot(dbFiles, labels, transports, ['1']*len(dbFiles), None,
+                              intr_Cam_Matrx_list*len(dbFiles), distor_Coeffs_list*len(dbFiles), homography_list*len(dbFiles),
                                    ax=ax, interval=densInterval, colors=plotColors,
                                   siteName=site.capitalize(),
                                   titleSize=14, xLabelSize=12, yLabelSize=12, xTickSize=8, yTickSize=8,
@@ -4396,8 +4437,9 @@ def modeShareCompChart(dbFiles, labels, interval, axs=None):
 
 
 # ===================================================================
-def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, interval=5, alpha=1,
-                    colors=plotColors, siteName=None, drawMean=True, smooth=False,
+def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea=None,
+                    intr_Cam_Matrx_list=None, distor_Coeffs_list=None, homography_list=None,
+                    ax=None, interval=5, alpha=1, colors=plotColors, siteName=None, drawMean=True, smooth=False,
                     titleSize=8, xLabelSize=8, yLabelSize=8, xTickSize=8, yTickSize=7, legendFontSize=6):
 
     inputNo = len(dbFiles)
@@ -4501,8 +4543,15 @@ def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, in
             continue
 
         # -------- Calculating Zone Area ---------------
-        if zoneArea is None:
-            zone_points_img = sessions[i].query(Zone.points).filter(Zone.idx == unitIdxs[i])
+        if zoneArea is None and all([p is not None for p in [intr_Cam_Matrx_list, distor_Coeffs_list, homography_list]]):
+            zone_points_img = sessions[i].query(Zone).filter(Zone.idx == unitIdxs[i]).first()
+            point_xs = [p.x for p in zone_points_img.points]
+            point_ys = [p.y for p in zone_points_img.points]
+            points = np.array([point_xs, point_ys])
+            prj_points = imageToWorldProject(points, intr_Cam_Matrx_list[i], distor_Coeffs_list[i], homography_list[i])
+            zone_vertices = list(zip(prj_points.tolist()[0], prj_points.tolist()[1]))
+
+            zoneArea = calculate_zone_area(zone_vertices)
 
         diff = []
         current_time = startTime
@@ -4556,7 +4605,7 @@ def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea, ax=None, in
     if unitIdxs[0].split('_')[0] == 'all':
         title = f'Density of {tm}s in all zones'
     else:
-        title = f'Density of {tm}s in zone #{unitIdxs[0]}'
+        title = f'Density of {tm}s in zone #{unitIdxs[0]} ({round(zoneArea)} m$^2$)'
     if siteName != None:
         title = f'{title} in {siteName}'
     ax.set_title(title, fontsize=titleSize)
@@ -4997,6 +5046,7 @@ def getObsStartEnd(session):
 
     first_times = [first_linePass_time, first_zonePass_time]
     last_times = [last_linePass_time, last_zonePass_time]
+
     if None in first_times:
         start_obs_time = next((t for t in first_times if t is not None), None)
     else:
@@ -5174,6 +5224,29 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
             texts.append(text)
 
     return texts
+
+# =====================================================================
+def calculate_zone_area(vertices):
+    """
+    Calculate the area of a polygon using the Shoelace formula.
+
+    Parameters:
+    vertices (list of tuples): A list of (x, y) coordinates of the polygon's vertices.
+    Example: vertices = [(1, 0), (4, 0), (4, 3), (1, 3)]
+
+    Returns:
+    float: The area of the polygon.
+    """
+    n = len(vertices)  # Number of vertices
+    area = 0.0
+
+    for i in range(n):
+        j = (i + 1) % n  # Next vertex index, wrapping around
+        area += vertices[i][0] * vertices[j][1]
+        area -= vertices[j][0] * vertices[i][1]
+
+    area = abs(area) / 2.0
+    return area
 
 
 # =====================================================================
@@ -5355,10 +5428,13 @@ def entryExitDiff(entries, exits, startTime, endTime, time_lag):
 
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':
-    from indicators import batchPlots
-    import os, shutil
 
-    outputFolder = '/Users/abbas/Desktop/plots'
+    # zonePassCheckup(r'/Users/abbas/Documents/PostDoc/Pedestrian_street_project/video_files/wellington-hickson/2022-06-15/wellington-hickson.sqlite')
+
+    # from indicators import batchPlots
+    import os, shutil
+    #
+    outputFolder = '/Users/abbas/Desktop/Wellington_Plots'
     metaDataFile = '/Users/abbas/Documents/PostDoc/Pedestrian_street_project/video_files/metadata.sqlite'
 
     for filename in os.listdir(outputFolder):
@@ -5371,8 +5447,8 @@ if __name__ == '__main__':
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-    batchPlots(metaDataFile, outputFolder, site='wellington-hickson', histInterval=10, repInterval=15,
-               densInterval=1)
+    batchPlots(metaDataFile, outputFolder, site='wellington-hickson', camView='2022-06-15',
+               histInterval=15, speedInerval=15, repInterval=30, densInterval=1)
 
 
 
