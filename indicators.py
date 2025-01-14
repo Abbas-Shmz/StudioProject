@@ -4559,7 +4559,7 @@ def zoneDensityPlot(dbFiles, labels, transports, unitIdxs, zoneArea=None,
             entry_count = sum(1 for entry_time in entries_lists[i] if entry_time <= current_time)
             exit_count = sum(1 for exit_time in exits_lists[i] if exit_time <= current_time)
             diff.append((current_time, (entry_count - exit_count)/zoneArea))
-            current_time += datetime.timedelta(minutes=interval)
+            current_time += datetime.timedelta(seconds=interval)
 
         if not smooth:
             ax.plot(*zip(*diff), label=labels[i], color=plotColors[i])
@@ -5429,13 +5429,18 @@ def entryExitDiff(entries, exits, startTime, endTime, time_lag):
 # ======================= DEMO MODE ============================
 if __name__ == '__main__':
 
-    # zonePassCheckup(r'/Users/abbas/Documents/PostDoc/Pedestrian_street_project/video_files/wellington-hickson/2022-06-15/wellington-hickson.sqlite')
+    project_name = 'ontario-jeannedArc'
+    camera_view = '2022-07-06'
 
-    # from indicators import batchPlots
+    # zonePassCheckup(f'/Users/abbas/Documents/PostDoc/Pedestrian_street_project/video_files/{project_name}/{camera_view}/{project_name}.sqlite')
+
+    # ----------------------------------
     import os, shutil
-    #
-    outputFolder = '/Users/abbas/Desktop/Wellington_Plots'
+    outputFolder = f'/Users/abbas/Desktop/{project_name}_{camera_view}_Plots'
     metaDataFile = '/Users/abbas/Documents/PostDoc/Pedestrian_street_project/video_files/metadata.sqlite'
+
+    if not os.path.exists(outputFolder):
+        os.makedirs(outputFolder)
 
     for filename in os.listdir(outputFolder):
         file_path = os.path.join(outputFolder, filename)
@@ -5447,8 +5452,10 @@ if __name__ == '__main__':
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-    batchPlots(metaDataFile, outputFolder, site='wellington-hickson', camView='2022-06-15',
+    batchPlots(metaDataFile, outputFolder, site=project_name, camView=camera_view,
                histInterval=15, speedInerval=15, repInterval=30, densInterval=1)
+
+
 
 
 
